@@ -138,6 +138,8 @@ class FullFlowTests(TestCase):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
         member = self.staff["Maria"]
         self.assertEqual(self.client.get(reverse("my_tips", args=[member.access_token])).status_code, 200)
+        self.client.logout()
+        self.assertContains(self.client.get(reverse("qr_show") + "?table=4"), "Table 4")  # works without login
 
     def test_webhook_marks_tip_completed(self):
         night = Night.current()

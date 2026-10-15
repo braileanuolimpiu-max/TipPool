@@ -4,7 +4,7 @@
 <header class="page-head no-print">
   <div>
     <h1>QR codes for tipping</h1>
-    <p>Guests scan a code and tip with PayPal or Venmo. Every code feeds the same tip pool; a table code also records which table the tip came from.</p>
+    <p>Print them for tables, the check presenter or the counter, or open one full screen on a phone or tablet. Every code feeds the same tip pool; a table code also records which table the tip came from.</p>
   </div>
 </header>
 
@@ -17,10 +17,18 @@
     <div class="panel-head"><h2>Whole restaurant</h2></div>
     <div class="panel-body setup-body">
       <div class="house-row">
-        <img class="house-qr" src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
+        <div class="tent tent-mini">
+          <p class="tent-place">{{ restaurant_name }}</p>
+          <p class="tent-label">Leave a tip</p>
+          <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
+          <p class="tent-note">PayPal, Venmo or card</p>
+        </div>
         <p style="margin:0">One code for the counter, the check presenter or printed receipts. Enough for most places.</p>
       </div>
-      <div class="setup-action"><button type="button" class="btn btn-primary" data-print="house">Print this code</button></div>
+      <div class="setup-action actions">
+        <button type="button" class="btn btn-primary" data-print="house">Print this code</button>
+        <a class="btn btn-secondary" href="{% url 'qr_show' %}" target="_blank" rel="noopener">Show on screen</a>
+      </div>
     </div>
   </section>
 
@@ -71,13 +79,14 @@
     <button type="button" class="btn btn-secondary" data-print="tables">Print table cards</button>
   </div>
   <div class="tent-grid">
-    {% for label, url in tables %}
+    {% for label, url, raw in tables %}
     <div class="tent">
       <p class="tent-place">{{ restaurant_name }}</p>
       <p class="tent-label"><span class="hl">{{ label }}</span></p>
       <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code to tip at {{ label }}" loading="lazy">
       <p class="tent-how">Scan to leave a tip</p>
       <p class="tent-note">PayPal, Venmo or card</p>
+      <a class="tent-show no-print" href="{% url 'qr_show' %}?table={{ raw|urlencode }}" target="_blank" rel="noopener">Show on screen</a>
     </div>
     {% endfor %}
   </div>

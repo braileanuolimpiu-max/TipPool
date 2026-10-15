@@ -154,11 +154,19 @@ def qr_page(request):
     return render(request, "tips/qr_page.html", {
         "restaurant": restaurant,
         "house_url": base,
-        "tables": [(f"Table {label}" if label.isdigit() else label, f"{base}?table={label}")
+        "tables": [(f"Table {label}" if label.isdigit() else label, f"{base}?table={label}", label)
                    for label in restaurant.table_labels],
         "suggestions": RestaurantSettings.SPOT_SUGGESTIONS,
         "custom_spots": [sp for sp in restaurant.spots if sp not in RestaurantSettings.SPOT_SUGGESTIONS],
     })
+
+
+def qr_show(request):
+    """Full-screen QR for a server's phone or a counter tablet. No login, it only links to the tip page."""
+    table = request.GET.get("table", "")[:20]
+    url = request.build_absolute_uri(reverse("tip_page")) + (f"?table={table}" if table else "")
+    label = (f"Table {table}" if table.isdigit() else table) if table else "Leave a tip"
+    return render(request, "tips/qr_show.html", {"url": url, "label": label, "table": table})
 
 
 def qr_svg(request):

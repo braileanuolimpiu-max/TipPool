@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ label }}{% endblock %}
+{% block body %}
+<main class="show-screen">
+  {% if user.is_authenticated %}<a class="close" href="{% url 'qr_page' %}">Back to QR codes</a>{% endif %}
+  {% if restaurant_named %}<p class="tent-place">{{ restaurant_name }}</p>{% endif %}
+  <h1 class="tent-label"><span class="hl">{{ label }}</span></h1>
+  <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code to leave a tip">
+  <p class="tent-how">Scan with your camera to leave a tip</p>
+  <p class="tent-note">PayPal, Venmo or card. Shared with everyone who served you.</p>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+  // keep the phone or tablet screen on while the code is showing
+  if ("wakeLock" in navigator) { navigator.wakeLock.request("screen").catch(() => {}); }
+</script>
+{% endblock %}

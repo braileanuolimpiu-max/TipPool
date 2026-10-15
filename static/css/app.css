@@ -306,6 +306,19 @@ fieldset.chips legend { font-weight: 700; font-size: .9rem; margin-bottom: 8px; 
 .tent-large .tent-label { font-size: 2.6rem; }
 .tent-large img { max-width: 230px; }
 .print-only { display: none; }
+.tent-mini { width: 168px; flex: none; padding: 12px 10px 10px; }
+.tent-mini .tent-label { font-size: 1.35rem; margin: 0 0 6px !important; }
+.tent-mini img { max-width: 112px; margin-bottom: 4px; }
+.tent-show { margin-top: 10px; font-size: .85rem; font-weight: 600; }
+
+/* full-screen code for a phone or tablet */
+.show-screen { min-height: 100vh; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px 16px; text-align: center; }
+.show-screen .tent-place { font-size: 1rem; }
+.show-screen .tent-label { font-size: clamp(2.6rem, 9vw, 4.4rem); }
+.show-screen img { width: min(78vw, 58vh); height: auto; aspect-ratio: 1; }
+.show-screen .tent-how { font-size: 1.15rem; }
+.show-screen .close { position: fixed; top: 14px; right: 16px; font-size: .9rem; }
 @media print {
   .topbar, .rail, .no-print { display: none !important; }
   .main { padding: 0; }
