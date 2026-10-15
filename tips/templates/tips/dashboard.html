@@ -1,11 +1,11 @@
 {% extends "app.html" %}
-{% block title %}Tonight{% endblock %}
+{% block title %}Current shift{% endblock %}
 {% block content %}
 <header class="page-head">
   <div>
-    <h1>{{ night.date|date:"l" }} night</h1>
+    <h1>{{ night.date|date:"l" }} shift</h1>
     <p>{% if next_close %}Closes out automatically {{ next_close|date:"l \a\t g:i A" }}.{% else %}Collecting tips until you close out.{% endif %}
-       {% if roster_count %}{{ roster_count }} on tonight's roster.{% endif %}</p>
+       {% if roster_count %}{{ roster_count }} on this shift's roster.{% endif %}</p>
   </div>
   <div class="actions">
     <a class="btn btn-secondary" href="{% url 'tip_page' %}" target="_blank" rel="noopener">Guest tip page</a>
@@ -15,9 +15,9 @@
 
 {% if unfinished %}
 <div class="flash info">
-  {% if unfinished.status == "closed" %}{{ unfinished }} closed{% if unfinished.auto_closed %} automatically{% endif %} and is waiting for who worked. <a href="{% url 'close_night_pk' unfinished.pk %}">Add who worked</a>
-  {% elif unfinished.status == "review" %}{{ unfinished }} is split and waiting for your approval. <a href="{% url 'review' unfinished.pk %}">Check and pay the team</a>
-  {% else %}{{ unfinished }} is being paid out. <a href="{% url 'payout_status' unfinished.pk %}">See the payout</a>{% endif %}
+  {% if unfinished.status == "closed" %}The {{ unfinished.date|date:'l, M j' }} shift closed{% if unfinished.auto_closed %} automatically{% endif %} and is waiting for who worked. <a href="{% url 'close_night_pk' unfinished.pk %}">Add who worked</a>
+  {% elif unfinished.status == "review" %}The {{ unfinished.date|date:'l, M j' }} shift is split and waiting for your approval. <a href="{% url 'review' unfinished.pk %}">Check and pay the team</a>
+  {% else %}The {{ unfinished.date|date:'l, M j' }} shift is being paid out. <a href="{% url 'payout_status' unfinished.pk %}">See the payout</a>{% endif %}
 </div>
 {% endif %}
 
@@ -25,7 +25,7 @@
   <div class="stack">
     <section aria-label="Tips so far">
       <div class="counter">
-        <div><div class="big"><span class="hl">${{ total }}</span></div><div class="cap">in tips so far tonight</div></div>
+        <div><div class="big"><span class="hl">${{ total }}</span></div><div class="cap">in tips this shift</div></div>
         <div class="side">
           <div><b>{{ tip_count }}</b><span class="small muted">guests tipped</span></div>
           <div><b>{% if average %}${{ average }}{% else %}–{% endif %}</b><span class="small muted">average tip</span></div>
@@ -77,7 +77,7 @@
         <hr>
         <div class="line total"><span>Total</span><span class="amt-hl">${{ total }}</span></div>
         {% else %}
-        <p style="text-align:center;margin:18px 0">No tips yet tonight.</p>
+        <p style="text-align:center;margin:18px 0">No tips yet this shift.</p>
         <p class="foot">Each tip prints here the moment a guest pays with PayPal or Venmo.</p>
         {% endif %}
       </div>

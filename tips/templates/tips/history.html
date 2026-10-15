@@ -1,13 +1,13 @@
 {% extends "app.html" %}
-{% block title %}Past nights{% endblock %}
+{% block title %}Past shifts{% endblock %}
 {% block content %}
 <header class="page-head">
-  <div><h1>Past nights</h1><p>Every close-out, what was collected and who was paid.</p></div>
+  <div><h1>Past shifts</h1><p>Every close-out, what was collected and who was paid.</p></div>
 </header>
 <section class="panel">
   {% if rows %}
   <div class="table-wrap"><table class="data">
-    <thead><tr><th>Night</th><th class="r">Tips</th><th class="r">People paid</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Shift</th><th class="r">Tips</th><th class="r">People paid</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
@@ -16,15 +16,17 @@
         <td class="r">{{ row.people }}</td>
         <td>{% if row.night.status == "paid" %}<span class="pill ok">Paid</span>
             {% elif row.night.status == "paying" %}<span class="pill wait">Paying</span>
+            {% elif row.night.status == "closed" %}<span class="pill wait">Needs who worked</span>
             {% else %}<span class="pill live">Waiting for approval</span>{% endif %}</td>
         <td class="r">{% if row.batch %}<a href="{% url 'payout_status' row.night.pk %}">Payout details</a>
+            {% elif row.night.status == "closed" %}<a href="{% url 'close_night_pk' row.night.pk %}">Add who worked</a>
             {% else %}<a href="{% url 'review' row.night.pk %}">Check and pay</a>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table></div>
   {% else %}
-  <div class="panel-body"><p class="muted" style="margin:0">Nothing here yet. When you close out a night, it shows up here. <a href="{% url 'close_night' %}">Close out tonight</a></p></div>
+  <div class="panel-body"><p class="muted" style="margin:0">Nothing here yet. When you close out a shift, it shows up here. <a href="{% url 'close_night' %}">Close out the current shift</a></p></div>
   {% endif %}
 </section>
 {% endblock %}

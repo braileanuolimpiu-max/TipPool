@@ -1,7 +1,7 @@
 {% extends "app.html" %}
 {% block title %}Payout{% endblock %}
 {% block content %}
-<a class="back" href="{% url 'history' %}">← Past nights</a>
+<a class="back" href="{% url 'history' %}">← Past shifts</a>
 <header class="page-head">
   <div>
     <h1>{% if night.status == "paid" %}Everyone's been paid{% else %}Paying the team{% endif %}</h1>
@@ -9,7 +9,7 @@
   </div>
   <div class="actions">
     <form method="post">{% csrf_token %}<button class="btn btn-secondary">Check PayPal again</button></form>
-    <a class="btn btn-primary" href="{% url 'dashboard' %}">Back to tonight</a>
+    <a class="btn btn-primary" href="{% url 'dashboard' %}">Back to current shift</a>
   </div>
 </header>
 {% include "tips/_stepper.html" with step=3 %}

@@ -1,13 +1,13 @@
 {% extends "app.html" %}
 {% block title %}Close out{% endblock %}
 {% block content %}
-<a class="back" href="{% url 'dashboard' %}">← Tonight</a>
+<a class="back" href="{% url 'dashboard' %}">← Current shift</a>
 <header class="page-head">
   <div>
-    <h1>{% if night.status == "open" %}Who's working {{ night.date|date:"l" }}{% else %}Who worked {{ night.date|date:"l" }}{% endif %}</h1>
+    <h1>{% if night.status == "open" %}Who's working this shift{% else %}Who worked {{ night.date|date:"l" }}'s shift{% endif %}</h1>
     <p>${{ night.tip_total }} from {{ tip_count }} tip{{ tip_count|pluralize }} so far.
       {% if night.status == "open" %}Save the roster during service and update the hours before closing, or calculate the split now.
-      {% else %}This night is closed{% if night.auto_closed %} automatically{% endif %}. Add who worked to calculate the split.{% endif %}</p>
+      {% else %}This shift is closed{% if night.auto_closed %} automatically{% endif %}. Add who worked to calculate the split.{% endif %}</p>
   </div>
 </header>
 {% include "tips/_stepper.html" with step=1 %}
@@ -16,12 +16,12 @@
 
 <div class="split-2 wide-left">
   <form method="post" class="panel" id="roster-form">{% csrf_token %}
-    <div class="panel-head"><h2>Who worked tonight</h2><span class="small muted" id="worked-count"></span></div>
+    <div class="panel-head"><h2>Who worked this shift</h2><span class="small muted" id="worked-count"></span></div>
     <ul class="rows roster">
       {% for row in rows %}
       <li class="{% if not row.worked %}off{% endif %}">
-        <label class="switch" title="Worked tonight">
-          <input type="checkbox" name="worked_{{ row.member.pk }}" {% if row.worked %}checked{% endif %} aria-label="{{ row.member.name }} worked tonight">
+        <label class="switch" title="Worked this shift">
+          <input type="checkbox" name="worked_{{ row.member.pk }}" {% if row.worked %}checked{% endif %} aria-label="{{ row.member.name }} worked this shift">
           <span></span>
         </label>
         <div class="who">
@@ -29,7 +29,7 @@
           <strong>{{ row.member.name }}</strong>
         </div>
         <div class="fields">
-          <select name="role_{{ row.member.pk }}" aria-label="{{ row.member.name }}'s role tonight">
+          <select name="role_{{ row.member.pk }}" aria-label="{{ row.member.name }}'s role this shift">
             {% for value, label in roles %}<option value="{{ value }}" {% if value == row.role %}selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>
           <input type="number" name="hours_{{ row.member.pk }}" value="{{ row.hours }}" min="0" max="24" step="0.25" placeholder="hrs" aria-label="{{ row.member.name }}'s hours">
@@ -58,7 +58,7 @@
     </form>
     {% if rule_set %}
     <section class="panel">
-      <div class="panel-head"><h2>Tonight's rules</h2><a class="small" href="{% url 'rules' %}">Edit</a></div>
+      <div class="panel-head"><h2>House rules</h2><a class="small" href="{% url 'rules' %}">Edit</a></div>
       <div class="panel-body"><p style="margin:0">{{ rule_set.summary }}</p></div>
     </section>
     {% endif %}

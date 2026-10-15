@@ -206,14 +206,14 @@ def read_schedule(image_bytes, media_type, staff_names):
 # 3. Explanations
 # ---------------------------------------------------------------------------
 EXPLAIN_SYSTEM = """You write a short, friendly explanation for each restaurant worker of how their share of
-tonight's tip pool was calculated. Use ONLY the numbers given; never recalculate or change an amount.
+this shift's tip pool was calculated. Use ONLY the numbers given; never recalculate or change an amount.
 2-3 sentences each, plain language, mention the group(s), the basis (hours or equal) and the amount."""
 
 
 def explain_shares(total, rules_summary, shares, notes):
     """shares: list of PersonShare. Returns {name: explanation}."""
     if mode() == "claude":
-        lines = [f"Total tips tonight: ${total}", f"Rules: {rules_summary}"]
+        lines = [f"Total tips this shift: ${total}", f"Rules: {rules_summary}"]
         for s in shares:
             parts = "; ".join(f"{b['group']}: {b['basis']} of ${b['pool']} = ${b['amount']}" for b in s.breakdown)
             lines.append(f"- {s.name} ({s.role}, {s.hours}h): ${s.amount}. {parts or 'no share'}")
@@ -230,7 +230,7 @@ def explain_shares(total, rules_summary, shares, notes):
 
 def _template_explanation(share):
     if not share.breakdown:
-        return f"{share.name} worked as {share.role}, which doesn't receive tips under tonight's rules."
+        return f"{share.name} worked as {share.role}, which doesn't receive tips under the house rules."
     parts = []
     for b in share.breakdown:
         basis = b["basis"]

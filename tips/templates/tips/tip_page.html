@@ -12,7 +12,7 @@
         <p>{% if table %}Table {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
       </div>
       <hr>
-      <p style="margin:0">Thanks for joining us. Your tip is shared with everyone who looked after you tonight, from the bar to the bussers.</p>
+      <p style="margin:0">Thank you. Your tip is shared with the whole team who looked after you today.</p>
       <hr>
       {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">No tip was taken. Choose an amount to try again.</p>{% endif %}
       <div class="amounts" role="group" aria-label="Tip amount">
@@ -27,7 +27,7 @@
       <p id="status" class="status-line" role="status">Loading PayPal…</p>
     </div>
   </div>
-  <p class="guest-note">Payments are processed by PayPal. The restaurant never sees your card details.</p>
+  <p class="guest-note">Payments are processed by PayPal. The business never sees your card details.</p>
 </div>
 {% endblock %}
 {% block scripts %}

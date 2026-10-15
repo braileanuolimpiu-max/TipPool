@@ -91,13 +91,13 @@ def mark_capture_completed(order_id, capture_id):
 def build_split(night, rule_set):
     """Calculate everyone's share for a night and store it (replaces an earlier draft)."""
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
-        raise TipPoolError("This night has already been paid out.")
+        raise TipPoolError("This shift has already been paid out.")
     shifts = list(night.shifts.select_related("staff"))
     if not shifts:
-        raise TipPoolError("Add who worked tonight first.")
+        raise TipPoolError("Add who worked this shift first.")
     total = night.tip_total
     if total <= 0:
-        raise TipPoolError("There are no completed tips for this night yet.")
+        raise TipPoolError("There are no completed tips for this shift yet.")
 
     inputs = [ShiftInput(str(s.staff_id), s.staff.name, s.role, s.hours) for s in shifts]
     try:

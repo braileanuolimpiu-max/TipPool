@@ -4,7 +4,7 @@
 <header class="page-head">
   <div>
     <h1>Settings</h1>
-    <p>Your restaurant, and when each night closes. At closing time tips stop counting toward the night, new tips start the next one, and the split is prepared for you.</p>
+    <p>Your business, and when each shift closes. At closing time tips stop counting toward the shift, new tips start the next one, and the split is prepared for you.</p>
   </div>
 </header>
 
@@ -32,35 +32,35 @@
         <input type="time" id="same-time" value="23:00" style="width:140px" aria-label="Time for every day">
         <button type="button" class="btn btn-secondary" id="apply-all">Use for every day</button>
       </div>
-      <p class="hint">A time before 6:00 AM counts as the same night after midnight (Friday 1:00 AM closes Friday's service on Saturday morning).</p>
+      <p class="hint">A time before 6:00 AM counts as the same shift after midnight (Friday 1:00 AM closes Friday's service on Saturday morning).</p>
     </div>
   </section>
 
   <div class="stack">
     <section class="panel">
-      <div class="panel-head"><h2>Your restaurant</h2></div>
+      <div class="panel-head"><h2>Your business</h2></div>
       <div class="panel-body">
         <label for="name">Name</label>
-        <input type="text" id="name" name="name" value="{{ restaurant.name }}" maxlength="80" placeholder="e.g. Luna Trattoria">
+        <input type="text" id="name" name="name" value="{{ restaurant.name }}" maxlength="80" placeholder="e.g. Luna Trattoria, Studio 9 Salon">
         <p class="hint">Shown to guests on the tip page and on your table cards.</p>
       </div>
     </section>
 
     <section class="panel">
-      <div class="panel-head"><h2>When the night closes</h2></div>
+      <div class="panel-head"><h2>When a shift closes</h2></div>
       <div class="panel-body stack">
         {% for value, label in after_choices %}
         <label class="choice"><input type="radio" name="after_close" value="{{ value }}" {% if restaurant.after_close == value %}checked{% endif %}>
           <span><strong>{{ label }}</strong>
-            <span class="small muted">{% if value == "review" %}You check the split, then press pay.{% else %}PayPal pays everyone as soon as the night closes. Only happens if you saved who's working.{% endif %}</span></span>
+            <span class="small muted">{% if value == "review" %}You check the split, then press pay.{% else %}PayPal pays everyone as soon as the shift closes. Only happens if you saved who's working.{% endif %}</span></span>
         </label>
         {% endfor %}
-        <p class="hint" style="margin:0">If nobody saved who worked, the night closes and waits for you. Nobody is paid by guesswork.</p>
+        <p class="hint" style="margin:0">If nobody saved who worked, the shift closes and waits for you. Nobody is paid by guesswork.</p>
       </div>
     </section>
 
     <section class="panel">
-      <div class="panel-head"><h2>Restaurant time zone</h2></div>
+      <div class="panel-head"><h2>Time zone</h2></div>
       <div class="panel-body">
         <select name="timezone" aria-label="Time zone">
           {% for value, label in timezones %}<option value="{{ value }}" {% if restaurant.timezone == value %}selected{% endif %}>{{ label }} ({{ value }})</option>{% endfor %}
@@ -70,7 +70,7 @@
 
     <div class="flash {% if next_close %}info{% else %}warning{% endif %}" style="margin:0">
       {% if next_close %}Next automatic close-out: <strong>{{ next_close|date:"l, M j \a\t g:i A" }}</strong>
-      {% else %}Automatic close-out is off. You close each night yourself.{% endif %}
+      {% else %}Automatic close-out is off. You close each shift yourself.{% endif %}
     </div>
     <button class="btn btn-primary btn-block">Save settings</button>
   </div>

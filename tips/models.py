@@ -77,7 +77,7 @@ class Night(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Night of {self.date:%b %d, %Y}"
+        return f"{self.date:%A, %b %d} shift"
 
     @property
     def tip_total(self):

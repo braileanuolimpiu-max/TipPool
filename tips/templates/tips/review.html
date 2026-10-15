@@ -5,7 +5,7 @@
 <header class="page-head">
   <div>
     <h1>Check the split</h1>
-    <p>Here is everyone's share of {{ night.date|date:"l" }}'s ${{ total }}. Nothing is paid until you approve.</p>
+    <p>Here is everyone's share of the ${{ total }} from {{ night.date|date:"l" }}'s shift. Nothing is paid until you approve.</p>
   </div>
 </header>
 {% include "tips/_stepper.html" with step=2 %}
@@ -17,7 +17,7 @@
     <div class="receipt">
       <div class="head">
         <h2>{{ restaurant_name }}</h2>
-        <p>Tip-out sheet for {{ night.date|date:"D M j, Y" }}</p>
+        <p>Tip-out sheet, {{ night.date|date:"D M j, Y" }}</p>
       </div>
       <hr>
       <div class="line"><span>Tips collected</span><span class="amt">${{ total }}</span></div>
