@@ -15,7 +15,7 @@
           <strong>{{ m.name }}</strong> <span class="small muted">{{ m.get_default_role_display }}</span>
           <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.paypal_email }}</div>
         </div>
-        <a class="small" href="{% url 'my_tips' m.access_token %}" target="_blank" rel="noopener">Their tips page</a>
+        <a class="small" href="{% url 'my_tips' m.access_token %}">Their tips page</a>
         <form method="post" action="{% url 'staff_toggle' m.pk %}">{% csrf_token %}
           <button class="btn btn-quiet small">{% if m.active %}Remove{% else %}Bring back{% endif %}</button></form>
       </li>
