@@ -268,10 +268,13 @@ paypal-button, venmo-button { width: 100%; --paypal-button-border-radius: 4px; }
 .receipt .btn-secondary { background: transparent; color: #1d1f21; border-color: #1d1f21; }
 
 /* ---------- qr: setup + printable table cards ---------- */
-.qr-setup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; align-items: start; margin-bottom: 34px; }
+.qr-setup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; align-items: stretch; margin-bottom: 34px; }
+.qr-setup > .panel { display: flex; flex-direction: column; }
+.qr-setup > .panel > .panel-body { flex: 1; }
 @media (max-width: 900px) { .qr-setup { grid-template-columns: 1fr; } }
-.house-row { display: flex; gap: 20px; align-items: center; }
-.house-qr { width: 132px; height: 132px; flex: none; border: 1px solid var(--hair); border-radius: 4px; padding: 6px; background: #fff; }
+.house-row { display: flex; gap: 22px; align-items: center; }
+.house-row .stack { align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+.house-qr { width: 168px; height: 168px; flex: none; border: 1px solid var(--hair); border-radius: 4px; padding: 6px; background: #fff; }
 .table-count-row { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
 .counter-input { display: flex; gap: 8px; align-items: stretch; width: 210px; }
 .counter-input input { text-align: center; font: 700 1.2rem var(--mono); }
