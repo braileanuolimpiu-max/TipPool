@@ -4,8 +4,10 @@
 <a class="back" href="{% url 'dashboard' %}">← Tonight</a>
 <header class="page-head">
   <div>
-    <h1>Close out {{ night.date|date:"l" }}</h1>
-    <p>${{ night.tip_total }} from {{ tip_count }} tip{{ tip_count|pluralize }} to share. Mark who worked and for how long.</p>
+    <h1>{% if night.status == "open" %}Who's working {{ night.date|date:"l" }}{% else %}Who worked {{ night.date|date:"l" }}{% endif %}</h1>
+    <p>${{ night.tip_total }} from {{ tip_count }} tip{{ tip_count|pluralize }} so far.
+      {% if night.status == "open" %}Save the roster during service and update the hours before closing, or calculate the split now.
+      {% else %}This night is closed{% if night.auto_closed %} automatically{% endif %}. Add who worked to calculate the split.{% endif %}</p>
   </div>
 </header>
 {% include "tips/_stepper.html" with step=1 %}
@@ -38,8 +40,8 @@
       {% endfor %}
     </ul>
     <div class="sticky-bar">
-      <span class="small muted">You can change this after checking the split.</span>
-      <button class="btn btn-primary" {% if not rule_set %}disabled{% endif %}>Calculate the split</button>
+      {% if night.status == "open" %}<button class="btn btn-secondary" name="save_roster">Save for later</button>{% else %}<span class="small muted">You can change this after checking the split.</span>{% endif %}
+      <button class="btn btn-primary" {% if not rule_set %}disabled{% endif %}>{% if night.status == "open" %}Close out and calculate{% else %}Calculate the split{% endif %}</button>
     </div>
   </form>
 

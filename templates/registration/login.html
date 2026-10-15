@@ -3,15 +3,26 @@
 {% block body %}
 <div class="login">
   <div class="left">
-    <a class="brand" href="#" style="padding:0">
-      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#2c46d1"/><path d="M9 8h14v16l-2.3-1.6L18.3 24 16 22.4 13.7 24l-2.4-1.6L9 24z" fill="#fff"/></svg>
-      <span>TipPool</span>
-    </a>
+    <a class="brand" href="#"><b>TipPool</b><span>{{ restaurant_name }}</span></a>
     <div>
-      <h1>End-of-night tip-outs, done in two minutes.</h1>
+      <h1>Tip-outs, done before the chairs are up.</h1>
       <p>Guests tip with PayPal or Venmo. AI applies your house rules and explains every share. One click pays the whole team.</p>
     </div>
-    <p class="small">{{ restaurant_name }}</p>
+    <div class="receipt-wrap">
+      <div class="receipt">
+        <div class="head"><h2>Tip-out sheet</h2><p>Friday</p></div>
+        <hr>
+        <div class="lines">
+          <div class="line"><span>Maria, server</span><span class="amt">$168.00</span></div>
+          <div class="line"><span>Lea, server</span><span class="amt">$140.00</span></div>
+          <div class="line"><span>Alex, bar</span><span class="amt">$120.00</span></div>
+          <div class="line"><span>John, server</span><span class="amt">$112.00</span></div>
+          <div class="line"><span>Sam, busser</span><span class="amt">$60.00</span></div>
+        </div>
+        <hr>
+        <div class="line total"><span>Paid</span><span class="amt-hl">$600.00</span></div>
+      </div>
+    </div>
   </div>
   <div class="right">
     <form method="post" class="stack">{% csrf_token %}

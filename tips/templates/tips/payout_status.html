@@ -15,7 +15,7 @@
 {% include "tips/_stepper.html" with step=3 %}
 
 <div class="split-2 reverse">
-  <div class="receipt-wrap">
+  <div class="tray"><div class="receipt-wrap">
     <div class="receipt">
       <div class="head">
         <h2>{{ restaurant_name }}</h2>
@@ -38,10 +38,10 @@
         {% endfor %}
       </div>
       <hr>
-      <div class="line total"><span>Paid out</span><span>${{ night.tip_total }}</span></div>
+      <div class="line total"><span>Paid out</span><span class="amt-hl">${{ night.tip_total }}</span></div>
       <p class="foot">Sent with PayPal Payouts</p>
     </div>
-  </div>
+  </div></div>
 
   <section class="panel">
     <div class="panel-head"><h2>What happens now</h2></div>

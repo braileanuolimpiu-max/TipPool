@@ -1,0 +1,86 @@
+{% extends "app.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Close-out settings</h1>
+    <p>Pick when each night closes. At that time tips stop counting toward the night, new tips start the next one, and the split is prepared for you.</p>
+  </div>
+</header>
+
+<form method="post" class="split-2">{% csrf_token %}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Closing time</h2>
+      <label class="actions" style="margin:0;font-weight:600">
+        <span class="switch"><input type="checkbox" name="auto_close_enabled" {% if restaurant.auto_close_enabled %}checked{% endif %}><span></span></span>
+        Close out automatically
+      </label>
+    </div>
+    <ul class="rows week" id="week">
+      {% for d in days %}
+      <li class="{% if not d.close or not d.close.enabled %}off{% endif %}">
+        <span class="switch"><input type="checkbox" name="on_{{ d.n }}" aria-label="Close out on {{ d.name }}" {% if d.close and d.close.enabled %}checked{% endif %}><span></span></span>
+        <span class="day">{{ d.name }}</span>
+        <input type="time" name="time_{{ d.n }}" value="{% if d.close %}{{ d.close.time|time:'H:i' }}{% endif %}" aria-label="{{ d.name }} closing time">
+        <span class="after">{% if d.close and d.close.after_midnight %}after midnight, early {{ d.name|slice:":3" }}+1{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="panel-body" style="border-top:1px solid var(--hair-soft)">
+      <div class="actions">
+        <input type="time" id="same-time" value="23:00" style="width:140px" aria-label="Time for every day">
+        <button type="button" class="btn btn-secondary" id="apply-all">Use for every day</button>
+      </div>
+      <p class="hint">A time before 6:00 AM counts as the same night after midnight (Friday 1:00 AM closes Friday's service on Saturday morning).</p>
+    </div>
+  </section>
+
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h2>When the night closes</h2></div>
+      <div class="panel-body stack">
+        {% for value, label in after_choices %}
+        <label class="choice"><input type="radio" name="after_close" value="{{ value }}" {% if restaurant.after_close == value %}checked{% endif %}>
+          <span><strong>{{ label }}</strong>
+            <span class="small muted">{% if value == "review" %}You check the split, then press pay.{% else %}PayPal pays everyone as soon as the night closes. Only happens if you saved who's working.{% endif %}</span></span>
+        </label>
+        {% endfor %}
+        <p class="hint" style="margin:0">If nobody saved who worked, the night closes and waits for you. Nobody is paid by guesswork.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Restaurant time zone</h2></div>
+      <div class="panel-body">
+        <select name="timezone" aria-label="Time zone">
+          {% for value, label in timezones %}<option value="{{ value }}" {% if restaurant.timezone == value %}selected{% endif %}>{{ label }} ({{ value }})</option>{% endfor %}
+        </select>
+      </div>
+    </section>
+
+    <div class="flash {% if next_close %}info{% else %}warning{% endif %}" style="margin:0">
+      {% if next_close %}Next automatic close-out: <strong>{{ next_close|date:"l, M j \a\t g:i A" }}</strong>
+      {% else %}Automatic close-out is off. You close each night yourself.{% endif %}
+    </div>
+    <button class="btn btn-primary btn-block">Save settings</button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const week = document.getElementById("week");
+  week.addEventListener("change", (e) => {
+    const li = e.target.closest("li");
+    if (li) li.classList.toggle("off", !li.querySelector("input[type=checkbox]").checked);
+  });
+  document.getElementById("apply-all").addEventListener("click", () => {
+    const t = document.getElementById("same-time").value;
+    week.querySelectorAll("li").forEach((li) => {
+      li.querySelector("input[type=time]").value = t;
+      li.querySelector("input[type=checkbox]").checked = true;
+      li.classList.remove("off");
+    });
+  });
+</script>
+{% endblock %}

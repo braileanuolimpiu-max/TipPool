@@ -61,6 +61,7 @@ class Night(models.Model):
 
     class Status(models.TextChoices):
         OPEN = "open", "Open (collecting tips)"
+        CLOSED = "closed", "Closed, needs who worked"
         REVIEW = "review", "Split ready for review"
         PAYING = "paying", "Paying out"
         PAID = "paid", "Paid"
@@ -69,6 +70,8 @@ class Night(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
     rule_set = models.ForeignKey(TipRuleSet, null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    auto_closed = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]
@@ -85,7 +88,10 @@ class Night(models.Model):
     def current(cls):
         """The night that is collecting tips right now (created if needed)."""
         night = cls.objects.filter(status=cls.Status.OPEN).first()
-        return night or cls.objects.create()
+        if night:
+            return night
+        from .autoclose import restaurant_tz
+        return cls.objects.create(date=timezone.now().astimezone(restaurant_tz()).date())
 
 
 class Tip(models.Model):
@@ -177,3 +183,45 @@ class WebhookEvent(models.Model):
     verified = models.BooleanField(default=False)
     payload = models.JSONField()
     received_at = models.DateTimeField(auto_now_add=True)
+
+
+class RestaurantSettings(models.Model):
+    """One row: how this restaurant runs its close-out."""
+
+    class AfterClose(models.TextChoices):
+        REVIEW = "review", "Prepare the split for me to approve"
+        PAY = "pay", "Pay the team automatically"
+
+    timezone = models.CharField(max_length=64, default="America/New_York")
+    auto_close_enabled = models.BooleanField(default=False)
+    after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)
+
+    def __str__(self):
+        return "Restaurant settings"
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class CloseTime(models.Model):
+    """When the night closes, per weekday of the service day (0 = Monday)."""
+
+    WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    weekday = models.PositiveSmallIntegerField(unique=True)
+    time = models.TimeField()
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["weekday"]
+
+    @property
+    def day_name(self):
+        return self.WEEKDAYS[self.weekday]
+
+    @property
+    def after_midnight(self):
+        """1:00 AM on a Friday service means Saturday 1:00 AM."""
+        return self.time.hour < 6

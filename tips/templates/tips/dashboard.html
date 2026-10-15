@@ -3,33 +3,37 @@
 {% block content %}
 <header class="page-head">
   <div>
-    <h1>Tonight</h1>
-    <p>{{ night.date|date:"l, F j" }}, collecting tips</p>
+    <h1>{{ night.date|date:"l" }} night</h1>
+    <p>{% if next_close %}Closes out automatically {{ next_close|date:"l \a\t g:i A" }}.{% else %}Collecting tips until you close out.{% endif %}
+       {% if roster_count %}{{ roster_count }} on tonight's roster.{% endif %}</p>
   </div>
   <div class="actions">
-    <a class="btn btn-secondary" href="{% url 'tip_page' %}" target="_blank" rel="noopener">Open guest tip page</a>
-    <a class="btn btn-primary" href="{% url 'close_night' %}">Close out tonight</a>
+    <a class="btn btn-secondary" href="{% url 'tip_page' %}" target="_blank" rel="noopener">Guest tip page</a>
+    <a class="btn btn-primary" href="{% url 'close_night' %}">{% if roster_count %}Close out now{% else %}Who's working{% endif %}</a>
   </div>
 </header>
 
 {% if unfinished %}
 <div class="flash info">
-  {{ unfinished }} isn't finished yet.
-  {% if unfinished.status == "review" %}<a href="{% url 'review' unfinished.pk %}">Check the split and pay the team</a>{% else %}<a href="{% url 'payout_status' unfinished.pk %}">See the payout</a>{% endif %}
+  {% if unfinished.status == "closed" %}{{ unfinished }} closed{% if unfinished.auto_closed %} automatically{% endif %} and is waiting for who worked. <a href="{% url 'close_night_pk' unfinished.pk %}">Add who worked</a>
+  {% elif unfinished.status == "review" %}{{ unfinished }} is split and waiting for your approval. <a href="{% url 'review' unfinished.pk %}">Check and pay the team</a>
+  {% else %}{{ unfinished }} is being paid out. <a href="{% url 'payout_status' unfinished.pk %}">See the payout</a>{% endif %}
 </div>
 {% endif %}
 
 <div class="split-2">
   <div class="stack">
-    <section class="panel" aria-label="Tonight's tips so far">
-      <div class="tally">
-        <div><div class="big">${{ total }}</div><div class="cap">in tips so far</div></div>
-        <div><div class="mid">{{ tip_count }}</div><div class="cap">guests tipped</div></div>
-        <div><div class="mid">{% if average %}${{ average }}{% else %}–{% endif %}</div><div class="cap">average tip</div></div>
+    <section aria-label="Tips so far">
+      <div class="counter">
+        <div><div class="big"><span class="hl">${{ total }}</span></div><div class="cap">in tips so far tonight</div></div>
+        <div class="side">
+          <div><b>{{ tip_count }}</b><span class="small muted">guests tipped</span></div>
+          <div><b>{% if average %}${{ average }}{% else %}–{% endif %}</b><span class="small muted">average tip</span></div>
+        </div>
       </div>
     </section>
 
-    {% if not rule_set or staff_count == 0 or not tip_count %}
+    {% if not setup_done %}
     <section class="panel">
       <div class="panel-head"><h2>Before your first close-out</h2></div>
       <ul class="checklist">
@@ -43,38 +47,40 @@
     </section>
     {% endif %}
 
-    <section class="panel">
-      <div class="panel-head"><h2>House rules</h2><a class="small" href="{% url 'rules' %}">Edit</a></div>
-      <div class="panel-body">
-        {% if rule_set %}<p style="margin:0">{{ rule_set.summary }}</p>
-        {% else %}<p class="muted" style="margin:0">No rules yet. <a href="{% url 'rules' %}">Describe how you share tips</a> and the split is calculated for you.</p>{% endif %}
+    <section>
+      <div class="rule-card">
+        <h3 style="margin-bottom:4px">House rules</h3>
+        {% if rule_set %}<p style="margin:0">{{ rule_set.summary }} <a class="small" href="{% url 'rules' %}">Edit</a></p>
+        {% else %}<p class="muted" style="margin:0">No rules yet. <a href="{% url 'rules' %}">Describe how you share tips</a>.</p>{% endif %}
       </div>
     </section>
   </div>
 
-  <div class="receipt-wrap">
-    <div class="receipt">
-      <div class="head">
-        <h2>{{ restaurant_name }}</h2>
-        <p>Tips received {{ night.date|date:"M j, Y" }}</p>
-      </div>
-      <hr>
-      {% if tips %}
-      <div class="lines">
-        {% for tip in tips %}
-        <div class="line">
-          <span class="what">{{ tip.created_at|time:"g:i A" }}  {% if tip.table %}Table {{ tip.table }}{% else %}Walk-up{% endif %}
-            {% if tip.payer_name %}<small>{{ tip.payer_name }}</small>{% endif %}</span>
-          <span class="amt">${{ tip.amount }}</span>
+  <div class="tray">
+    <div class="receipt-wrap">
+      <div class="receipt">
+        <div class="head">
+          <h2>{{ restaurant_name }}</h2>
+          <p>Tips received {{ night.date|date:"M j, Y" }}</p>
         </div>
-        {% endfor %}
+        <hr>
+        {% if tips %}
+        <div class="lines">
+          {% for tip in tips %}
+          <div class="line">
+            <span class="what">{{ tip.created_at|time:"g:i A" }}  {% if tip.table %}Table {{ tip.table }}{% else %}Walk-up{% endif %}
+              {% if tip.payer_name %}<small>{{ tip.payer_name }}</small>{% endif %}</span>
+            <span class="amt">${{ tip.amount }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <hr>
+        <div class="line total"><span>Total</span><span class="amt-hl">${{ total }}</span></div>
+        {% else %}
+        <p style="text-align:center;margin:18px 0">No tips yet tonight.</p>
+        <p class="foot">Each tip prints here the moment a guest pays with PayPal or Venmo.</p>
+        {% endif %}
       </div>
-      <hr>
-      <div class="line total"><span>Total</span><span>${{ total }}</span></div>
-      {% else %}
-      <p style="text-align:center;margin:18px 0">No tips yet tonight.</p>
-      <p class="foot">Tips appear here the moment a guest pays with PayPal or Venmo.</p>
-      {% endif %}
     </div>
   </div>
 </div>

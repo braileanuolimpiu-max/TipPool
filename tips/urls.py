@@ -13,6 +13,7 @@ urlpatterns = [
     # manager
     path("qr/", views.qr_page, name="qr_page"),
     path("history/", views.history, name="history"),
+    path("settings/", views.settings_page, name="settings"),
     path("staff/", views.staff_list, name="staff_list"),
     path("staff/<int:pk>/toggle/", views.staff_toggle, name="staff_toggle"),
     path("rules/", views.rules_page, name="rules"),

@@ -14,8 +14,9 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, services
-from .models import Night, PayoutBatch, Role, Shift, StaffMember, Tip, TipRuleSet, WebhookEvent
+from . import ai, autoclose, services
+from .models import (CloseTime, Night, PayoutBatch, RestaurantSettings, Role, Shift, StaffMember, Tip,
+                     TipRuleSet, WebhookEvent)
 from .paypal import PayPalError, get_client
 
 log = logging.getLogger("tips.views")
@@ -46,7 +47,9 @@ def dashboard(request):
         "tip_count": len(tips),
         "total": total,
         "average": (total / len(tips)).quantize(Decimal("0.01")) if tips else None,
-        "unfinished": Night.objects.filter(status__in=[Night.Status.REVIEW, Night.Status.PAYING]).first(),
+        "unfinished": Night.objects.filter(status__in=[Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).first(),
+        "next_close": autoclose.next_close(),
+        "roster_count": night.shifts.count(),
         "rule_set": rule_set,
         "staff_count": staff_count,
         "setup": [
@@ -55,6 +58,7 @@ def dashboard(request):
             {"done": any_tip_ever, "text": "Print table QR codes so guests can tip", "url": reverse("qr_page")},
         ],
         "ai_mode": ai.mode(),
+        "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever,
     })
 
 
@@ -239,7 +243,8 @@ def close_night(request, pk=None):
 
     elif request.method == "POST":
         rule_set = TipRuleSet.active()
-        if not rule_set:
+        saving_only = "save_roster" in request.POST
+        if not rule_set and not saving_only:
             messages.error(request, "Set your tip rules first.")
             return redirect("rules")
         night.shifts.all().delete()
@@ -253,6 +258,10 @@ def close_night(request, pk=None):
             role = request.POST.get(f"role_{member.pk}", member.default_role)
             if hours > 0 and role in Role.values:
                 Shift.objects.create(night=night, staff=member, role=role, hours=hours)
+        if saving_only:
+            messages.success(request, f"Saved {night.shifts.count()} people on tonight's roster. "
+                                      "Update the hours any time before closing.")
+            return redirect("close_night_pk", pk=night.pk)
         try:
             services.build_split(night, rule_set)
         except services.TipPoolError as exc:
@@ -280,7 +289,7 @@ def close_night(request, pk=None):
 @login_required
 def review(request, pk):
     night = get_object_or_404(Night, pk=pk)
-    if night.status == Night.Status.OPEN:
+    if night.status in (Night.Status.OPEN, Night.Status.CLOSED):
         return redirect("close_night_pk", pk=night.pk)
     shares = list(night.shares.select_related("staff"))
     return render(request, "tips/review.html", {
@@ -337,6 +346,47 @@ def payout_status_json(request, pk):
     return JsonResponse({
         "batch_status": batch.status, "night_status": night.status,
         "items": {str(i.pk): i.status for i in batch.items.all()},
+    })
+
+
+# --- Settings: automatic close-out --------------------------------------------
+TIMEZONES = [
+    ("America/New_York", "US Eastern"), ("America/Chicago", "US Central"), ("America/Denver", "US Mountain"),
+    ("America/Los_Angeles", "US Pacific"), ("Europe/London", "UK"), ("Europe/Bucharest", "Romania"),
+    ("Europe/Berlin", "Central Europe"), ("UTC", "UTC"),
+]
+
+
+@login_required
+def settings_page(request):
+    from datetime import time as dtime
+    restaurant = RestaurantSettings.load()
+    if request.method == "POST":
+        restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
+        if request.POST.get("after_close") in RestaurantSettings.AfterClose.values:
+            restaurant.after_close = request.POST["after_close"]
+        if request.POST.get("timezone") in dict(TIMEZONES):
+            restaurant.timezone = request.POST["timezone"]
+        restaurant.save()
+        for day in range(7):
+            raw = request.POST.get(f"time_{day}", "")
+            enabled = bool(request.POST.get(f"on_{day}"))
+            try:
+                hour, minute = (int(x) for x in raw.split(":")[:2])
+                value = dtime(hour, minute)
+            except ValueError:
+                value = None
+            if value:
+                CloseTime.objects.update_or_create(weekday=day, defaults={"time": value, "enabled": enabled})
+            else:
+                CloseTime.objects.filter(weekday=day).update(enabled=False)
+        messages.success(request, "Close-out settings saved.")
+        return redirect("settings")
+    existing = {c.weekday: c for c in CloseTime.objects.all()}
+    days = [{"n": d, "name": CloseTime.WEEKDAYS[d], "close": existing.get(d)} for d in range(7)]
+    return render(request, "tips/settings.html", {
+        "restaurant": restaurant, "days": days, "timezones": TIMEZONES,
+        "after_choices": RestaurantSettings.AfterClose.choices, "next_close": autoclose.next_close(),
     })
 
 

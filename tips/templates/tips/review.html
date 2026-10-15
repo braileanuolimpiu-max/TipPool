@@ -13,7 +13,7 @@
 {% if paid_total != total %}<div class="flash error">The shares add up to ${{ paid_total }}, but ${{ total }} was collected. Go back to who worked and calculate again.</div>{% endif %}
 
 <div class="split-2 reverse">
-  <div class="receipt-wrap">
+  <div class="tray"><div class="receipt-wrap">
     <div class="receipt">
       <div class="head">
         <h2>{{ restaurant_name }}</h2>
@@ -31,10 +31,10 @@
         {% endfor %}
       </div>
       <hr>
-      <div class="line total"><span>To pay out</span><span>${{ paid_total }}</span></div>
+      <div class="line total"><span>To pay out</span><span class="amt-hl">${{ paid_total }}</span></div>
       {% if rule_set %}<p class="foot">{{ rule_set.summary }}</p>{% endif %}
     </div>
-  </div>
+  </div></div>
 
   <div class="stack">
     <section class="panel">
