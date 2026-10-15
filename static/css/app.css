@@ -101,14 +101,14 @@ a:hover { text-decoration-color: var(--marker); text-decoration-thickness: 4px; 
   padding: 11px 18px; font: 700 .95rem var(--body); cursor: pointer; text-decoration: none; border: 1.5px solid var(--ink);
   transition: background .12s, color .12s, transform .06s; }
 .btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--ink); color: #fff; box-shadow: 0 3px 0 #000; }
+.btn-primary { background: var(--ink); color: #fff; }
 .btn-primary:hover { background: var(--marker); color: var(--ink); text-decoration: none; }
 .btn-secondary { background: var(--paper); color: var(--ink); }
 .btn-secondary:hover { background: var(--marker-soft); text-decoration: none; }
 .btn-quiet { border-color: transparent; background: none; color: var(--graphite); padding: 11px 6px; text-decoration: underline; }
 .btn-quiet:hover { color: var(--ink); }
 .btn-block { width: 100%; padding: 14px 18px; font-size: 1.02rem; }
-.btn[disabled] { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
 
 /* ---------- forms ---------- */
 label { display: block; font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
