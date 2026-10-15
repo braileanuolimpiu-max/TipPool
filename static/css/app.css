@@ -271,9 +271,11 @@ paypal-button, venmo-button { width: 100%; --paypal-button-border-radius: 4px; }
 .qr-setup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; align-items: stretch; margin-bottom: 34px; }
 .qr-setup > .panel { display: flex; flex-direction: column; }
 .qr-setup > .panel > .panel-body { flex: 1; }
+.qr-setup .panel-head { min-height: 58px; align-items: center; }
+.setup-body { display: flex; flex-direction: column; gap: 18px; }
+.setup-action { margin-top: auto; padding-top: 4px; }
 @media (max-width: 900px) { .qr-setup { grid-template-columns: 1fr; } }
 .house-row { display: flex; gap: 22px; align-items: center; }
-.house-row .stack { align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
 .house-qr { width: 168px; height: 168px; flex: none; border: 1px solid var(--hair); border-radius: 4px; padding: 6px; background: #fff; }
 .table-count-row { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
 .counter-input { display: flex; gap: 8px; align-items: stretch; width: 210px; }

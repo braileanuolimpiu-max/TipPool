@@ -15,18 +15,18 @@
 <div class="qr-setup no-print">
   <section class="panel">
     <div class="panel-head"><h2>Whole restaurant</h2></div>
-    <div class="panel-body house-row">
-      <img class="house-qr" src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
-      <div class="stack">
+    <div class="panel-body setup-body">
+      <div class="house-row">
+        <img class="house-qr" src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
         <p style="margin:0">One code for the counter, the check presenter or printed receipts. Enough for most places.</p>
-        <button type="button" class="btn btn-primary" data-print="house">Print this code</button>
       </div>
+      <div class="setup-action"><button type="button" class="btn btn-primary" data-print="house">Print this code</button></div>
     </div>
   </section>
 
   <form method="post" class="panel">{% csrf_token %}
     <div class="panel-head"><h2>Each table</h2><span class="small muted">optional</span></div>
-    <div class="panel-body stack">
+    <div class="panel-body setup-body">
       <div class="table-count-row">
         <div>
           <label for="table_count">How many tables?</label>
@@ -48,7 +48,7 @@
         {% endfor %}
         <input type="text" name="new_spot" placeholder="Add another, e.g. Rooftop" maxlength="20" aria-label="Add another spot" class="chip-input">
       </fieldset>
-      <button class="btn btn-primary">Make table cards</button>
+      <div class="setup-action"><button class="btn btn-primary">Make table cards</button></div>
     </div>
   </form>
 </div>
