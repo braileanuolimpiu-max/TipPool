@@ -1,48 +1,71 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}Payout{% endblock %}
 {% block content %}
-<div class="steps"><span>1. Who worked</span><span>2. Review split</span><span class="on">3. Pay with PayPal</span></div>
-<div class="row spread">
+<a class="back" href="{% url 'history' %}">← Past nights</a>
+<header class="page-head">
   <div>
-    <h1>Payout</h1>
-    <p class="muted">{{ night }} · PayPal batch <code>{{ batch.paypal_batch_id }}</code> ·
-      <span class="badge {% if batch.status == 'SUCCESS' %}good{% elif batch.status == 'DENIED' %}bad{% else %}warn{% endif %}" id="batch-status">{{ batch.status }}</span></p>
+    <h1>{% if night.status == "paid" %}Everyone's been paid{% else %}Paying the team{% endif %}</h1>
+    <p>{{ night.date|date:"l, F j" }}. PayPal payout {{ batch.paypal_batch_id }}</p>
   </div>
-  <form method="post">{% csrf_token %}<button class="btn btn-ghost">Refresh from PayPal</button></form>
-</div>
+  <div class="actions">
+    <form method="post">{% csrf_token %}<button class="btn btn-secondary">Check PayPal again</button></form>
+    <a class="btn btn-primary" href="{% url 'dashboard' %}">Back to tonight</a>
+  </div>
+</header>
+{% include "tips/_stepper.html" with step=3 %}
 
-<div class="card">
-  <div class="table-wrap"><table>
-    <thead><tr><th>Person</th><th>PayPal</th><th class="num">Amount</th><th>Status</th></tr></thead>
-    <tbody>
-    {% for item in items %}
-      <tr>
-        <td><strong>{{ item.share.staff.name }}</strong></td>
-        <td class="small">{{ item.share.staff.paypal_email }}</td>
-        <td class="num">${{ item.share.amount }}</td>
-        <td><span class="badge {% if item.status == 'SUCCESS' %}good{% elif item.status in 'FAILED,RETURNED,BLOCKED,DENIED' %}bad{% else %}warn{% endif %}" data-item="{{ item.pk }}">{{ item.status }}</span>
-          {% if item.error %}<div class="small" style="color:var(--danger)">{{ item.error }}</div>{% endif %}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
+<div class="split-2 reverse">
+  <div class="receipt-wrap">
+    <div class="receipt">
+      <div class="head">
+        <h2>{{ restaurant_name }}</h2>
+        <p>Payout for {{ night.date|date:"D M j, Y" }}</p>
+      </div>
+      <hr>
+      <div class="lines roomy">
+        {% for item in items %}
+        <div class="line">
+          <span class="what">{{ item.share.staff.name }}
+            {% if item.status == "SUCCESS" %}<span class="stamp ok" data-item="{{ item.pk }}">PAID</span>
+            {% elif item.status in "FAILED RETURNED BLOCKED DENIED REFUNDED REVERSED" %}<span class="stamp bad" data-item="{{ item.pk }}">{{ item.status }}</span>
+            {% elif item.status == "UNCLAIMED" %}<span class="stamp wait" data-item="{{ item.pk }}">UNCLAIMED</span>
+            {% else %}<span class="stamp wait" data-item="{{ item.pk }}">SENDING</span>{% endif %}
+            <small>{{ item.share.staff.paypal_email }}</small>
+            {% if item.error %}<small style="color:#b8342a">{{ item.error }}</small>{% endif %}
+          </span>
+          <span class="amt">${{ item.share.amount }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <hr>
+      <div class="line total"><span>Paid out</span><span>${{ night.tip_total }}</span></div>
+      <p class="foot">Sent with PayPal Payouts</p>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><h2>What happens now</h2></div>
+    <div class="panel-body stack">
+      {% if night.status == "paid" %}
+      <p style="margin:0">PayPal has delivered every share. Each person got an email from PayPal and can see the math on their own tips page.</p>
+      {% else %}
+      <p style="margin:0">PayPal is sending the money. This page updates by itself, usually within a minute.</p>
+      {% endif %}
+      <p class="small muted" style="margin:0">UNCLAIMED means that email has no PayPal account yet. PayPal holds the money for 30 days until they sign up.</p>
+    </div>
+  </section>
 </div>
 {% endblock %}
 {% block scripts %}
 {% if night.status == "paying" %}
 <script>
-  // Watch PayPal until every payment is final
+  // Ask PayPal every few seconds until every payment is final
   const poll = setInterval(async () => {
     const res = await fetch("{% url 'payout_status_json' night.pk %}");
     if (!res.ok) return;
     const data = await res.json();
-    document.getElementById("batch-status").textContent = data.batch_status;
-    for (const [id, status] of Object.entries(data.items)) {
-      const el = document.querySelector('[data-item="' + id + '"]');
-      if (el) el.textContent = status;
-    }
     if (data.night_status === "paid") { clearInterval(poll); window.location.reload(); }
-  }, 5000);
+  }, 4000);
 </script>
 {% endif %}
 {% endblock %}

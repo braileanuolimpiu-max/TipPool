@@ -12,6 +12,7 @@ urlpatterns = [
     path("qr.svg", views.qr_svg, name="qr_svg"),
     # manager
     path("qr/", views.qr_page, name="qr_page"),
+    path("history/", views.history, name="history"),
     path("staff/", views.staff_list, name="staff_list"),
     path("staff/<int:pk>/toggle/", views.staff_toggle, name="staff_toggle"),
     path("rules/", views.rules_page, name="rules"),

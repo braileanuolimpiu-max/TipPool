@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block body %}
+{% with u=request.resolver_match.url_name %}
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="{% url 'dashboard' %}">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#2c46d1"/><path d="M9 8h14v16l-2.3-1.6L18.3 24 16 22.4 13.7 24l-2.4-1.6L9 24z" fill="#fff"/><path d="M12 13h8M12 17h5" stroke="#2c46d1" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>TipPool<small>{{ restaurant_name }}</small></span>
+    </a>
+    <nav class="side-nav" aria-label="Main">
+      <a href="{% url 'dashboard' %}" {% if u == 'dashboard' %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3"/><circle cx="12" cy="12" r="3.5"/></svg>
+        <span>Tonight</span></a>
+      <a href="{% url 'close_night' %}" {% if u == 'close_night' or u == 'close_night_pk' or u == 'review' or u == 'payout_status' %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+        <span>Close out</span></a>
+      <a href="{% url 'history' %}" {% if u == 'history' %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>
+        <span>Past nights</span></a>
+      <a href="{% url 'staff_list' %}" {% if u == 'staff_list' %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.5 3.5 5.2"/></svg>
+        <span>Team</span></a>
+      <a href="{% url 'rules' %}" {% if u == 'rules' %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>
+        <span>Tip rules</span></a>
+      <a href="{% url 'qr_page' %}" {% if u == 'qr_page' %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>
+        <span>Table QR codes</span></a>
+    </nav>
+    <div class="side-foot">
+      <p>Signed in as {{ user.username }}</p>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>
+    </div>
+  </aside>
+  <main class="main">
+    {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endwith %}
+{% endblock %}

@@ -1,69 +1,81 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}Tonight{% endblock %}
 {% block content %}
-<div class="row spread" style="margin-bottom:16px">
+<header class="page-head">
   <div>
     <h1>Tonight</h1>
-    <p class="muted">{{ night }} · <span class="badge">{{ night.get_status_display }}</span></p>
+    <p>{{ night.date|date:"l, F j" }}, collecting tips</p>
   </div>
-  <a class="btn btn-primary" href="{% url 'close_night' %}">Close the night &rarr;</a>
-</div>
+  <div class="actions">
+    <a class="btn btn-secondary" href="{% url 'tip_page' %}" target="_blank" rel="noopener">Open guest tip page</a>
+    <a class="btn btn-primary" href="{% url 'close_night' %}">Close out tonight</a>
+  </div>
+</header>
 
-{% if not rule_set or staff_count == 0 %}
-<div class="alert warning">
-  <strong>Getting started:</strong>
-  {% if staff_count == 0 %}<a href="{% url 'staff_list' %}">add your staff</a>{% endif %}
-  {% if staff_count == 0 and not rule_set %} and {% endif %}
-  {% if not rule_set %}<a href="{% url 'rules' %}">write your tip rules</a>{% endif %}.
+{% if unfinished %}
+<div class="flash info">
+  {{ unfinished }} isn't finished yet.
+  {% if unfinished.status == "review" %}<a href="{% url 'review' unfinished.pk %}">Check the split and pay the team</a>{% else %}<a href="{% url 'payout_status' unfinished.pk %}">See the payout</a>{% endif %}
 </div>
 {% endif %}
 
-<div class="grid" style="margin-bottom:16px">
-  <div class="card stat"><div class="label">Tips collected</div><div class="value">${{ night.tip_total }}</div></div>
-  <div class="card stat"><div class="label">Tips</div><div class="value">{{ completed_count }}</div></div>
-  <div class="card stat"><div class="label">Active staff</div><div class="value">{{ staff_count }}</div></div>
-</div>
+<div class="split-2">
+  <div class="stack">
+    <section class="panel" aria-label="Tonight's tips so far">
+      <div class="tally">
+        <div><div class="big">${{ total }}</div><div class="cap">in tips so far</div></div>
+        <div><div class="mid">{{ tip_count }}</div><div class="cap">guests tipped</div></div>
+        <div><div class="mid">{% if average %}${{ average }}{% else %}–{% endif %}</div><div class="cap">average tip</div></div>
+      </div>
+    </section>
 
-<div class="grid">
-  <div class="card">
-    <div class="row spread"><h2>Tips tonight</h2><a class="small" href="{% url 'tip_page' %}" target="_blank">Open the tip page &nearr;</a></div>
-    {% if tips %}
-    <div class="table-wrap"><table>
-      <thead><tr><th>Time</th><th>Table</th><th>From</th><th class="num">Amount</th><th>Status</th></tr></thead>
-      <tbody>
-      {% for tip in tips %}
-        <tr>
-          <td>{{ tip.created_at|time:"H:i" }}</td>
-          <td>{{ tip.table|default:"–" }}</td>
-          <td>{{ tip.payer_name|default:"–" }}</td>
-          <td class="num">${{ tip.amount }}</td>
-          <td><span class="badge {% if tip.status == 'completed' %}good{% elif tip.status == 'failed' %}bad{% else %}warn{% endif %}">{{ tip.get_status_display }}</span></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
-    {% else %}
-    <p class="muted">No tips yet. Print the <a href="{% url 'qr_page' %}">table QR codes</a> so guests can tip with PayPal or Venmo.</p>
+    {% if not rule_set or staff_count == 0 or not tip_count %}
+    <section class="panel">
+      <div class="panel-head"><h2>Before your first close-out</h2></div>
+      <ul class="checklist">
+        {% for item in setup %}
+        <li class="{% if item.done %}is-done{% endif %}">
+          <span class="tick" aria-hidden="true">{% if item.done %}✓{% endif %}</span>
+          <span class="t">{% if item.done %}{{ item.text }}{% else %}<a href="{{ item.url }}">{{ item.text }}</a>{% endif %}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
     {% endif %}
+
+    <section class="panel">
+      <div class="panel-head"><h2>House rules</h2><a class="small" href="{% url 'rules' %}">Edit</a></div>
+      <div class="panel-body">
+        {% if rule_set %}<p style="margin:0">{{ rule_set.summary }}</p>
+        {% else %}<p class="muted" style="margin:0">No rules yet. <a href="{% url 'rules' %}">Describe how you share tips</a> and the split is calculated for you.</p>{% endif %}
+      </div>
+    </section>
   </div>
 
-  <div class="card">
-    <h2>Past nights</h2>
-    {% if past_nights %}
-    <ul class="clean">
-      {% for n in past_nights %}
-      <li class="row spread">
-        <span>{{ n }}</span>
-        <span class="row">
-          <span class="badge {% if n.status == 'paid' %}good{% elif n.status == 'paying' %}warn{% endif %}">{{ n.get_status_display }}</span>
-          {% if n.status == 'paid' or n.status == 'paying' %}<a href="{% url 'payout_status' n.pk %}">payout</a>
-          {% else %}<a href="{% url 'review' n.pk %}">review</a>{% endif %}
-        </span>
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="muted">Nothing yet.</p>{% endif %}
-    <p class="small muted" style="margin-top:16px">AI mode: <strong>{{ ai_mode }}</strong></p>
+  <div class="receipt-wrap">
+    <div class="receipt">
+      <div class="head">
+        <h2>{{ restaurant_name }}</h2>
+        <p>Tips received {{ night.date|date:"M j, Y" }}</p>
+      </div>
+      <hr>
+      {% if tips %}
+      <div class="lines">
+        {% for tip in tips %}
+        <div class="line">
+          <span class="what">{{ tip.created_at|time:"g:i A" }}  {% if tip.table %}Table {{ tip.table }}{% else %}Walk-up{% endif %}
+            {% if tip.payer_name %}<small>{{ tip.payer_name }}</small>{% endif %}</span>
+          <span class="amt">${{ tip.amount }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <hr>
+      <div class="line total"><span>Total</span><span>${{ total }}</span></div>
+      {% else %}
+      <p style="text-align:center;margin:18px 0">No tips yet tonight.</p>
+      <p class="foot">Tips appear here the moment a guest pays with PayPal or Venmo.</p>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

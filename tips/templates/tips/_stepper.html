@@ -1,0 +1,12 @@
+<nav class="stepper" aria-label="Close-out steps">
+  {% if step == 1 %}<span class="step now" aria-current="step"><b>1</b><span class="label">Who worked</span></span>
+  {% elif night.status == "review" %}<a class="done" href="{% url 'close_night_pk' night.pk %}"><b>✓</b><span class="label">Who worked</span></a>
+  {% else %}<span class="step done"><b>✓</b><span class="label">Who worked</span></span>{% endif %}
+
+  {% if step == 2 %}<span class="step now" aria-current="step"><b>2</b><span class="label">Check the split</span></span>
+  {% elif step > 2 %}<a class="done" href="{% url 'review' night.pk %}"><b>✓</b><span class="label">Check the split</span></a>
+  {% else %}<span class="step"><b>2</b><span class="label">Check the split</span></span>{% endif %}
+
+  {% if step == 3 %}<span class="step now" aria-current="step"><b>3</b><span class="label">Pay the team</span></span>
+  {% else %}<span class="step"><b>3</b><span class="label">Pay the team</span></span>{% endif %}
+</nav>

@@ -1,43 +1,65 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}Tip rules{% endblock %}
 {% block content %}
-<h1>Tip rules</h1>
-<p class="muted">Describe how your restaurant shares tips, in your own words. The AI turns it into exact rules and checks them.</p>
+<header class="page-head">
+  <div><h1>Tip rules</h1><p>Write how your house shares tips, the way you'd explain it to a new hire.</p></div>
+</header>
 
-<div class="grid">
-  <form method="post" class="card stack">{% csrf_token %}
-    <div>
-      <label for="text">Your rules</label>
-      <textarea id="text" name="text" placeholder="{{ example }}">{{ text }}</textarea>
-      <p class="small muted">Example: “{{ example }}”</p>
+<div class="split-2">
+  <form method="post" class="panel">{% csrf_token %}
+    <div class="panel-body stack">
+      <div>
+        <label for="text">How do you share tips?</label>
+        <textarea id="text" name="text" placeholder="{{ example }}">{{ text }}</textarea>
+      </div>
+      <div>
+        <p class="small muted" style="margin:0 0 6px">Start from an example:</p>
+        <div class="actions">
+          <button type="button" class="btn btn-secondary small" data-example="Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours worked.">Bar + bussers</button>
+          <button type="button" class="btn btn-secondary small" data-example="Everyone shares the tips by hours worked: servers, bartenders and bussers.">Everyone by hours</button>
+          <button type="button" class="btn btn-secondary small" data-example="Kitchen gets 15%, hosts get 5% split equally, the rest goes to servers by hours.">Kitchen included</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" name="parse">Read my rules</button>
+        <span class="small muted">{% if ai_mode == "claude" %}Read by Claude{% else %}Read by the offline parser (Claude mode is off){% endif %}</span>
+      </div>
     </div>
-    <button class="btn btn-primary" name="parse">✨ Read my rules</button>
-    <p class="small muted">AI mode: <strong>{{ ai_mode }}</strong></p>
   </form>
 
   {% if preview %}
-  <div class="card stack">
-    <h2>Here's what I understood</h2>
-    <p>{{ preview.summary }}</p>
-    {% include "tips/_rules_table.html" with rules=preview.rules %}
-    {% if preview.warnings %}
-    <div class="alert warning"><strong>Check these:</strong>
-      <ul>{% for w in preview.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  <section class="panel">
+    <div class="panel-head"><h2>Here's how I read it</h2></div>
+    <div class="panel-body stack">
+      <p style="margin:0">{{ preview.summary }}</p>
+      {% include "tips/_rules_table.html" with rules=preview.rules %}
+      {% if preview.warnings %}<div class="note-warn"><strong>Check before saving</strong><ul>{% for w in preview.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+      <form method="post" class="actions">{% csrf_token %}
+        <button class="btn btn-primary" name="save">Use these rules</button>
+        <span class="small muted">or change the text and read it again</span>
+      </form>
     </div>
-    {% endif %}
-    <form method="post">{% csrf_token %}<button class="btn btn-primary" name="save">Save these rules</button></form>
-  </div>
+  </section>
   {% elif active %}
-  <div class="card stack">
-    <div class="row spread"><h2>Current rules</h2><span class="badge good">Active</span></div>
-    <p>{{ active.summary }}</p>
-    {% include "tips/_rules_table.html" with rules=active.rules %}
-    {% if active.warnings %}
-    <div class="alert warning"><strong>Notes:</strong>
-      <ul>{% for w in active.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  <section class="panel">
+    <div class="panel-head"><h2>Rules in use</h2><span class="pill ok">Active</span></div>
+    <div class="panel-body stack">
+      <p style="margin:0">{{ active.summary }}</p>
+      {% include "tips/_rules_table.html" with rules=active.rules %}
+      {% if active.warnings %}<div class="note-warn"><strong>Notes</strong><ul>{% for w in active.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
     </div>
-    {% endif %}
-  </div>
+  </section>
+  {% else %}
+  <section class="panel panel-body"><p class="muted" style="margin:0">Your rules will appear here as a clear table, with a warning if anything could break US tip-pool law.</p></section>
   {% endif %}
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll("[data-example]").forEach((b) => b.addEventListener("click", () => {
+    const t = document.getElementById("text");
+    t.value = b.dataset.example;
+    t.focus();
+  }));
+</script>
 {% endblock %}

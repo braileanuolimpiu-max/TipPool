@@ -1,16 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Log in{% endblock %}
-{% block container_class %}narrow{% endblock %}
-{% block content %}
-<div class="card stack">
-  <h1>Manager login</h1>
-  <p class="muted">Collect tips with PayPal, split them fairly with AI, pay your team in one click.</p>
-  {% if form.errors %}<div class="alert error">Wrong username or password.</div>{% endif %}
-  <form method="post" class="stack">{% csrf_token %}
-    <div><label for="id_username">Username</label><input type="text" name="username" id="id_username" autofocus required></div>
-    <div><label for="id_password">Password</label><input type="password" name="password" id="id_password" required></div>
-    <input type="hidden" name="next" value="{{ next }}">
-    <button class="btn btn-primary btn-big">Log in</button>
-  </form>
+{% block title %}Sign in{% endblock %}
+{% block body %}
+<div class="login">
+  <div class="left">
+    <a class="brand" href="#" style="padding:0">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#2c46d1"/><path d="M9 8h14v16l-2.3-1.6L18.3 24 16 22.4 13.7 24l-2.4-1.6L9 24z" fill="#fff"/></svg>
+      <span>TipPool</span>
+    </a>
+    <div>
+      <h1>End-of-night tip-outs, done in two minutes.</h1>
+      <p>Guests tip with PayPal or Venmo. AI applies your house rules and explains every share. One click pays the whole team.</p>
+    </div>
+    <p class="small">{{ restaurant_name }}</p>
+  </div>
+  <div class="right">
+    <form method="post" class="stack">{% csrf_token %}
+      <h2>Manager sign in</h2>
+      {% if form.errors %}<div class="flash error">That username and password don't match.</div>{% endif %}
+      <div><label for="id_username">Username</label><input type="text" name="username" id="id_username" autocomplete="username" autofocus required></div>
+      <div><label for="id_password">Password</label><input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn btn-primary btn-block">Sign in</button>
+    </form>
+  </div>
 </div>
 {% endblock %}

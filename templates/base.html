@@ -3,35 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}TipPool{% endblock %} · TipPool</title>
+  <title>{% block title %}TipPool{% endblock %} | {{ restaurant_name }}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232c46d1'/><path d='M9 8h14v16l-2.3-1.6L18.3 24 16 22.4 13.7 24l-2.4-1.6L9 24z' fill='white'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body>
-{% block topbar %}
-<header class="topbar">
-  <div class="inner">
-    <a class="logo" href="{% url 'dashboard' %}">Tip<span>Pool</span></a>
-    {% if user.is_authenticated %}
-    {% with u=request.resolver_match.url_name %}
-    <nav class="nav">
-      <a href="{% url 'dashboard' %}" class="{% if u == 'dashboard' %}active{% endif %}">Tonight</a>
-      <a href="{% url 'close_night' %}" class="{% if u == 'close_night' or u == 'close_night_pk' or u == 'review' %}active{% endif %}">Close the night</a>
-      <a href="{% url 'rules' %}" class="{% if u == 'rules' %}active{% endif %}">Tip rules</a>
-      <a href="{% url 'staff_list' %}" class="{% if u == 'staff_list' %}active{% endif %}">Staff</a>
-      <a href="{% url 'qr_page' %}" class="{% if u == 'qr_page' %}active{% endif %}">Table QR codes</a>
-    </nav>
-    {% endwith %}
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-ghost small">Log out</button></form>
-    {% endif %}
-  </div>
-</header>
-{% endblock %}
-<main class="container {% block container_class %}{% endblock %}">
-  {% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}
-  {% block content %}{% endblock %}
-</main>
+{% block body %}{% endblock %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

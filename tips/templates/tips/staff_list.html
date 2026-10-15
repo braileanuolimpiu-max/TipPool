@@ -1,35 +1,40 @@
-{% extends "base.html" %}
-{% block title %}Staff{% endblock %}
+{% extends "app.html" %}
+{% block title %}Team{% endblock %}
 {% block content %}
-<h1>Staff</h1>
-<p class="muted">Tips are paid to each person's PayPal email. Each person also gets a private link to see their own tips.</p>
-<div class="grid">
-  <div class="card" style="grid-column: span 2; min-width: 0">
-    <div class="table-wrap"><table>
-      <thead><tr><th>Name</th><th>Usual role</th><th>PayPal email</th><th>Their page</th><th></th></tr></thead>
-      <tbody>
+<header class="page-head">
+  <div><h1>Team</h1><p>Tips are paid to each person's PayPal email. Everyone also has a private page with their own tips.</p></div>
+</header>
+<div class="split-2">
+  <section class="panel">
+    {% if staff %}
+    <ul class="rows">
       {% for m in staff %}
-        <tr{% if not m.active %} class="muted"{% endif %}>
-          <td><strong>{{ m.name }}</strong></td>
-          <td>{{ m.get_default_role_display }}</td>
-          <td class="small">{{ m.paypal_email }}</td>
-          <td><a class="small" href="{% url 'my_tips' m.access_token %}" target="_blank">open &nearr;</a></td>
-          <td><form method="post" action="{% url 'staff_toggle' m.pk %}">{% csrf_token %}
-            <button class="btn btn-ghost small">{% if m.active %}Deactivate{% else %}Activate{% endif %}</button></form></td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="5" class="muted">No staff yet. Add your team on the right.</td></tr>
+      <li{% if not m.active %} style="opacity:.55"{% endif %}>
+        <span class="avatar" aria-hidden="true">{{ m.name|slice:":1" }}</span>
+        <div style="flex:1;min-width:0">
+          <strong>{{ m.name }}</strong> <span class="small muted">{{ m.get_default_role_display }}</span>
+          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.paypal_email }}</div>
+        </div>
+        <a class="small" href="{% url 'my_tips' m.access_token %}" target="_blank" rel="noopener">Their tips page</a>
+        <form method="post" action="{% url 'staff_toggle' m.pk %}">{% csrf_token %}
+          <button class="btn btn-quiet small">{% if m.active %}Remove{% else %}Bring back{% endif %}</button></form>
+      </li>
       {% endfor %}
-      </tbody>
-    </table></div>
-  </div>
-  <form method="post" class="card stack">{% csrf_token %}
-    <h2>Add a person</h2>
-    <div><label for="name">Name</label><input type="text" id="name" name="name" required></div>
-    <div><label for="paypal_email">PayPal email</label><input type="email" id="paypal_email" name="paypal_email" required></div>
-    <div><label for="default_role">Usual role</label>
-      <select id="default_role" name="default_role">{% for value, label in roles %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
-    <button class="btn btn-primary">Add</button>
+    </ul>
+    {% else %}
+    <div class="panel-body"><p class="muted" style="margin:0">No one here yet. Add the people who share tips.</p></div>
+    {% endif %}
+  </section>
+  <form method="post" class="panel">{% csrf_token %}
+    <div class="panel-head"><h2>Add someone</h2></div>
+    <div class="panel-body stack">
+      <div><label for="name">Name</label><input type="text" id="name" name="name" required></div>
+      <div><label for="paypal_email">PayPal email</label><input type="email" id="paypal_email" name="paypal_email" required>
+        <p class="hint">Where their tips are sent.</p></div>
+      <div><label for="default_role">Usual role</label>
+        <select id="default_role" name="default_role">{% for value, label in roles %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+      <button class="btn btn-primary">Add to team</button>
+    </div>
   </form>
 </div>
 {% endblock %}

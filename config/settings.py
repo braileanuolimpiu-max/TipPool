@@ -69,6 +69,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'tips.context.app_context',
             ],
         },
     },
@@ -144,6 +145,7 @@ PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID", "")
 PAYPAL_BASE_URL = os.environ.get("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
 PAYPAL_SDK_URL = os.environ.get("PAYPAL_SDK_URL", "https://www.sandbox.paypal.com/web-sdk/v6/core")
 TIP_CURRENCY = "USD"
+RESTAURANT_NAME = os.environ.get("RESTAURANT_NAME", "The Corner Table")
 
 # --- AI ---
 # "mock" = built-in rule parser, no API key, no cost (good while building)

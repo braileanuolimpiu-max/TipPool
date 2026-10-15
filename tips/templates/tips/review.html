@@ -1,38 +1,71 @@
-{% extends "base.html" %}
-{% block title %}Review the split{% endblock %}
+{% extends "app.html" %}
+{% block title %}Check the split{% endblock %}
 {% block content %}
-<div class="steps"><span>1. Who worked</span><span class="on">2. Review split</span><span>3. Pay with PayPal</span></div>
-<h1>Review the split</h1>
-<p class="muted">{{ night }} · total tips <strong>${{ total }}</strong>{% if rule_set %} · {{ rule_set.summary }}{% endif %}</p>
-
-<div class="card stack">
-  <div class="table-wrap"><table>
-    <thead><tr><th>Person</th><th>Role</th><th class="num">Hours</th><th class="num">Share</th></tr></thead>
-    <tbody>
-    {% for s in shares %}
-      <tr>
-        <td><strong>{{ s.staff.name }}</strong>
-          {% if s.explanation %}<div class="why">{{ s.explanation }}</div>{% endif %}</td>
-        <td>{{ s.get_role_display }}</td>
-        <td class="num">{{ s.hours|floatformat:"-2" }}</td>
-        <td class="num"><strong>${{ s.amount }}</strong></td>
-      </tr>
-    {% endfor %}
-    </tbody>
-    <tfoot><tr><td colspan="3">Total paid out</td><td class="num">${{ paid_total }}</td></tr></tfoot>
-  </table></div>
-  {% if paid_total != total %}<div class="alert error">The shares (${{ paid_total }}) don't match the tips (${{ total }}). Recalculate before paying.</div>{% endif %}
-
-  {% if night.status == "review" %}
-  <div class="row">
-    <a class="btn btn-ghost" href="{% url 'close_night_pk' night.pk %}">&larr; Edit who worked</a>
-    <form method="post" action="{% url 'pay' night.pk %}" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Sending to PayPal…'">{% csrf_token %}
-      <button class="btn btn-primary">Approve &amp; pay everyone with PayPal</button>
-    </form>
+<a class="back" href="{% url 'close_night_pk' night.pk %}">← Who worked</a>
+<header class="page-head">
+  <div>
+    <h1>Check the split</h1>
+    <p>Here is everyone's share of {{ night.date|date:"l" }}'s ${{ total }}. Nothing is paid until you approve.</p>
   </div>
-  <p class="small muted">One PayPal Payouts batch sends every share at once, straight to each person's PayPal account.</p>
-  {% else %}
-  <a class="btn btn-primary" href="{% url 'payout_status' night.pk %}">See payout status &rarr;</a>
-  {% endif %}
+</header>
+{% include "tips/_stepper.html" with step=2 %}
+
+{% if paid_total != total %}<div class="flash error">The shares add up to ${{ paid_total }}, but ${{ total }} was collected. Go back to who worked and calculate again.</div>{% endif %}
+
+<div class="split-2 reverse">
+  <div class="receipt-wrap">
+    <div class="receipt">
+      <div class="head">
+        <h2>{{ restaurant_name }}</h2>
+        <p>Tip-out sheet for {{ night.date|date:"D M j, Y" }}</p>
+      </div>
+      <hr>
+      <div class="line"><span>Tips collected</span><span class="amt">${{ total }}</span></div>
+      <hr>
+      <div class="lines roomy">
+        {% for s in shares %}
+        <div class="line">
+          <span class="what">{{ s.staff.name }}<small>{{ s.get_role_display }}, {{ s.hours|floatformat:"-2" }} h</small></span>
+          <span class="amt">${{ s.amount }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <hr>
+      <div class="line total"><span>To pay out</span><span>${{ paid_total }}</span></div>
+      {% if rule_set %}<p class="foot">{{ rule_set.summary }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Why each person gets this</h2></div>
+      {% for s in shares %}
+      <details class="why" {% if forloop.first %}open{% endif %}>
+        <summary><span class="avatar" aria-hidden="true">{{ s.staff.name|slice:":1" }}</span>{{ s.staff.name }}<span class="amt">${{ s.amount }}</span></summary>
+        <p>{{ s.explanation|default:"No explanation available." }}</p>
+      </details>
+      {% endfor %}
+    </section>
+
+    {% if night.status == "review" %}
+    <form method="post" action="{% url 'pay' night.pk %}" class="panel panel-body stack" id="pay-form">{% csrf_token %}
+      <p style="margin:0">Each person gets their share straight to their PayPal account, in one PayPal payout.</p>
+      <button class="btn btn-primary btn-block">Pay {{ paying_count }} {% if paying_count == 1 %}person{% else %}people{% endif %} ${{ paid_total }}</button>
+      <a class="btn btn-quiet" href="{% url 'close_night_pk' night.pk %}">Change who worked</a>
+    </form>
+    {% else %}
+    <a class="btn btn-primary btn-block" href="{% url 'payout_status' night.pk %}">See the payout</a>
+    {% endif %}
+  </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const pay = document.getElementById("pay-form");
+  if (pay) pay.addEventListener("submit", () => {
+    const b = pay.querySelector("button");
+    b.disabled = true;
+    b.textContent = "Sending to PayPal…";
+  });
+</script>
 {% endblock %}

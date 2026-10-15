@@ -35,21 +35,44 @@ def _sync_tips(night):
 def dashboard(request):
     night = Night.current()
     _sync_tips(night)
+    tips = list(night.tips.filter(status=Tip.Status.COMPLETED))
+    total = night.tip_total
+    staff_count = StaffMember.objects.filter(active=True).count()
+    rule_set = TipRuleSet.active()
+    any_tip_ever = Tip.objects.filter(status=Tip.Status.COMPLETED).exists()
     return render(request, "tips/dashboard.html", {
         "night": night,
-        # only paid tips; guests who opened PayPal but didn't pay are left out
-        "tips": night.tips.filter(status=Tip.Status.COMPLETED)[:50],
-        "completed_count": night.tips.filter(status=Tip.Status.COMPLETED).count(),
-        "past_nights": Night.objects.exclude(pk=night.pk)[:10],
-        "rule_set": TipRuleSet.active(),
-        "staff_count": StaffMember.objects.filter(active=True).count(),
+        "tips": tips[:40],
+        "tip_count": len(tips),
+        "total": total,
+        "average": (total / len(tips)).quantize(Decimal("0.01")) if tips else None,
+        "unfinished": Night.objects.filter(status__in=[Night.Status.REVIEW, Night.Status.PAYING]).first(),
+        "rule_set": rule_set,
+        "staff_count": staff_count,
+        "setup": [
+            {"done": staff_count > 0, "text": "Add your team and their PayPal emails", "url": reverse("staff_list")},
+            {"done": bool(rule_set), "text": "Describe how your house shares tips", "url": reverse("rules")},
+            {"done": any_tip_ever, "text": "Print table QR codes so guests can tip", "url": reverse("qr_page")},
+        ],
         "ai_mode": ai.mode(),
     })
+
+
+@login_required
+def history(request):
+    nights = (Night.objects.exclude(status=Night.Status.OPEN)
+              .prefetch_related("shares", "tips").select_related("payout_batch")[:60])
+    rows = []
+    for n in nights:
+        rows.append({"night": n, "total": n.tip_total, "people": sum(1 for s in n.shares.all() if s.amount > 0),
+                     "batch": getattr(n, "payout_batch", None)})
+    return render(request, "tips/history.html", {"rows": rows})
 
 
 # --- Customer tip page (public) -----------------------------------------------
 def tip_page(request):
     return render(request, "tips/tip_page.html", {
+        "cancelled": "cancelled" in request.GET,
         "presets": TIP_PRESETS,
         "table": request.GET.get("table", "")[:20],
         "paypal_client_id": settings.PAYPAL_CLIENT_ID,
@@ -66,7 +89,7 @@ def tip_thanks(request):
             tip = services.capture_tip(order_id)
         except PayPalError:
             log.warning("Capture on return page failed for %s", order_id)
-    return render(request, "tips/tip_thanks.html", {"tip": tip})
+    return render(request, "tips/tip_thanks.html", {"tip": tip, "table": tip.table if tip else ""})
 
 
 @require_POST
@@ -243,12 +266,13 @@ def close_night(request, pk=None):
         guess = prefill.get(member.pk)
         rows.append({
             "member": member,
-            "worked": bool(shift or guess),
+            # first visit: everyone on (managers switch off who was absent); afterwards keep their choices
+            "worked": bool(shift or guess) or (not existing and not prefill),
             "role": (guess or {}).get("role") or (shift.role if shift else member.default_role),
             "hours": (guess or {}).get("hours") or (shift.hours if shift else ""),
         })
     return render(request, "tips/close_night.html", {
-        "night": night, "rows": rows, "roles": Role.choices, "rule_set": TipRuleSet.active(),
+        "night": night, "rows": rows, "tip_count": night.tips.filter(status=Tip.Status.COMPLETED).count(), "roles": Role.choices, "rule_set": TipRuleSet.active(),
         "ai_notes": ai_notes, "ai_mode": ai.mode(),
     })
 
@@ -262,6 +286,7 @@ def review(request, pk):
     return render(request, "tips/review.html", {
         "night": night, "shares": shares, "total": night.tip_total,
         "paid_total": sum((s.amount for s in shares), Decimal("0")),
+        "paying_count": sum(1 for s in shares if s.amount > 0),
         "rule_set": night.rule_set,
     })
 

@@ -1,25 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Leave a tip{% endblock %}
-{% block topbar %}{% endblock %}
-{% block container_class %}public{% endblock %}
-{% block content %}
-<div class="card">
-  <h1>Thank you for dining with us</h1>
-  <p class="muted">Your tip is shared fairly with the whole team who served you tonight{% if table %} · Table {{ table }}{% endif %}.</p>
-
-  <div class="amounts" id="amounts">
-    {% for p in presets %}<button type="button" class="amount{% if p == 10 %} selected{% endif %}" data-amount="{{ p }}">${{ p }}</button>{% endfor %}
+{% block body %}
+<div class="guest">
+  {% if user.is_authenticated %}
+  <div class="manager-strip"><span>You're viewing the guest tip page</span><a href="{% url 'dashboard' %}">Back to dashboard</a></div>
+  {% endif %}
+  <div class="receipt-wrap" style="width:100%">
+    <div class="receipt">
+      <div class="head">
+        <h2>{{ restaurant_name }}</h2>
+        <p>{% if table %}Table {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
+      </div>
+      <hr>
+      <p style="margin:0">Thanks for joining us. Your tip is shared with everyone who looked after you tonight, from the bar to the bussers.</p>
+      <hr>
+      {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">No tip was taken. Choose an amount to try again.</p>{% endif %}
+      <div class="amounts" role="group" aria-label="Tip amount">
+        {% for p in presets %}<button type="button" class="amount" data-amount="{{ p }}" aria-pressed="{% if p == 10 %}true{% else %}false{% endif %}">${{ p }}</button>{% endfor %}
+      </div>
+      <label for="custom">Other amount</label>
+      <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="$ 0.00">
+      <div class="pay-buttons">
+        <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
+        <venmo-button type="pay" class="venmo-blue" hidden></venmo-button>
+      </div>
+      <p id="status" class="status-line" role="status">Loading PayPal…</p>
+    </div>
   </div>
-  <label for="custom">Or another amount ($)</label>
-  <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="e.g. 12.50">
-
-  <div class="pay-buttons">
-    <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
-    <venmo-button type="pay" class="venmo-blue" hidden></venmo-button>
-  </div>
-  <p id="status" class="small muted" style="margin-top:12px">Loading PayPal…</p>
+  <p class="guest-note">Payments are processed by PayPal. {{ restaurant_name }} never sees your card details.</p>
 </div>
-<p class="small muted" style="margin-top:16px">Powered by Tip<strong>Pool</strong> · payments by PayPal</p>
 {% endblock %}
 {% block scripts %}
 {{ table|json_script:"table-data" }}
@@ -29,14 +38,15 @@
   const statusEl = document.getElementById("status");
   let amount = "10.00";
 
-  document.querySelectorAll(".amount").forEach((btn) => btn.addEventListener("click", () => {
-    document.querySelectorAll(".amount").forEach((b) => b.classList.remove("selected"));
-    btn.classList.add("selected");
+  const amountButtons = document.querySelectorAll(".amount");
+  amountButtons.forEach((btn) => btn.addEventListener("click", () => {
+    amountButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
+    btn.setAttribute("aria-pressed", "true");
     document.getElementById("custom").value = "";
     amount = Number(btn.dataset.amount).toFixed(2);
   }));
   document.getElementById("custom").addEventListener("input", (e) => {
-    document.querySelectorAll(".amount").forEach((b) => b.classList.remove("selected"));
+    amountButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
     amount = e.target.value ? Number(e.target.value).toFixed(2) : "";
   });
 

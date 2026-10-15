@@ -134,7 +134,7 @@ class FullFlowTests(TestCase):
 
     def test_pages_render(self):
         self.tip("10.00")
-        for name in ["dashboard", "tip_page", "rules", "staff_list", "close_night", "qr_page"]:
+        for name in ["dashboard", "tip_page", "rules", "staff_list", "close_night", "qr_page", "history"]:
             self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
         member = self.staff["Maria"]
         self.assertEqual(self.client.get(reverse("my_tips", args=[member.access_token])).status_code, 200)
