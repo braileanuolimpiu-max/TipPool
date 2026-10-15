@@ -24,9 +24,17 @@ TIP_PRESETS = [5, 10, 15, 20]
 
 
 # --- Manager dashboard -------------------------------------------------------
+def _sync_tips(night):
+    try:
+        services.sync_pending_tips(night)
+    except Exception:  # never break the page because PayPal is slow
+        log.exception("Tip sync failed")
+
+
 @login_required
 def dashboard(request):
     night = Night.current()
+    _sync_tips(night)
     return render(request, "tips/dashboard.html", {
         "night": night,
         # only paid tips; guests who opened PayPal but didn't pay are left out
@@ -50,7 +58,14 @@ def tip_page(request):
 
 
 def tip_thanks(request):
-    tip = Tip.objects.filter(paypal_order_id=request.GET.get("order", "")).first()
+    # "order" comes from our page; "token" is what PayPal adds when it redirects back here
+    order_id = request.GET.get("order") or request.GET.get("token") or ""
+    tip = Tip.objects.filter(paypal_order_id=order_id).first()
+    if tip and tip.status != Tip.Status.COMPLETED:
+        try:
+            tip = services.capture_tip(order_id)
+        except PayPalError:
+            log.warning("Capture on return page failed for %s", order_id)
     return render(request, "tips/tip_thanks.html", {"tip": tip})
 
 
@@ -59,7 +74,12 @@ def api_create_order(request):
     try:
         data = json.loads(request.body or "{}")
         amount = Decimal(str(data.get("amount", "")))
-        order_id = services.create_tip_order(amount, str(data.get("table", "")))
+        table = str(data.get("table", ""))
+        order_id = services.create_tip_order(
+            amount, table,
+            return_url=request.build_absolute_uri(reverse("tip_thanks")),
+            cancel_url=request.build_absolute_uri(reverse("tip_page")) + "?cancelled=1",
+        )
     except (InvalidOperation, ValueError, json.JSONDecodeError):
         return JsonResponse({"error": "Please choose a valid tip amount."}, status=400)
     except services.TipPoolError as exc:
@@ -168,6 +188,8 @@ def close_night(request, pk=None):
     night = get_object_or_404(Night, pk=pk) if pk else Night.current()
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
         return redirect("payout_status", pk=night.pk)
+    if night.status == Night.Status.OPEN:
+        _sync_tips(night)
     staff = list(StaffMember.objects.filter(active=True))
     existing = {s.staff_id: s for s in night.shifts.all()}
     prefill = {}

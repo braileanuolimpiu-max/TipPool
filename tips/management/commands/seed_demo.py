@@ -3,6 +3,7 @@
     python manage.py seed_demo
 
 Staff come from DEMO_STAFF in .env, format:  Name:role:paypal_email,Name:role:paypal_email,...
+An empty email falls back to NAME_EMAIL in .env (e.g. MARIA_EMAIL=...).
 """
 import os
 
@@ -39,7 +40,8 @@ class Command(BaseCommand):
             if role not in Role.values:
                 self.stderr.write(f"Skipping {name}: unknown role '{role}'")
                 continue
-            email = email or f"{name.lower()}@example.com"
+            # also accept one line per person in .env, e.g. MARIA_EMAIL=...
+            email = email or os.environ.get(f"{name.upper()}_EMAIL", "") or f"{name.lower()}@example.com"
             member, made = StaffMember.objects.update_or_create(
                 name=name, defaults={"default_role": role, "paypal_email": email, "active": True})
             self.stdout.write(f"{'Added' if made else 'Updated'} {name} ({role}) -> {email}")

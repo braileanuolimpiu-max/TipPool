@@ -75,7 +75,8 @@ class PayPalClient:
         return response.json() if response.content else {}
 
     # --- Orders API v2 (collecting tips) -------------------------------------
-    def create_order(self, amount, currency="USD", description="Tip", reference_id=None):
+    def create_order(self, amount, currency="USD", description="Tip", reference_id=None,
+                     return_url=None, cancel_url=None):
         body = {
             "intent": "CAPTURE",
             "purchase_units": [{
@@ -84,6 +85,13 @@ class PayPalClient:
                 "amount": {"currency_code": currency, "value": f"{amount:.2f}"},
             }],
         }
+        experience = {
+            "shipping_preference": "NO_SHIPPING",  # a tip has nothing to ship
+            "user_action": "PAY_NOW",              # show "Pay Now", not "Continue to Review Order"
+        }
+        if return_url and cancel_url:
+            experience.update({"return_url": return_url, "cancel_url": cancel_url})
+        body["payment_source"] = {"paypal": {"experience_context": experience}}
         return self._request("POST", "/v2/checkout/orders", json=body)
 
     def capture_order(self, order_id):

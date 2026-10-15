@@ -23,7 +23,7 @@ class TipPoolError(Exception):
 
 
 # --- Tips (money in) ---------------------------------------------------------
-def create_tip_order(amount, table=""):
+def create_tip_order(amount, table="", return_url=None, cancel_url=None):
     """Create a PayPal order for a tip on tonight's night."""
     amount = Decimal(str(amount)).quantize(Decimal("0.01"))
     if amount < Decimal("1.00") or amount > Decimal("500.00"):
@@ -31,7 +31,8 @@ def create_tip_order(amount, table=""):
     night = Night.current()
     order = get_client().create_order(amount, settings.TIP_CURRENCY,
                                       description=f"Tip{f' - table {table}' if table else ''}",
-                                      reference_id=f"night-{night.pk}")
+                                      reference_id=f"night-{night.pk}",
+                                      return_url=return_url, cancel_url=cancel_url)
     Tip.objects.create(night=night, amount=amount, paypal_order_id=order["id"], table=table[:20])
     return order["id"]
 
@@ -44,12 +45,28 @@ def capture_tip(order_id):
     try:
         result = get_client().capture_order(order_id)
     except PayPalError as exc:
-        if exc.details.get("details", [{}])[0].get("issue") == "ORDER_ALREADY_CAPTURED":
+        issue = (exc.details.get("details") or [{}])[0].get("issue")
+        if issue == "ORDER_ALREADY_CAPTURED":
             result = get_client().get_order(order_id)
         else:
             raise
     _apply_order_result(tip, result)
     return tip
+
+
+def sync_pending_tips(night, max_checks=20):
+    """Safety net: finish tips the guest approved but that were never captured
+    (e.g. the PayPal window closed before it could tell our page)."""
+    finished = 0
+    for tip in night.tips.filter(status=Tip.Status.CREATED).order_by("-created_at")[:max_checks]:
+        try:
+            status = get_client().get_order(tip.paypal_order_id).get("status")
+            if status in ("APPROVED", "COMPLETED"):
+                capture_tip(tip.paypal_order_id)
+                finished += 1
+        except PayPalError:
+            log.warning("Could not sync tip order %s", tip.paypal_order_id)
+    return finished
 
 
 def _apply_order_result(tip, result):

@@ -15,10 +15,16 @@ class FakePayPal:
     def __init__(self):
         self.orders = 0
         self.payout_bodies = []
+        self.order_status = {}
+        self.last_order_kwargs = {}
 
-    def create_order(self, amount, currency="USD", description="Tip", reference_id=None):
+    def create_order(self, amount, currency="USD", description="Tip", reference_id=None, **kwargs):
         self.orders += 1
+        self.last_order_kwargs = kwargs
         return {"id": f"ORDER{self.orders}"}
+
+    def get_order(self, order_id):
+        return {"id": order_id, "status": self.order_status.get(order_id, "CREATED")}
 
     def capture_order(self, order_id):
         return {"purchase_units": [{"payments": {"captures": [{"id": f"CAP-{order_id}", "status": "COMPLETED"}]}}],
@@ -97,6 +103,29 @@ class FullFlowTests(TestCase):
         res = self.client.get(reverse("payout_status_json", args=[night.pk]))
         self.assertEqual(res.json()["night_status"], "paid")
         self.assertEqual(set(PayoutItem.objects.values_list("status", flat=True)), {"SUCCESS"})
+
+    def test_return_and_cancel_urls_sent_to_paypal(self):
+        self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5"}), content_type="application/json")
+        self.assertTrue(self.paypal.last_order_kwargs["return_url"].endswith(reverse("tip_thanks")))
+        self.assertIn("cancelled=1", self.paypal.last_order_kwargs["cancel_url"])
+
+    def test_stuck_approved_tip_is_finished_by_dashboard(self):
+        """Guest approved in PayPal but the popup never came back: the dashboard captures it."""
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5"}),
+                               content_type="application/json")
+        order_id = res.json()["orderId"]
+        self.client.get(reverse("dashboard"))
+        self.assertEqual(Tip.objects.get(paypal_order_id=order_id).status, "created")  # not approved yet
+        self.paypal.order_status[order_id] = "APPROVED"
+        self.client.get(reverse("dashboard"))
+        self.assertEqual(Tip.objects.get(paypal_order_id=order_id).status, "completed")
+
+    def test_return_page_captures(self):
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5"}),
+                               content_type="application/json")
+        order_id = res.json()["orderId"]
+        self.client.get(reverse("tip_thanks") + f"?token={order_id}&PayerID=X")
+        self.assertEqual(Tip.objects.get(paypal_order_id=order_id).status, "completed")
 
     def test_bad_tip_amount(self):
         res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "0.50"}),
