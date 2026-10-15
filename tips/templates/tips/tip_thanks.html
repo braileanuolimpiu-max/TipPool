@@ -8,7 +8,7 @@
   <div class="receipt-wrap" style="width:100%">
     <div class="receipt" style="text-align:center">
       <div class="head">
-        <h2>{{ restaurant_name }}</h2>
+        <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}Thank you{% endif %}</h2>
         <p>{% if table %}Table {{ table }}, {% endif %}{% if tip %}{{ tip.created_at|date:"M j, g:i A" }}{% else %}{% now "M j, g:i A" %}{% endif %}</p>
       </div>
       <hr>

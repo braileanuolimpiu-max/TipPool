@@ -4,36 +4,30 @@
 <header class="page-head no-print">
   <div>
     <h1>QR codes for tipping</h1>
-    <p>Guests scan a code and tip with PayPal or Venmo. Every code feeds the same tip pool. Table codes only add which table the tip came from to the night's receipt.</p>
+    <p>Guests scan a code and tip with PayPal or Venmo. Every code feeds the same tip pool; a table code also records which table the tip came from.</p>
   </div>
 </header>
 
-<div class="split-2 reverse">
-  <section class="stack print-house">
-    <div class="no-print">
-      <h2>One code for the whole restaurant</h2>
-      <p class="muted" style="margin:6px 0 0">Put it on the counter, in the check presenter or on printed receipts. Enough for most places.</p>
-    </div>
-    <div class="tray">
-      <div class="receipt-wrap">
-        <div class="receipt" style="text-align:center;max-width:300px">
-          <div class="head"><h2>{{ restaurant_name }}</h2><p>Thank you for dining with us</p></div>
-          <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}" style="width:100%;max-width:200px;display:block;margin:8px auto">
-          <p style="margin:0;font-weight:700">Scan to leave a tip</p>
-          <p class="foot" style="margin-top:4px">Shared with the whole team</p>
-        </div>
+{% if not restaurant_named %}
+<div class="flash warning no-print">Your cards say "Your restaurant" until you <a href="{% url 'settings' %}">add your restaurant's name</a>.</div>
+{% endif %}
+
+<div class="qr-setup no-print">
+  <section class="panel">
+    <div class="panel-head"><h2>Whole restaurant</h2></div>
+    <div class="panel-body house-row">
+      <img class="house-qr" src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
+      <div class="stack">
+        <p style="margin:0">One code for the counter, the check presenter or printed receipts. Enough for most places.</p>
+        <button type="button" class="btn btn-primary" data-print="house">Print this code</button>
       </div>
     </div>
-    <button type="button" class="btn btn-primary no-print" data-print="house">Print this code</button>
   </section>
 
-  <section class="stack print-tables">
-    <div class="no-print">
-      <h2>A code for each table</h2>
-      <p class="muted" style="margin:6px 0 0">Optional. Tips then show their table, like "Table 4: $20".</p>
-    </div>
-    <form method="post" class="panel no-print">{% csrf_token %}
-      <div class="panel-body stack">
+  <form method="post" class="panel">{% csrf_token %}
+    <div class="panel-head"><h2>Each table</h2><span class="small muted">optional</span></div>
+    <div class="panel-body stack">
+      <div class="table-count-row">
         <div>
           <label for="table_count">How many tables?</label>
           <div class="counter-input">
@@ -41,48 +35,62 @@
             <input type="number" id="table_count" name="table_count" min="0" max="200" value="{{ restaurant.table_count }}" inputmode="numeric">
             <button type="button" class="btn btn-secondary" data-step="1" aria-label="One table more">+</button>
           </div>
-          <p class="hint">{% if restaurant.table_count %}Codes are numbered Table 1 to Table {{ restaurant.table_count }}.{% else %}Leave at 0 if you don't number your tables.{% endif %}</p>
         </div>
-        <fieldset class="chips">
-          <legend>Other spots guests tip from</legend>
-          {% for spot in suggestions %}
-          <label class="chip"><input type="checkbox" name="spots" value="{{ spot }}" {% if spot in restaurant.spots %}checked{% endif %}><span>{{ spot }}</span></label>
-          {% endfor %}
-          {% for spot in custom_spots %}
-          <label class="chip"><input type="checkbox" name="spots" value="{{ spot }}" checked><span>{{ spot }}</span></label>
-          {% endfor %}
-          <input type="text" name="new_spot" placeholder="Add another, e.g. Rooftop" maxlength="20" aria-label="Add another spot" class="chip-input">
-        </fieldset>
-        <button class="btn btn-primary">Make the codes</button>
+        <p class="hint" style="margin:0">{% if restaurant.table_count %}Cards are numbered Table 1 to Table {{ restaurant.table_count }}.{% else %}Leave at 0 if you don't number your tables.{% endif %}</p>
       </div>
-    </form>
-
-    {% if tables %}
-    <div class="actions no-print">
-      <span class="muted">{{ tables|length }} code{{ tables|pluralize }} ready.</span>
-      <button type="button" class="btn btn-secondary" data-print="tables">Print table codes</button>
+      <fieldset class="chips">
+        <legend>Other spots guests tip from</legend>
+        {% for spot in suggestions %}
+        <label class="chip"><input type="checkbox" name="spots" value="{{ spot }}" {% if spot in restaurant.spots %}checked{% endif %}><span>{{ spot }}</span></label>
+        {% endfor %}
+        {% for spot in custom_spots %}
+        <label class="chip"><input type="checkbox" name="spots" value="{{ spot }}" checked><span>{{ spot }}</span></label>
+        {% endfor %}
+        <input type="text" name="new_spot" placeholder="Add another, e.g. Rooftop" maxlength="20" aria-label="Add another spot" class="chip-input">
+      </fieldset>
+      <button class="btn btn-primary">Make table cards</button>
     </div>
-    <div class="qr-grid">
-      {% for label, url in tables %}
-      <div class="receipt-wrap"><div class="receipt">
-        <div class="head"><h2>{{ restaurant_name }}</h2><p>{{ label }}</p></div>
-        <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code to tip at {{ label }}" loading="lazy">
-        <p style="margin:0;font-weight:700">Scan to leave a tip</p>
-      </div></div>
-      {% endfor %}
-    </div>
-    {% endif %}
-  </section>
+  </form>
 </div>
+
+<!-- printable: the house card -->
+<div class="print-house print-only">
+  <div class="tent tent-large">
+    <p class="tent-place">{{ restaurant_name }}</p>
+    <p class="tent-label">Leave a tip</p>
+    <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="">
+    <p class="tent-how">Scan with your phone camera. Pay with PayPal, Venmo or card.</p>
+    <p class="tent-note">Shared with everyone who served you</p>
+  </div>
+</div>
+
+{% if tables %}
+<section class="print-tables">
+  <div class="row-head no-print">
+    <h2>{{ tables|length }} table card{{ tables|pluralize }}</h2>
+    <button type="button" class="btn btn-secondary" data-print="tables">Print table cards</button>
+  </div>
+  <div class="tent-grid">
+    {% for label, url in tables %}
+    <div class="tent">
+      <p class="tent-place">{{ restaurant_name }}</p>
+      <p class="tent-label"><span class="hl">{{ label }}</span></p>
+      <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code to tip at {{ label }}" loading="lazy">
+      <p class="tent-how">Scan to leave a tip</p>
+      <p class="tent-note">PayPal, Venmo or card</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
-  // − / + buttons for the table count
   const count = document.getElementById("table_count");
   document.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", () => {
     count.value = Math.max(0, Math.min(200, (parseInt(count.value, 10) || 0) + Number(b.dataset.step)));
   }));
-  // print only the part the manager asked for
+  // print only the cards the manager asked for
   document.querySelectorAll("[data-print]").forEach((b) => b.addEventListener("click", () => {
     document.body.dataset.print = b.dataset.print;
     window.print();

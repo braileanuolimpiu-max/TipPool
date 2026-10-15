@@ -53,12 +53,13 @@ def dashboard(request):
         "rule_set": rule_set,
         "staff_count": staff_count,
         "setup": [
+            {"done": bool(RestaurantSettings.load().name), "text": "Add your restaurant's name", "url": reverse("settings")},
             {"done": staff_count > 0, "text": "Add your team and their PayPal emails", "url": reverse("staff_list")},
             {"done": bool(rule_set), "text": "Describe how your house shares tips", "url": reverse("rules")},
             {"done": any_tip_ever, "text": "Print table QR codes so guests can tip", "url": reverse("qr_page")},
         ],
         "ai_mode": ai.mode(),
-        "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever,
+        "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever and bool(RestaurantSettings.load().name),
     })
 
 
@@ -381,6 +382,7 @@ def settings_page(request):
     from datetime import time as dtime
     restaurant = RestaurantSettings.load()
     if request.method == "POST":
+        restaurant.name = request.POST.get("name", "").strip()[:80]
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
         if request.POST.get("after_close") in RestaurantSettings.AfterClose.values:
             restaurant.after_close = request.POST["after_close"]

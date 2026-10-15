@@ -8,7 +8,7 @@
   <div class="receipt-wrap" style="width:100%">
     <div class="receipt">
       <div class="head">
-        <h2>{{ restaurant_name }}</h2>
+        <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}Thank you{% endif %}</h2>
         <p>{% if table %}Table {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
       </div>
       <hr>
@@ -27,7 +27,7 @@
       <p id="status" class="status-line" role="status">Loading PayPal…</p>
     </div>
   </div>
-  <p class="guest-note">Payments are processed by PayPal. {{ restaurant_name }} never sees your card details.</p>
+  <p class="guest-note">Payments are processed by PayPal. The restaurant never sees your card details.</p>
 </div>
 {% endblock %}
 {% block scripts %}

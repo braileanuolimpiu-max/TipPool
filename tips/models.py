@@ -192,6 +192,7 @@ class RestaurantSettings(models.Model):
         REVIEW = "review", "Prepare the split for me to approve"
         PAY = "pay", "Pay the team automatically"
 
+    name = models.CharField(max_length=80, blank=True)
     timezone = models.CharField(max_length=64, default="America/New_York")
     auto_close_enabled = models.BooleanField(default=False)
     after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)

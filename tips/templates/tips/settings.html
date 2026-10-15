@@ -3,8 +3,8 @@
 {% block content %}
 <header class="page-head">
   <div>
-    <h1>Close-out settings</h1>
-    <p>Pick when each night closes. At that time tips stop counting toward the night, new tips start the next one, and the split is prepared for you.</p>
+    <h1>Settings</h1>
+    <p>Your restaurant, and when each night closes. At closing time tips stop counting toward the night, new tips start the next one, and the split is prepared for you.</p>
   </div>
 </header>
 
@@ -37,6 +37,15 @@
   </section>
 
   <div class="stack">
+    <section class="panel">
+      <div class="panel-head"><h2>Your restaurant</h2></div>
+      <div class="panel-body">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" value="{{ restaurant.name }}" maxlength="80" placeholder="e.g. Luna Trattoria">
+        <p class="hint">Shown to guests on the tip page and on your table cards.</p>
+      </div>
+    </section>
+
     <section class="panel">
       <div class="panel-head"><h2>When the night closes</h2></div>
       <div class="panel-body stack">
