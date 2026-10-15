@@ -268,6 +268,18 @@ paypal-button, venmo-button { width: 100%; --paypal-button-border-radius: 4px; }
 .receipt .btn-secondary { background: transparent; color: #1d1f21; border-color: #1d1f21; }
 
 /* ---------- qr ---------- */
+.counter-input { display: flex; gap: 8px; align-items: stretch; max-width: 220px; }
+.counter-input input { text-align: center; font: 700 1.2rem var(--mono); }
+.counter-input .btn { padding: 8px 16px; font-size: 1.2rem; }
+fieldset.chips { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+fieldset.chips legend { font-weight: 700; font-size: .9rem; margin-bottom: 8px; padding: 0; }
+.chip { position: relative; margin: 0; font-weight: 600; }
+.chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.chip span { display: inline-block; padding: 7px 14px; border: 1.5px solid var(--hair); border-radius: 999px; background: var(--paper); }
+.chip input:checked + span { background: var(--marker); border-color: var(--ink); }
+.chip input:checked + span::before { content: "✓ "; }
+.chip input:focus-visible + span { box-shadow: var(--focus); }
+.chip-input { width: auto !important; flex: 1 1 180px; border-radius: 999px !important; padding: 7px 14px !important; }
 .qr-grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
 .qr-grid .receipt { text-align: center; }
 .qr-grid img { width: 100%; max-width: 170px; display: block; margin: 10px auto; }
@@ -277,6 +289,8 @@ paypal-button, venmo-button { width: 100%; --paypal-button-border-radius: 4px; }
   .tray { background: none; box-shadow: none; padding: 0; }
   .receipt-wrap { filter: none; }
   .receipt { border: 1px dashed #999; break-inside: avoid; -webkit-mask: none; mask: none; }
+  body[data-print="house"] .print-tables, body[data-print="tables"] .print-house { display: none !important; }
+  .split-2 { display: block; }
 }
 
 /* ---------- login ---------- */

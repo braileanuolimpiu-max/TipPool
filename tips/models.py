@@ -195,9 +195,18 @@ class RestaurantSettings(models.Model):
     timezone = models.CharField(max_length=64, default="America/New_York")
     auto_close_enabled = models.BooleanField(default=False)
     after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)
+    # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
+    table_count = models.PositiveSmallIntegerField(default=0)
+    spots = models.JSONField(default=list, blank=True)
+
+    SPOT_SUGGESTIONS = ["Bar", "Patio", "Counter", "Takeout"]
 
     def __str__(self):
         return "Restaurant settings"
+
+    @property
+    def table_labels(self):
+        return [str(n) for n in range(1, self.table_count + 1)] + list(self.spots)
 
     @classmethod
     def load(cls):

@@ -135,10 +135,29 @@ def api_capture_order(request, order_id):
 # --- QR code for tables -------------------------------------------------------
 @login_required
 def qr_page(request):
-    tables = [t.strip() for t in request.GET.get("tables", "1,2,3,4").split(",") if t.strip()][:24]
+    restaurant = RestaurantSettings.load()
+    if request.method == "POST":
+        try:
+            restaurant.table_count = max(0, min(200, int(request.POST.get("table_count", 0))))
+        except ValueError:
+            pass
+        spots = [sp.strip()[:20] for sp in request.POST.getlist("spots") if sp.strip()]
+        extra = request.POST.get("new_spot", "").strip()[:20]
+        if extra:
+            spots.append(extra)
+        restaurant.spots = list(dict.fromkeys(spots))[:24]  # keep order, drop duplicates
+        restaurant.save()
+        messages.success(request, "Table codes updated.")
+        return redirect("qr_page")
     base = request.build_absolute_uri(reverse("tip_page"))
-    return render(request, "tips/qr_page.html", {"tables": [(t, f"{base}?table={t}") for t in tables],
-                                                 "tables_value": ",".join(tables)})
+    return render(request, "tips/qr_page.html", {
+        "restaurant": restaurant,
+        "house_url": base,
+        "tables": [(f"Table {label}" if label.isdigit() else label, f"{base}?table={label}")
+                   for label in restaurant.table_labels],
+        "suggestions": RestaurantSettings.SPOT_SUGGESTIONS,
+        "custom_spots": [sp for sp in restaurant.spots if sp not in RestaurantSettings.SPOT_SUGGESTIONS],
+    })
 
 
 def qr_svg(request):
