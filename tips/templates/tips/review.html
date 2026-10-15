@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Review the split{% endblock %}
+{% block content %}
+<div class="steps"><span>1. Who worked</span><span class="on">2. Review split</span><span>3. Pay with PayPal</span></div>
+<h1>Review the split</h1>
+<p class="muted">{{ night }} · total tips <strong>${{ total }}</strong>{% if rule_set %} · {{ rule_set.summary }}{% endif %}</p>
+
+<div class="card stack">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Person</th><th>Role</th><th class="num">Hours</th><th class="num">Share</th></tr></thead>
+    <tbody>
+    {% for s in shares %}
+      <tr>
+        <td><strong>{{ s.staff.name }}</strong>
+          {% if s.explanation %}<div class="why">{{ s.explanation }}</div>{% endif %}</td>
+        <td>{{ s.get_role_display }}</td>
+        <td class="num">{{ s.hours|floatformat:"-2" }}</td>
+        <td class="num"><strong>${{ s.amount }}</strong></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="3">Total paid out</td><td class="num">${{ paid_total }}</td></tr></tfoot>
+  </table></div>
+  {% if paid_total != total %}<div class="alert error">The shares (${{ paid_total }}) don't match the tips (${{ total }}). Recalculate before paying.</div>{% endif %}
+
+  {% if night.status == "review" %}
+  <div class="row">
+    <a class="btn btn-ghost" href="{% url 'close_night_pk' night.pk %}">&larr; Edit who worked</a>
+    <form method="post" action="{% url 'pay' night.pk %}" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Sending to PayPal…'">{% csrf_token %}
+      <button class="btn btn-primary">Approve &amp; pay everyone with PayPal</button>
+    </form>
+  </div>
+  <p class="small muted">One PayPal Payouts batch sends every share at once, straight to each person's PayPal account.</p>
+  {% else %}
+  <a class="btn btn-primary" href="{% url 'payout_status' night.pk %}">See payout status &rarr;</a>
+  {% endif %}
+</div>
+{% endblock %}

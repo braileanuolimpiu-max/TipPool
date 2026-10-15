@@ -1,0 +1,37 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TipPool{% endblock %} · TipPool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+{% block topbar %}
+<header class="topbar">
+  <div class="inner">
+    <a class="logo" href="{% url 'dashboard' %}">Tip<span>Pool</span></a>
+    {% if user.is_authenticated %}
+    {% with u=request.resolver_match.url_name %}
+    <nav class="nav">
+      <a href="{% url 'dashboard' %}" class="{% if u == 'dashboard' %}active{% endif %}">Tonight</a>
+      <a href="{% url 'close_night' %}" class="{% if u == 'close_night' or u == 'close_night_pk' or u == 'review' %}active{% endif %}">Close the night</a>
+      <a href="{% url 'rules' %}" class="{% if u == 'rules' %}active{% endif %}">Tip rules</a>
+      <a href="{% url 'staff_list' %}" class="{% if u == 'staff_list' %}active{% endif %}">Staff</a>
+      <a href="{% url 'qr_page' %}" class="{% if u == 'qr_page' %}active{% endif %}">Table QR codes</a>
+    </nav>
+    {% endwith %}
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-ghost small">Log out</button></form>
+    {% endif %}
+  </div>
+</header>
+{% endblock %}
+<main class="container {% block container_class %}{% endblock %}">
+  {% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

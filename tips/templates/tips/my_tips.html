@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}My tips{% endblock %}
+{% block topbar %}{% endblock %}
+{% block container_class %}public{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Hi {{ member.name }} 👋</h1>
+  <p class="muted">Your tips, and exactly how each amount was calculated.</p>
+  {% for s in shares %}
+  <div>
+    <div class="row spread">
+      <strong>{{ s.night }}</strong>
+      <span><strong>${{ s.amount }}</strong>
+        {% with item=s.payout_item %}{% if item %}<span class="badge {% if item.status == 'SUCCESS' %}good{% else %}warn{% endif %}">{% if item.status == 'SUCCESS' %}paid{% else %}{{ item.status|lower }}{% endif %}</span>{% else %}<span class="badge">not paid yet</span>{% endif %}{% endwith %}
+      </span>
+    </div>
+    {% if s.explanation %}<div class="why">{{ s.explanation }}</div>{% endif %}
+  </div>
+  {% empty %}
+  <p class="muted">No tips yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

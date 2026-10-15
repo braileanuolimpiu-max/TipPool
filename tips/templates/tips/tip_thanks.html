@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Thank you{% endblock %}
+{% block topbar %}{% endblock %}
+{% block container_class %}public{% endblock %}
+{% block content %}
+<div class="card stack" style="text-align:center">
+  <div class="big-check">🙏</div>
+  <h1>Thank you!</h1>
+  {% if tip %}<p>Your <strong>${{ tip.amount }}</strong> tip was received{% if tip.status != 'completed' %} and is being confirmed{% endif %}.</p>{% endif %}
+  <p class="muted">At the end of the night it is split fairly between everyone who worked, and paid straight to their PayPal.</p>
+</div>
+{% endblock %}

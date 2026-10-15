@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Close the night{% endblock %}
+{% block content %}
+<div class="steps"><span class="on">1. Who worked</span><span>2. Review split</span><span>3. Pay with PayPal</span></div>
+<div class="row spread" style="margin-bottom:16px">
+  <div>
+    <h1>Close the night</h1>
+    <p class="muted">{{ night }} · tips collected: <strong>${{ night.tip_total }}</strong></p>
+  </div>
+</div>
+
+{% if not rule_set %}<div class="alert warning">You have no tip rules yet. <a href="{% url 'rules' %}">Write them first</a>.</div>{% endif %}
+
+<div class="grid">
+  <form method="post" enctype="multipart/form-data" class="card stack">{% csrf_token %}
+    <h2>📷 From a photo</h2>
+    <p class="small muted">Take a photo of tonight's schedule or timecards. The AI fills in who worked and their hours.</p>
+    <input type="file" name="photo" accept="image/*" capture="environment" required>
+    <button class="btn btn-ghost">Read the photo</button>
+    {% if ai_mode != "claude" %}<p class="small muted">Needs AI mode “claude”. Until then, fill the table by hand.</p>{% endif %}
+    {% if ai_notes %}<div class="alert warning"><ul>{% for n in ai_notes %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}
+  </form>
+
+  <form method="post" class="card stack" style="grid-column: span 2; min-width:0">{% csrf_token %}
+    <h2>Who worked tonight</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Worked</th><th>Name</th><th>Role tonight</th><th class="num">Hours</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><input type="checkbox" name="worked_{{ row.member.pk }}" {% if row.worked %}checked{% endif %} aria-label="{{ row.member.name }} worked"></td>
+          <td><strong>{{ row.member.name }}</strong></td>
+          <td><select name="role_{{ row.member.pk }}">{% for value, label in roles %}<option value="{{ value }}" {% if value == row.role %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></td>
+          <td class="num"><input type="number" name="hours_{{ row.member.pk }}" value="{{ row.hours }}" min="0" max="24" step="0.25" style="max-width:100px"></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="muted">No active staff. <a href="{% url 'staff_list' %}">Add your team</a>.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <button class="btn btn-primary btn-big">Calculate the split &rarr;</button>
+  </form>
+</div>
+{% endblock %}

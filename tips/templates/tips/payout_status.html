@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Payout{% endblock %}
+{% block content %}
+<div class="steps"><span>1. Who worked</span><span>2. Review split</span><span class="on">3. Pay with PayPal</span></div>
+<div class="row spread">
+  <div>
+    <h1>Payout</h1>
+    <p class="muted">{{ night }} · PayPal batch <code>{{ batch.paypal_batch_id }}</code> ·
+      <span class="badge {% if batch.status == 'SUCCESS' %}good{% elif batch.status == 'DENIED' %}bad{% else %}warn{% endif %}" id="batch-status">{{ batch.status }}</span></p>
+  </div>
+  <form method="post">{% csrf_token %}<button class="btn btn-ghost">Refresh from PayPal</button></form>
+</div>
+
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Person</th><th>PayPal</th><th class="num">Amount</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td><strong>{{ item.share.staff.name }}</strong></td>
+        <td class="small">{{ item.share.staff.paypal_email }}</td>
+        <td class="num">${{ item.share.amount }}</td>
+        <td><span class="badge {% if item.status == 'SUCCESS' %}good{% elif item.status in 'FAILED,RETURNED,BLOCKED,DENIED' %}bad{% else %}warn{% endif %}" data-item="{{ item.pk }}">{{ item.status }}</span>
+          {% if item.error %}<div class="small" style="color:var(--danger)">{{ item.error }}</div>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if night.status == "paying" %}
+<script>
+  // Watch PayPal until every payment is final
+  const poll = setInterval(async () => {
+    const res = await fetch("{% url 'payout_status_json' night.pk %}");
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById("batch-status").textContent = data.batch_status;
+    for (const [id, status] of Object.entries(data.items)) {
+      const el = document.querySelector('[data-item="' + id + '"]');
+      if (el) el.textContent = status;
+    }
+    if (data.night_status === "paid") { clearInterval(poll); window.location.reload(); }
+  }, 5000);
+</script>
+{% endif %}
+{% endblock %}

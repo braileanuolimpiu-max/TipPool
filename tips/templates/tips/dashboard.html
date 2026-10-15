@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Tonight{% endblock %}
+{% block content %}
+<div class="row spread" style="margin-bottom:16px">
+  <div>
+    <h1>Tonight</h1>
+    <p class="muted">{{ night }} · <span class="badge">{{ night.get_status_display }}</span></p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'close_night' %}">Close the night &rarr;</a>
+</div>
+
+{% if not rule_set or staff_count == 0 %}
+<div class="alert warning">
+  <strong>Getting started:</strong>
+  {% if staff_count == 0 %}<a href="{% url 'staff_list' %}">add your staff</a>{% endif %}
+  {% if staff_count == 0 and not rule_set %} and {% endif %}
+  {% if not rule_set %}<a href="{% url 'rules' %}">write your tip rules</a>{% endif %}.
+</div>
+{% endif %}
+
+<div class="grid" style="margin-bottom:16px">
+  <div class="card stat"><div class="label">Tips collected</div><div class="value">${{ night.tip_total }}</div></div>
+  <div class="card stat"><div class="label">Tips</div><div class="value">{{ completed_count }}</div></div>
+  <div class="card stat"><div class="label">Active staff</div><div class="value">{{ staff_count }}</div></div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="row spread"><h2>Tips tonight</h2><a class="small" href="{% url 'tip_page' %}" target="_blank">Open the tip page &nearr;</a></div>
+    {% if tips %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Time</th><th>Table</th><th>From</th><th class="num">Amount</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for tip in tips %}
+        <tr>
+          <td>{{ tip.created_at|time:"H:i" }}</td>
+          <td>{{ tip.table|default:"–" }}</td>
+          <td>{{ tip.payer_name|default:"–" }}</td>
+          <td class="num">${{ tip.amount }}</td>
+          <td><span class="badge {% if tip.status == 'completed' %}good{% elif tip.status == 'failed' %}bad{% else %}warn{% endif %}">{{ tip.get_status_display }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <p class="muted">No tips yet. Print the <a href="{% url 'qr_page' %}">table QR codes</a> so guests can tip with PayPal or Venmo.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Past nights</h2>
+    {% if past_nights %}
+    <ul class="clean">
+      {% for n in past_nights %}
+      <li class="row spread">
+        <span>{{ n }}</span>
+        <span class="row">
+          <span class="badge {% if n.status == 'paid' %}good{% elif n.status == 'paying' %}warn{% endif %}">{{ n.get_status_display }}</span>
+          {% if n.status == 'paid' or n.status == 'paying' %}<a href="{% url 'payout_status' n.pk %}">payout</a>
+          {% else %}<a href="{% url 'review' n.pk %}">review</a>{% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Nothing yet.</p>{% endif %}
+    <p class="small muted" style="margin-top:16px">AI mode: <strong>{{ ai_mode }}</strong></p>
+  </div>
+</div>
+{% endblock %}

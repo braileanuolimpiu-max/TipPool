@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Table QR codes{% endblock %}
+{% block content %}
+<div class="row spread no-print" style="margin-bottom:16px">
+  <div>
+    <h1>Table QR codes</h1>
+    <p class="muted">Print these and put one on each table or receipt. Guests scan, tip with PayPal or Venmo.</p>
+  </div>
+  <button class="btn btn-primary" onclick="window.print()">Print</button>
+</div>
+<form method="get" class="card row no-print" style="margin-bottom:16px">
+  <div style="flex:1"><label for="tables">Tables (comma separated)</label>
+    <input type="text" id="tables" name="tables" value="{{ tables_value }}"></div>
+  <button class="btn btn-ghost" style="align-self:flex-end">Update</button>
+</form>
+<div class="qr-grid">
+  {% for table, url in tables %}
+  <div class="card qr-card">
+    <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code for table {{ table }}">
+    <h3 style="margin-top:8px">Table {{ table }}</h3>
+    <p class="small muted">Scan to leave a tip</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

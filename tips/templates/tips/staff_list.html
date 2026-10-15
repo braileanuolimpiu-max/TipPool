@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Staff{% endblock %}
+{% block content %}
+<h1>Staff</h1>
+<p class="muted">Tips are paid to each person's PayPal email. Each person also gets a private link to see their own tips.</p>
+<div class="grid">
+  <div class="card" style="grid-column: span 2; min-width: 0">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Usual role</th><th>PayPal email</th><th>Their page</th><th></th></tr></thead>
+      <tbody>
+      {% for m in staff %}
+        <tr{% if not m.active %} class="muted"{% endif %}>
+          <td><strong>{{ m.name }}</strong></td>
+          <td>{{ m.get_default_role_display }}</td>
+          <td class="small">{{ m.paypal_email }}</td>
+          <td><a class="small" href="{% url 'my_tips' m.access_token %}" target="_blank">open &nearr;</a></td>
+          <td><form method="post" action="{% url 'staff_toggle' m.pk %}">{% csrf_token %}
+            <button class="btn btn-ghost small">{% if m.active %}Deactivate{% else %}Activate{% endif %}</button></form></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">No staff yet. Add your team on the right.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <form method="post" class="card stack">{% csrf_token %}
+    <h2>Add a person</h2>
+    <div><label for="name">Name</label><input type="text" id="name" name="name" required></div>
+    <div><label for="paypal_email">PayPal email</label><input type="email" id="paypal_email" name="paypal_email" required></div>
+    <div><label for="default_role">Usual role</label>
+      <select id="default_role" name="default_role">{% for value, label in roles %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+    <button class="btn btn-primary">Add</button>
+  </form>
+</div>
+{% endblock %}

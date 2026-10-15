@@ -1,0 +1,5 @@
+Django==5.2.18
+requests==2.34.2
+anthropic==1.14.0
+pydantic==2.14.1
+qrcode[pil]==8.2

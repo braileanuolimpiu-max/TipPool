@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Tip rules{% endblock %}
+{% block content %}
+<h1>Tip rules</h1>
+<p class="muted">Describe how your restaurant shares tips, in your own words. The AI turns it into exact rules and checks them.</p>
+
+<div class="grid">
+  <form method="post" class="card stack">{% csrf_token %}
+    <div>
+      <label for="text">Your rules</label>
+      <textarea id="text" name="text" placeholder="{{ example }}">{{ text }}</textarea>
+      <p class="small muted">Example: “{{ example }}”</p>
+    </div>
+    <button class="btn btn-primary" name="parse">✨ Read my rules</button>
+    <p class="small muted">AI mode: <strong>{{ ai_mode }}</strong></p>
+  </form>
+
+  {% if preview %}
+  <div class="card stack">
+    <h2>Here's what I understood</h2>
+    <p>{{ preview.summary }}</p>
+    {% include "tips/_rules_table.html" with rules=preview.rules %}
+    {% if preview.warnings %}
+    <div class="alert warning"><strong>Check these:</strong>
+      <ul>{% for w in preview.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    <form method="post">{% csrf_token %}<button class="btn btn-primary" name="save">Save these rules</button></form>
+  </div>
+  {% elif active %}
+  <div class="card stack">
+    <div class="row spread"><h2>Current rules</h2><span class="badge good">Active</span></div>
+    <p>{{ active.summary }}</p>
+    {% include "tips/_rules_table.html" with rules=active.rules %}
+    {% if active.warnings %}
+    <div class="alert warning"><strong>Notes:</strong>
+      <ul>{% for w in active.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
