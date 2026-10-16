@@ -18,6 +18,8 @@ urlpatterns = [
     path("api/orders/", views.api_create_order, name="api_create_order"),
     path("api/orders/<str:order_id>/capture/", views.api_capture_order, name="api_capture_order"),
     path("qr.svg", views.qr_svg, name="qr_svg"),
+    path("qr.png", views.qr_png, name="qr_png"),
+    path("qr/print/", views.qr_print, name="qr_print"),
     path("qr/show/", views.qr_show, name="qr_show"),
     # manager
     path("qr/", views.qr_page, name="qr_page"),

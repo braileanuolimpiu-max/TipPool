@@ -257,7 +257,69 @@ def qr_svg(request):
     image = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage, box_size=12, border=2)
     buffer = io.BytesIO()
     image.save(buffer)
-    return HttpResponse(buffer.getvalue(), content_type="image/svg+xml")
+    response = HttpResponse(buffer.getvalue(), content_type="image/svg+xml")
+    if request.GET.get("download"):
+        response["Content-Disposition"] = 'attachment; filename="tippool-qr.svg"'
+    return response
+
+
+def qr_png(request):
+    """A big PNG of a tip code, for menus, posters or design tools."""
+    url = request.GET.get("url", "")
+    if not url.startswith(request.build_absolute_uri("/")) or len(url) > 300:
+        return HttpResponseBadRequest("Only links to this site.")
+    code = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_Q, box_size=24, border=4)
+    code.add_data(url)
+    code.make(fit=True)
+    buffer = io.BytesIO()
+    code.make_image(fill_color="#141414", back_color="white").save(buffer, format="PNG")
+    response = HttpResponse(buffer.getvalue(), content_type="image/png")
+    response["Content-Disposition"] = 'attachment; filename="tippool-qr.png"'
+    return response
+
+
+QR_LAYOUTS = {
+    # key: (label, per page, what it is)
+    "tent": ("Table tents", 2, "Fold in half: it stands up and reads from both sides"),
+    "card": ("Cards", 4, "For the check presenter, the counter or a frame"),
+    "sticker": ("Stickers", 12, "For tables, menus, the till or name badges"),
+    "poster": ("Poster", 1, "One big code for the door, the wall or the counter"),
+}
+
+
+@manager_required
+def qr_print(request):
+    """Print studio: pick a layout, paper, copies and text, see the real pages, then print or save as PDF."""
+    location = request.location
+    layout = request.GET.get("layout") if request.GET.get("layout") in QR_LAYOUTS else "tent"
+    paper = "letter" if request.GET.get("paper") == "letter" else "a4"
+    which = request.GET.get("codes", "shared")
+    try:
+        copies = max(1, min(60, int(request.GET.get("copies", QR_LAYOUTS[layout][1]))))
+    except ValueError:
+        copies = QR_LAYOUTS[layout][1]
+    headline = (request.GET.get("headline") or "Leave a tip").strip()[:40]
+    footer = (request.GET.get("footer") or "").strip()[:80]
+
+    base = request.build_absolute_uri(reverse("tip_page")) + f"?at={location.slug}"
+    shared = {"title": headline, "url": base, "who": ""}
+    people = [{"title": f"Tip {m.staff.name}", "url": f"{base}&to={m.pk}", "who": m.role_name}
+              for m in Membership.objects.filter(location=location, active=True).select_related("staff")
+              ] if location.tip_mode != Location.TipMode.POOL else []
+    if which == "people" and people:
+        items = [p for p in people for _ in range(copies)]
+    else:
+        which = "shared"
+        items = [shared] * copies
+    per_page = QR_LAYOUTS[layout][1]
+    pages = [items[i:i + per_page] for i in range(0, len(items), per_page)]
+    note = footer or ("Shared with the whole team" if location.tip_mode == Location.TipMode.POOL else
+                      "Goes to the person you choose")
+    return render(request, "tips/qr_print.html", {
+        "layouts": QR_LAYOUTS, "layout": layout, "paper": paper, "copies": copies, "which": which,
+        "headline": headline, "footer": footer, "note": note, "pages": pages, "has_people": bool(people),
+        "house_url": base, "sheet_count": len(pages),
+    })
 
 
 # --- Staff ---------------------------------------------------------------------

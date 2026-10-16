@@ -1,0 +1,79 @@
+{% extends "app.html" %}{% load static %}
+{% block title %}Print QR codes{% endblock %}
+{% block head %}<style>@page { size: {% if paper == "letter" %}letter{% else %}A4{% endif %} portrait; margin: 0; }</style>{% endblock %}
+{% block content %}
+<a class="back no-print" href="{% url 'qr_page' %}">← QR codes</a>
+<header class="page-head no-print">
+  <div><h1>Print your codes</h1><p>Pick a layout and see the real pages. Print them, or choose "Save as PDF" in the print window to send to a print shop.</p></div>
+  <div class="actions">
+    <a class="btn btn-secondary" href="{% url 'qr_png' %}?url={{ house_url|urlencode }}">Download PNG</a>
+    <a class="btn btn-secondary" href="{% url 'qr_svg' %}?download=1&url={{ house_url|urlencode }}">Download SVG</a>
+    <button type="button" class="btn btn-primary" id="print-now">Print {{ sheet_count }} page{{ sheet_count|pluralize }}</button>
+  </div>
+</header>
+
+<div class="print-studio">
+  <form method="get" class="panel studio-controls no-print" id="studio">
+    <div class="panel-head"><h2>Layout</h2></div>
+    <div class="panel-body stack">
+      <div class="layout-pick">
+        {% for key, info in layouts.items %}
+        <label class="choice layout-{{ key }}"><input type="radio" name="layout" value="{{ key }}" {% if layout == key %}checked{% endif %}>
+          <span><strong>{{ info.0 }}</strong><span class="small muted">{{ info.1 }} per page. {{ info.2 }}</span></span></label>
+        {% endfor %}
+      </div>
+      {% if has_people %}
+      <div><label for="codes">Which codes</label>
+        <select id="codes" name="codes">
+          <option value="shared" {% if which == "shared" %}selected{% endif %}>The shared code</option>
+          <option value="people" {% if which == "people" %}selected{% endif %}>One for each person</option>
+        </select></div>
+      {% endif %}
+      <div class="form-grid">
+        <div><label for="copies">{% if which == "people" %}Copies of each{% else %}Copies{% endif %}</label>
+          <input type="number" id="copies" name="copies" min="1" max="60" value="{{ copies }}" inputmode="numeric"></div>
+        <div><label for="paper">Paper</label>
+          <select id="paper" name="paper"><option value="a4" {% if paper == "a4" %}selected{% endif %}>A4</option><option value="letter" {% if paper == "letter" %}selected{% endif %}>US Letter</option></select></div>
+      </div>
+      <div><label for="headline">Headline</label>
+        <input type="text" id="headline" name="headline" maxlength="40" value="{{ headline }}"></div>
+      <div><label for="footer">Small print <span class="muted">(optional)</span></label>
+        <input type="text" id="footer" name="footer" maxlength="80" value="{{ footer }}" placeholder="{{ note }}"></div>
+      <noscript><button class="btn btn-secondary">Update preview</button></noscript>
+      <p class="hint tight">In the print window, set margins to "None" and scale to 100% for exact sizes.</p>
+    </div>
+  </form>
+
+  <div class="sheets paper-{{ paper }} layout-{{ layout }}">
+    {% for page in pages %}
+    <section class="sheet" aria-label="Page {{ forloop.counter }}">
+      {% for item in page %}
+      <div class="qr-item">
+        {% if layout == "tent" %}
+        <div class="tent-half flipped">{% include "tips/_qr_face.html" %}</div>
+        <div class="fold-line"><span>fold</span></div>
+        <div class="tent-half">{% include "tips/_qr_face.html" %}</div>
+        {% else %}
+        {% include "tips/_qr_face.html" %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  // live preview: any change redraws the pages
+  const studio = document.getElementById("studio");
+  let timer;
+  studio.addEventListener("change", () => studio.submit());
+  studio.addEventListener("input", (e) => {
+    if (e.target.type !== "text" && e.target.type !== "number") return;
+    clearTimeout(timer);
+    timer = setTimeout(() => studio.submit(), 700);
+  });
+  document.getElementById("print-now").addEventListener("click", () => window.print());
+</script>
+{% endblock %}

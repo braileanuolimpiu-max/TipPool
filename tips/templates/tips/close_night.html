@@ -75,7 +75,7 @@
         {% endif %}
         <input type="text" name="note" maxlength="120" placeholder="Note (optional), e.g. card machine total" aria-label="Note">
         <button class="btn btn-secondary">Add tips</button>
-        <p class="hint" style="margin:0">Everyone is paid their full share through PayPal, so keep the cash and card tips in the business account.</p>
+        <p class="hint tight">Everyone is paid their full share through PayPal, so keep the cash and card tips in the business account.</p>
       </form>
     </section>
 
@@ -85,7 +85,7 @@
         <p class="muted small" style="margin:0">Snap the schedule or the timecards. AI fills in who worked and their hours, and you check it before anything is calculated.</p>
         <input type="file" name="photo" accept="image/*" capture="environment" required aria-label="Schedule photo">
         <button class="btn btn-secondary">Read the photo</button>
-        {% if ai_mode != "claude" %}<p class="hint" style="margin:0">Photo reading turns on with the Claude AI mode. Until then, fill the list by hand.</p>{% endif %}
+        {% if ai_mode != "claude" %}<p class="hint tight">Photo reading turns on with the Claude AI mode. Until then, fill the list by hand.</p>{% endif %}
         {% if ai_notes %}<div class="note-warn"><strong>Check these</strong><ul>{% for n in ai_notes %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}
       </div>
     </form>

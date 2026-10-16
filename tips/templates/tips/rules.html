@@ -19,7 +19,7 @@
           {% endfor %}
         </div>
       </div>
-      <p class="hint" style="margin:0">Your roles: {% for r in roles %}{{ r.name }}{% if not forloop.last %}, {% endif %}{% empty %}none yet{% endfor %}.
+      <p class="hint tight">Your roles: {% for r in roles %}{{ r.name }}{% if not forloop.last %}, {% endif %}{% empty %}none yet{% endfor %}.
         <a href="{% url 'staff_list' %}#roles">Change roles</a></p>
       <div class="actions">
         <button class="btn btn-primary" name="parse">Read my rules</button>

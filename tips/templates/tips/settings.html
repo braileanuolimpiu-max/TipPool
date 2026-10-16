@@ -98,11 +98,12 @@
               <span class="after">{% if d.close and d.close.after_midnight %}after midnight{% endif %}</span>
             </li>
             {% endfor %}
+            <li class="all-days">
+              <span class="day all-label">All days</span>
+              <input type="time" id="same-time" value="23:00" aria-label="Time for every day">
+              <button type="button" class="btn btn-secondary small" id="apply-all">Apply</button>
+            </li>
           </ul>
-          <div class="actions">
-            <input type="time" id="same-time" value="23:00" style="width:140px" aria-label="Time for every day">
-            <button type="button" class="btn btn-secondary small" id="apply-all">Use for every day</button>
-          </div>
         </div>
       </section>
 
@@ -167,7 +168,7 @@
               <input type="text" id="paypal_webhook_id" name="paypal_webhook_id" value="{{ business.paypal_webhook_id }}" autocomplete="off" spellcheck="false"></div>
             <label class="choice"><input type="checkbox" name="paypal_live" {% if business.paypal_live %}checked{% endif %}><span><strong>Live (real money)</strong><span class="small muted">Leave off for sandbox testing.</span></span></label>
           </div>
-          <p class="hint" style="margin:0">From developer.paypal.com, Apps &amp; Credentials, with Payouts turned on. The secret is stored encrypted and never shown again. Webhook address: <code>{{ webhook_url }}</code></p>
+          <p class="hint tight">From developer.paypal.com, Apps &amp; Credentials, with Payouts turned on. The secret is stored encrypted and never shown again. Webhook address: <code>{{ webhook_url }}</code></p>
         </div>
       </fieldset>
       <div class="setting-foot">
@@ -260,12 +261,12 @@
 <script>
   const week = document.getElementById("week");
   week.addEventListener("change", (e) => {
-    const li = e.target.closest("li");
-    if (li) li.classList.toggle("off", !li.querySelector("input[type=checkbox]").checked);
+    const box = e.target.closest("li")?.querySelector("input[type=checkbox]");
+    if (box) box.closest("li").classList.toggle("off", !box.checked);
   });
   document.getElementById("apply-all").addEventListener("click", () => {
     const t = document.getElementById("same-time").value;
-    week.querySelectorAll("li").forEach((li) => {
+    week.querySelectorAll("li:not(.all-days)").forEach((li) => {
       li.querySelector("input[type=time]").value = t;
       li.querySelector("input[type=checkbox]").checked = true;
       li.classList.remove("off");

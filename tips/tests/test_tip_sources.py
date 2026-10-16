@@ -103,3 +103,35 @@ class TipSourceTests(TestCase):
         self.assertContains(self.client.get(reverse("qr_page")), "Personal codes")
         member = self.maria.memberships.get()
         self.assertContains(self.client.get(reverse("qr_show") + f"?to={member.pk}"), "Tip Maria")
+
+
+class QrPrintTests(TestCase):
+    def setUp(self):
+        from tips.tests.helpers import make_manager
+        self.location = Location.default()
+        self.client.force_login(make_manager("m"))
+
+    def test_print_studio_layouts_and_copies(self):
+        for layout, per_page in (("tent", 2), ("card", 4), ("sticker", 12), ("poster", 1)):
+            page = self.client.get(reverse("qr_print") + f"?layout={layout}&copies=5")
+            self.assertEqual(page.status_code, 200)
+            self.assertEqual(len(page.context["pages"]), -(-5 // per_page))
+        self.assertContains(self.client.get(reverse("qr_print") + "?paper=letter"), "size: letter")
+
+    def test_personal_cards_only_when_personal_tips(self):
+        hire("Maria", "server")
+        page = self.client.get(reverse("qr_print") + "?codes=people")
+        self.assertEqual(page.context["which"], "shared")  # pooled: no personal codes
+        self.location.tip_mode = Location.TipMode.PERSONAL
+        self.location.save()
+        page = self.client.get(reverse("qr_print") + "?codes=people&copies=2")
+        self.assertContains(page, "Tip Maria", count=2)
+
+    def test_downloads(self):
+        url = f"http://testserver/tip/?at={self.location.slug}"
+        png = self.client.get(reverse("qr_png") + "?url=" + url)
+        self.assertEqual((png.status_code, png["Content-Type"]), (200, "image/png"))
+        self.assertIn("attachment", png["Content-Disposition"])
+        svg = self.client.get(reverse("qr_svg") + "?download=1&url=" + url)
+        self.assertIn("attachment", svg["Content-Disposition"])
+        self.assertEqual(self.client.get(reverse("qr_png") + "?url=https://evil.example/").status_code, 400)

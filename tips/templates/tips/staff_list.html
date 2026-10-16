@@ -44,7 +44,7 @@
                 <input type="number" name="h_{{ d }}" value="{% if h %}{{ h.normalize }}{% endif %}" min="0" max="24" step="0.25" placeholder="off" aria-label="{{ m.staff.name }} usual hours on {{ day }}"></label>{% endfor %}
             </div>
             <div class="actions"><button class="btn btn-secondary small">Save usual week</button>
-              <span class="hint" style="margin:0">Fills in the close-out. Clock-ins and your changes come first.</span></div>
+              <span class="hint tight">Fills in the close-out. Clock-ins and your changes come first.</span></div>
           </form>
         </details>
         {% endif %}

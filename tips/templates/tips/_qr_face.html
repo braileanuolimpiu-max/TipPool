@@ -1,0 +1,9 @@
+{% load static %}<div class="qr-face">
+  <p class="qf-place">{{ restaurant_name }}</p>
+  <p class="qf-title"><span class="hl">{{ item.title }}</span></p>
+  {% if item.who %}<p class="qf-who">{{ item.who }}</p>{% endif %}
+  <img class="qf-code" src="{% url 'qr_svg' %}?url={{ item.url|urlencode }}" alt="QR code: {{ item.title }}">
+  <p class="qf-how">Scan with your phone camera</p>
+  <p class="qf-note">{{ footer|default:note }}</p>
+  <p class="qf-pay">PayPal · Venmo · card<img src="{% static 'icons/tippool.svg' %}" alt=""></p>
+</div>
