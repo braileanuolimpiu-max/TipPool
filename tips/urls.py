@@ -7,6 +7,7 @@ urlpatterns = [
     # business accounts
     path("signup/", accounts.signup, name="signup"),
     path("invite/<str:token>/", accounts.accept_invite, name="accept_invite"),
+    path("my-link/", accounts.email_my_link, name="email_my_link"),
     path("managers/invite/", accounts.invite_manager, name="invite_manager"),
     path("managers/<int:pk>/remove/", accounts.remove_manager, name="remove_manager"),
     path("managers/invites/<int:pk>/cancel/", accounts.cancel_invite, name="cancel_invite"),
@@ -30,6 +31,7 @@ urlpatterns = [
     path("staff/<int:pk>/toggle/", views.staff_toggle, name="staff_toggle"),
     path("staff/<int:pk>/role/", views.staff_role, name="staff_role"),
     path("staff/<int:pk>/schedule/", views.staff_schedule, name="staff_schedule"),
+    path("staff/<int:pk>/new-link/", views.staff_new_link, name="staff_new_link"),
     path("roles/add/", views.role_add, name="role_add"),
     path("roles/<int:pk>/remove/", views.role_remove, name="role_remove"),
     path("roles/preset/", views.role_preset, name="role_preset"),

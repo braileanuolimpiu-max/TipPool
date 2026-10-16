@@ -15,7 +15,7 @@
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn btn-primary btn-block">Sign in</button>
       <p class="auth-switch">New to TipPool? <a href="{% url 'signup' %}">Create a business account</a></p>
-      <p class="hint" style="margin:0">Staff don't need to sign in: your manager gives you a private link to your tips.</p>
+      <p class="hint" style="margin:0">Staff don't need to sign in: you have a private link to your tips. Lost it? <a href="{% url 'email_my_link' %}">Email me my link</a></p>
     </form>
   </div>
 </div>

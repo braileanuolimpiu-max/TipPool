@@ -1,0 +1,17 @@
+{% extends "registration/_auth_simple.html" %}
+{% block title %}Get your tips link{% endblock %}
+{% block panel %}
+{% if sent %}
+<h2>Check your email</h2>
+<p class="muted">If that email is on a team, your private tips link is on its way. It can take a minute. Can't find it? Ask your manager to copy it for you.</p>
+<a class="btn btn-secondary" href="{% url 'email_my_link' %}">Try another email</a>
+{% else %}
+<form method="post" class="stack">{% csrf_token %}
+  <h2>Get your tips link</h2>
+  <p class="muted" style="margin:0">Enter the email your tips are paid to (your PayPal email). We'll send your private link there.</p>
+  <div><label for="email">Email</label><input type="email" id="email" name="email" required autocomplete="email" autofocus></div>
+  <button class="btn btn-primary btn-block">Email me my link</button>
+  <p class="auth-switch"><a href="{% url 'login' %}">Manager? Sign in</a></p>
+</form>
+{% endif %}
+{% endblock %}

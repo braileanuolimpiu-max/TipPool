@@ -269,6 +269,7 @@ def staff_list(request):
         "role_rows": [{"role": r, "count": counts[r.key]} for r in roles],
         "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
         "business_type": location.business_type,
+        "base_url": request.build_absolute_uri("/").rstrip("/"),
     })
 
 
@@ -282,6 +283,20 @@ def staff_role(request, pk):
         member.save(update_fields=["default_role"])
         Change.log(request, f"Changed {member.staff.name}'s usual role to {member.role_name}")
         messages.success(request, f"{member.staff.name} is now {member.role_name.lower()}.")
+    return redirect("staff_list")
+
+
+@manager_required
+@require_POST
+def staff_new_link(request, pk):
+    """The old private link stops working (e.g. it was sent to the wrong person)."""
+    from .models import new_access_token
+    member = get_object_or_404(Membership, pk=pk, location=request.location)
+    member.staff.access_token = new_access_token()
+    member.staff.save(update_fields=["access_token"])
+    Change.log(request, f"Made a new tips link for {member.staff.name} (the old one no longer works)")
+    messages.success(request, f"New link made for {member.staff.name}. Copy it and send it to them: "
+                              "the old one no longer works.")
     return redirect("staff_list")
 
 

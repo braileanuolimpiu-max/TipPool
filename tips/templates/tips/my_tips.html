@@ -2,9 +2,6 @@
 {% block title %}My tips{% endblock %}
 {% block body %}
 <div class="guest">
-  {% if user.is_authenticated %}
-  <div class="manager-strip"><span>You're viewing {{ member.name }}'s page</span><a href="{% url 'staff_list' %}">Back to team</a></div>
-  {% endif %}
   <div style="width:100%;max-width:460px;margin-bottom:14px">
     <h1>Hi {{ member.name }}</h1>
     <p class="muted" style="margin:4px 0 0">Your tips{% if member_locations %} from {% for loc in member_locations %}{{ loc.display_name }}{% if not forloop.last %}{% if forloop.revcounter == 2 %} and {% else %}, {% endif %}{% endif %}{% endfor %}{% endif %}, and the math behind each one.</p>

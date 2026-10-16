@@ -128,6 +128,29 @@ def signup(request):
     })
 
 
+# --- Staff: get your private tips link by email ---------------------------------------
+def email_my_link(request):
+    """A worker who lost their link types their email; the link goes to that inbox only.
+    The answer is the same whether or not the email is on a team, so nobody can test emails here."""
+    from django.core.cache import cache
+    from .models import StaffMember
+    sent = False
+    if request.method == "POST":
+        email = request.POST.get("email", "").strip().lower()
+        sent = True
+        # at most one email per address every 2 minutes
+        if "@" in email and cache.add(f"my-link:{email}", 1, 120):
+            people = StaffMember.objects.filter(paypal_email__iexact=email, memberships__active=True).distinct()
+            lines = [f"{p.business.name}: {request.build_absolute_uri(reverse('my_tips', args=[p.access_token]))}"
+                     for p in people.select_related("business")]
+            if lines:
+                send_mail("Your TipPool tips link",
+                          "Here is your private link to your tips. Keep it to yourself: anyone with it can see "
+                          "your tips.\n\n" + "\n".join(lines) + "\n\nTip: add it to your phone's home screen.\n",
+                          settings.DEFAULT_FROM_EMAIL, [email], fail_silently=True)
+    return render(request, "registration/my_link.html", {"sent": sent})
+
+
 # --- Invite other managers ----------------------------------------------------------
 @require_POST
 @owner_required

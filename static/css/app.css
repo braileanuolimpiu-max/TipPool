@@ -487,3 +487,19 @@ hr.soft { border: 0; border-top: 1px solid var(--hair); margin: 4px 0; }
   .login .left .receipt-wrap, .login .left p { display: none; }
   .login .left h1 { font-size: 2rem; }
 }
+
+/* Team: each person's private link, copy + make a new one */
+.link-tools { display: flex; align-items: center; gap: 4px; order: 2; flex-basis: 100%; margin: -2px 0 0 46px; }
+.link-tools .label { font-size: .78rem; font-weight: 700; color: var(--graphite); margin-right: 4px; white-space: nowrap; }
+.link-tools .copy-link { flex: 1; max-width: 420px; min-width: 0; margin: 0; padding: 6px 8px; font: .74rem var(--mono); color: var(--graphite); }
+.team-rows .week-edit { order: 3; }
+.link-tools form { margin: 0; }
+.icon-btn { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--hair); border-radius: 4px;
+  background: var(--paper); color: var(--ink); cursor: pointer; }
+.icon-btn svg { width: 16px; height: 16px; }
+.icon-btn:hover { border-color: var(--ink); }
+.icon-btn:focus-visible { box-shadow: var(--focus); outline: 0; }
+.icon-btn.done { background: var(--go-soft); border-color: var(--go); color: var(--go); }
+@media (max-width: 640px) {
+  .link-tools .label { display: none; }
+}
