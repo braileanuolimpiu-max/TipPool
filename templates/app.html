@@ -11,12 +11,16 @@
     </select><noscript><button>Go</button></noscript>
   </form>
   {% endif %}
+  <button type="button" class="menu-btn" id="menu-btn" aria-controls="main-nav" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+    <span>Menu</span>
+  </button>
   <div class="who-am-i">
     <span>Signed in as {{ user.username }}</span>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>
   </div>
 </header>
-<div class="rail">
+<div class="rail" id="main-nav">
   <nav aria-label="Main">
     {% if locations|length > 1 %}
     <a class="ticket" href="{% url 'overview' %}" {% if u == 'overview' %}aria-current="page"{% endif %}>
@@ -52,10 +56,28 @@
       <span class="label">Settings</span></a>
   </nav>
 </div>
+<div class="menu-scrim" id="menu-scrim" hidden></div>
 <main class="main">
   <p class="eyebrow" aria-hidden="true"><span class="dot"></span>{{ restaurant_name }}<span class="sep">/</span>{% now "l, M j" %}</p>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </main>
 {% endwith %}
+<script>
+  // phones: the ticket rail becomes a menu sheet
+  (function () {
+    const btn = document.getElementById("menu-btn"), scrim = document.getElementById("menu-scrim");
+    if (!btn) return;
+    const set = (open) => {
+      const bar = document.querySelector(".topbar");
+      document.documentElement.style.setProperty("--topbar-h", bar.getBoundingClientRect().bottom + "px");
+      document.body.classList.toggle("menu-open", open);
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      scrim.hidden = !open;
+    };
+    btn.addEventListener("click", () => set(!document.body.classList.contains("menu-open")));
+    scrim.addEventListener("click", () => set(false));
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
+  })();
+</script>
 {% endblock %}

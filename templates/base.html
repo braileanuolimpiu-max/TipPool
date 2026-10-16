@@ -15,6 +15,17 @@
 </head>
 <body>
 {% block body %}{% endblock %}
+<script>
+  // tables become labelled cards on phones: each cell gets its column's name
+  document.querySelectorAll("table.data").forEach((table) => {
+    const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent.trim());
+    if (!heads.length) return;
+    table.classList.add("has-labels");
+    table.querySelectorAll("tbody tr").forEach((tr) => {
+      [...tr.children].forEach((td, i) => { if (heads[i]) td.setAttribute("data-label", heads[i]); });
+    });
+  });
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
