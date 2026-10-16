@@ -94,9 +94,10 @@ def blocking(night):
 
 
 def _usual_total(night):
-    previous = (Night.objects.filter(location=night.location, status=Night.Status.PAID)
-                .exclude(pk=night.pk).order_by("-date")[:8])
-    totals = [n.tip_total for n in previous if n.tip_total > 0]
+    from django.db.models import Q, Sum
+    previous = (Night.objects.filter(location=night.location, status=Night.Status.PAID).exclude(pk=night.pk)
+                .annotate(total=Sum("tips__amount", filter=Q(tips__status=Tip.Status.COMPLETED))).order_by("-date")[:8])
+    totals = [n.total for n in previous if n.total and n.total > 0]
     return Decimal(median(totals)) if len(totals) >= 3 else None
 
 

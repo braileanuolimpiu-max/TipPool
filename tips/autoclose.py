@@ -30,33 +30,46 @@ def location_tz(location):
         return ZoneInfo("UTC")
 
 
+def service_window(location, at=None):
+    """(service day, closing time) of the shift that is running at `at`.
+
+    A shift belongs to the next closing time after it started: opened at 23:30 on Friday after a
+    23:00 close, it is Saturday's shift; opened on a day with no close time, it runs to the next one.
+    Without any close times: today's date and no closing time."""
+    tz = location_tz(location)
+    at = (at or timezone.now()).astimezone(tz)
+    times = {c.weekday: c for c in CloseTime.objects.filter(location=location, enabled=True)}
+    for offset in range(-1, 8):
+        service_day = at.date() + timedelta(days=offset)
+        close = times.get(service_day.weekday())
+        if not close:
+            continue
+        day = service_day + timedelta(days=1) if close.after_midnight else service_day
+        closes = datetime.combine(day, close.time, tzinfo=tz)
+        if closes > at:
+            return service_day, closes
+    return at.date(), None
+
+
 def close_due_at(night, tz=None):
-    """When this night should close automatically, or None if there's no close time that day."""
+    """When this shift closes automatically. Its date is its service day: that day's closing time, or,
+    if that day has none (closed on Mondays), the next day that has one. None without any close times."""
     tz = tz or location_tz(night.location)
-    close = CloseTime.objects.filter(location_id=night.location_id, weekday=night.date.weekday(), enabled=True).first()
-    if not close:
-        return None
-    day = night.date + timedelta(days=1) if close.after_midnight else night.date
-    return datetime.combine(day, close.time, tzinfo=tz)
+    times = {c.weekday: c for c in CloseTime.objects.filter(location_id=night.location_id, enabled=True)}
+    for offset in range(0, 7):
+        service_day = night.date + timedelta(days=offset)
+        close = times.get(service_day.weekday())
+        if close:
+            day = service_day + timedelta(days=1) if close.after_midnight else service_day
+            return datetime.combine(day, close.time, tzinfo=tz)
+    return None
 
 
 def next_close(location, now=None):
     """The next scheduled close-out at this location (for the settings page)."""
     if not location.auto_close_enabled:
         return None
-    tz = location_tz(location)
-    now = (now or timezone.now()).astimezone(tz)
-    times = {c.weekday: c for c in CloseTime.objects.filter(location=location, enabled=True)}
-    for offset in range(-1, 8):
-        service_day = now.date() + timedelta(days=offset)
-        close = times.get(service_day.weekday())
-        if not close:
-            continue
-        day = service_day + timedelta(days=1) if close.after_midnight else service_day
-        at = datetime.combine(day, close.time, tzinfo=tz)
-        if at > now:
-            return at
-    return None
+    return service_window(location, now)[1]
 
 
 def run(now=None):
@@ -109,6 +122,17 @@ def hold(night, reason):
 
 
 def close_night(night, location):
+    try:
+        services.sync_pending_tips(night)  # tips a guest approved just before closing still count
+    except Exception:
+        log.warning("Could not check pending tips before closing %s", night)
+    with transaction.atomic():
+        night = Night.objects.select_for_update().get(pk=night.pk)
+        nothing = (night.status == Night.Status.OPEN and not night.tips.exists() and not night.shifts.exists()
+                   and not night.clock_entries.exists())
+        if nothing:
+            night.delete()
+            return f"{night}: nothing happened, removed"
     with transaction.atomic():
         night = Night.objects.select_for_update().get(pk=night.pk)
         if night.status != Night.Status.OPEN:

@@ -146,7 +146,7 @@ def word_pattern(role):
 def roles_in_use(location):
     """Role keys someone on this location's team still has (those roles can't be removed)."""
     from .models import Membership
-    return set(Membership.objects.filter(location=location, active=True).values_list("default_role", flat=True))
+    return set(Membership.objects.filter(location=location).values_list("default_role", flat=True))
 
 
 def add_role(location, name, aliases="", no_tips=False):

@@ -124,7 +124,7 @@ def sync_pending_tips(night, max_checks=20):
 
 
 def _apply_order_result(tip, result):
-    unit = result["purchase_units"][0]
+    unit = (result.get("purchase_units") or [{}])[0]
     captures = unit.get("payments", {}).get("captures", [])
     capture = captures[0] if captures else {}
     payer = result.get("payer", {}).get("name", {})
@@ -133,8 +133,22 @@ def _apply_order_result(tip, result):
     fee = ((capture.get("seller_receivable_breakdown") or {}).get("paypal_fee") or {}).get("value")
     if fee is not None:
         tip.fee = Decimal(fee)
+    became_complete = tip.status != Tip.Status.COMPLETED and capture.get("status") == "COMPLETED"
     tip.status = Tip.Status.COMPLETED if capture.get("status") == "COMPLETED" else tip.status
     tip.save()
+    if became_complete:
+        _late_tip(tip)
+
+
+def _late_tip(tip):
+    """A guest's tip finished after its shift moved on. Before payout: the split is calculated again.
+    After payout: the tip moves to the current shift, so it's shared next time instead of lost."""
+    night = tip.night
+    if night.status == Night.Status.REVIEW:
+        _invalidate_split(night)
+    elif night.status in (Night.Status.PAYING, Night.Status.PAID):
+        tip.night = Night.current(night.location)
+        tip.save(update_fields=["night"])
 
 
 def sync_tip(order_id):
@@ -162,9 +176,20 @@ def sync_capture(capture_id):
 
 
 def mark_capture_completed(order_id, capture_id):
-    """Called from the webhook: PAYMENT.CAPTURE.COMPLETED."""
-    updated = Tip.objects.filter(paypal_order_id=order_id).exclude(status=Tip.Status.COMPLETED)
-    return updated.update(status=Tip.Status.COMPLETED, paypal_capture_id=capture_id)
+    """Called from a signed webhook: PAYMENT.CAPTURE.COMPLETED. Reads the order from PayPal so the fee is
+    recorded too (and late tips are handled like any other capture)."""
+    tip = Tip.objects.filter(paypal_order_id=order_id).exclude(status=Tip.Status.COMPLETED).first()
+    if tip is None:
+        return 0
+    try:
+        _apply_order_result(tip, get_client(business_of(tip.night)).get_order(order_id))
+    except PayPalError:
+        pass
+    if tip.status != Tip.Status.COMPLETED:  # PayPal's signed event says it's captured
+        tip.status, tip.paypal_capture_id = Tip.Status.COMPLETED, tip.paypal_capture_id or capture_id
+        tip.save(update_fields=["status", "paypal_capture_id"])
+        _late_tip(tip)
+    return 1
 
 
 def tip_given_back(capture_id, what):
@@ -248,7 +273,7 @@ def build_split(night, rule_set):
         Share.objects.create(
             night=night, staff_id=int(person.key), role=person.role, hours=person.hours,
             amount=person.amount, breakdown=person.breakdown,
-            explanation=explanations.get(person.name, ""),
+            explanation=explanations.get(person.key, ""),
         )
     night.rule_set = rule_set
     night.status = Night.Status.REVIEW
@@ -493,8 +518,10 @@ def _alert_if_stuck(item):
 
 
 def _finish_night_if_done(night):
+    """Paid once every current payout arrived (or waits to be accepted). A failed one keeps the shift in
+    "paying" with an alert, until it's sent again."""
     statuses = set(PayoutItem.objects.filter(batch__night=night, superseded=False).values_list("status", flat=True))
-    if statuses and statuses <= ITEM_DONE | ITEM_FAILED:
+    if statuses and statuses <= ITEM_DONE:
         if night.status != Night.Status.PAID:
             night.status = Night.Status.PAID
             night.save(update_fields=["status"])

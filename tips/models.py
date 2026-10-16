@@ -200,8 +200,32 @@ class Role(models.Model):
 
     @classmethod
     def label(cls, key, location_id):
-        role = cls.objects.filter(location_id=location_id, key=key).first()
-        return role.name if role else (key or "").replace("-", " ").capitalize()
+        names = cls.names_for(location_id)
+        return names.get(key) or (key or "").replace("-", " ").capitalize()
+
+    @classmethod
+    def names_for(cls, location_id):
+        """{key: name} for a location, cached for a minute (cleared whenever a role changes)."""
+        from django.core.cache import cache
+        cache_key = f"role-names:{location_id}"
+        names = cache.get(cache_key)
+        if names is None:
+            names = dict(cls.objects.filter(location_id=location_id).values_list("key", "name"))
+            cache.set(cache_key, names, 60)
+        return names
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self._forget()
+
+    def delete(self, *args, **kwargs):
+        result = super().delete(*args, **kwargs)
+        self._forget()
+        return result
+
+    def _forget(self):
+        from django.core.cache import cache
+        cache.delete(f"role-names:{self.location_id}")
 
     @classmethod
     def new_key(cls, location, name):
@@ -380,12 +404,18 @@ class Night(models.Model):
 
     @classmethod
     def current(cls, location):
-        """The shift at this location that is collecting tips right now (created if needed)."""
-        night = cls.objects.filter(location=location, status=cls.Status.OPEN).first()
+        """The shift at this location that is collecting tips right now (created if needed).
+        Locked on the location, so two requests at the same moment can't open two shifts."""
+        night = cls.objects.filter(location=location, status=cls.Status.OPEN).order_by("created_at").first()
         if night:
             return night
-        from .autoclose import location_tz
-        return cls.objects.create(location=location, date=timezone.now().astimezone(location_tz(location)).date())
+        from django.db import transaction
+
+        from .autoclose import service_window
+        with transaction.atomic():
+            Location.objects.select_for_update().filter(pk=location.pk).first()
+            night = cls.objects.filter(location=location, status=cls.Status.OPEN).order_by("created_at").first()
+            return night or cls.objects.create(location=location, date=service_window(location)[0])
 
 
 class Tip(models.Model):
@@ -452,7 +482,8 @@ class ClockEntry(models.Model):
 class RoleLabelMixin:
     @property
     def role_name(self):
-        return Role.label(self.role, self.night.location_id)
+        location_id = self.__dict__.get("_location_id") or self.night.location_id
+        return Role.label(self.role, location_id)
 
 
 class Shift(RoleLabelMixin, models.Model):

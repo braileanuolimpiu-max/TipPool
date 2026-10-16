@@ -90,7 +90,7 @@
     const res = await fetch("{% url 'payout_status_json' night.pk %}");
     if (!res.ok) return;
     const data = await res.json();
-    if (data.night_status === "paid") { clearInterval(poll); window.location.reload(); }
+    if (data.night_status === "paid" || data.settled) { clearInterval(poll); window.location.reload(); }
   }, 4000);
 </script>
 {% endif %}

@@ -38,7 +38,10 @@
       {% endif %}
       <label for="custom">Other amount</label>
       <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00">
-      <div class="pay-buttons">
+      {% if nobody %}
+      <p class="flash warning" style="margin:12px 0 0">Nobody is taking tips here right now. Please ask the staff.</p>
+      {% endif %}
+      <div class="pay-buttons"{% if nobody %} hidden{% endif %}>
         <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
         <venmo-button type="pay" class="venmo-blue" hidden></venmo-button>
       </div>

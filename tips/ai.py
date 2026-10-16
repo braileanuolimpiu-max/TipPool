@@ -271,7 +271,7 @@ this shift's tip pool was calculated. Use ONLY the numbers given; never recalcul
 
 
 def explain_shares(total, rules_summary, shares, notes, role_names=None, symbol="$"):
-    """shares: list of PersonShare. role_names: {role key: name}. Returns {name: explanation}."""
+    """shares: list of PersonShare. role_names: {role key: name}. Returns {person key: explanation}."""
     role_names = role_names or {}
     cur = symbol
 
@@ -288,10 +288,18 @@ def explain_shares(total, rules_summary, shares, notes, role_names=None, symbol=
         try:
             out = _claude_parse(EXPLAIN_SYSTEM, [{"type": "text", "text": "\n".join(lines)}],
                                 ExplanationsOut, effort="low")
-            return {e.name: e.explanation for e in out.explanations}
+            by_name = {}
+            for e in out.explanations:
+                by_name.setdefault(e.name, []).append(e.explanation)
+            counts = {}
+            for s in shares:
+                counts[s.name] = counts.get(s.name, 0) + 1
+            # two people with the same name get their own template text, never each other's
+            return {s.key: (by_name[s.name][0] if counts[s.name] == 1 and s.name in by_name
+                            else _template_explanation(s, role_of(s), cur)) for s in shares}
         except AIError as exc:
             log.warning("Falling back to template explanations: %s", exc)
-    return {s.name: _template_explanation(s, role_of(s), cur) for s in shares}
+    return {s.key: _template_explanation(s, role_of(s), cur) for s in shares}
 
 
 def _template_explanation(share, role, cur="$"):

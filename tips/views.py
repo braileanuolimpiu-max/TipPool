@@ -105,12 +105,16 @@ def clock_out_for(request, pk):
 
 @manager_required
 def history(request):
+    from django.db.models import Count, Sum
     nights = (Night.objects.filter(location=request.location).exclude(status=Night.Status.OPEN)
-              .prefetch_related("shares", "tips", "payout_batches")[:60])
+              .annotate(total=Sum("tips__amount", filter=Q(tips__status=Tip.Status.COMPLETED)),
+                        paid_people=Count("shares", filter=Q(shares__amount__gt=0), distinct=True))
+              .prefetch_related("payout_batches")[:60])
     rows = []
     for n in nights:
-        rows.append({"night": n, "total": n.tip_total, "people": sum(1 for s in n.shares.all() if s.amount > 0),
-                     "batch": getattr(n, "payout_batch", None)})
+        batches = [b for b in n.payout_batches.all() if not b.is_retry]
+        rows.append({"night": n, "total": (n.total or Decimal("0")).quantize(Decimal("0.01")),
+                     "people": n.paid_people, "batch": batches[0] if batches else None})
     return render(request, "tips/history.html", {"rows": rows})
 
 
@@ -122,10 +126,12 @@ def tip_page(request):
     people = []
     if location.tip_mode != Location.TipMode.POOL:
         # who's working right now first, then the rest of the team
-        working = set(Night.current(location).clock_entries.filter(ended_at__isnull=True).values_list("staff_id", flat=True))
-        working |= set(Night.current(location).shifts.values_list("staff_id", flat=True))
-        members = Membership.objects.filter(location=location, active=True).select_related("staff")
-        members = [m for m in members if not Role.objects.filter(location=location, key=m.default_role, no_tips=True).exists()]
+        night = Night.current(location)
+        working = set(night.clock_entries.filter(ended_at__isnull=True).values_list("staff_id", flat=True))
+        working |= set(night.shifts.values_list("staff_id", flat=True))
+        no_tips = set(Role.objects.filter(location=location, no_tips=True).values_list("key", flat=True))
+        members = [m for m in Membership.objects.filter(location=location, active=True).select_related("staff")
+                   if m.default_role not in no_tips]
         people = sorted(members, key=lambda m: (m.staff_id not in working, m.staff.name))
     to = request.GET.get("to", "")
     style, values = location.tip_buttons
@@ -133,6 +139,8 @@ def tip_page(request):
         "location": location, "restaurant_name": location.display_name, "restaurant_named": bool(location.name),
         "at": location.slug,
         "tip_style": style,
+        # personal tips only, and nobody to pick: tipping can't work right now
+        "nobody": location.tip_mode == Location.TipMode.PERSONAL and not people,
         "presets": values,
         "default_pick": values[1] if len(values) > 1 else values[0],
         "tip_message": location.tip_message,
@@ -159,6 +167,9 @@ def tip_thanks(request):
             log.warning("Capture on return page failed for %s", order_id)
     if tip:  # show the business the tip went to, even without ?at= in the return link
         request.location = tip.night.location
+    if request.location is None:
+        raise Http404("We couldn't find that tip.")
+    timezone.activate(autoclose.location_tz(request.location))
     return render(request, "tips/tip_thanks.html", {
         "tip": tip, "table": tip.table if tip else "", "location": request.location,
         "cur": request.location.business.symbol,
@@ -540,6 +551,8 @@ def rules_page(request):
     text = ""
     if request.method == "POST" and "save" in request.POST:
         preview = request.session.pop("rules_preview", None)
+        if preview and preview.get("location") != request.location.pk:
+            preview = None
         if not preview:
             messages.error(request, "Nothing to save, please describe the rules again.")
             return redirect("rules")
@@ -553,7 +566,7 @@ def rules_page(request):
         text = request.POST.get("text", "")
         try:
             parsed = ai.parse_rules(text, request.location)
-            preview = {"text": text, **parsed}
+            preview = {"text": text, "location": request.location.pk, **parsed}
             request.session["rules_preview"] = preview
         except ai.AIError as exc:
             messages.error(request, str(exc))
@@ -575,9 +588,11 @@ def close_night(request, pk=None):
     if night.status == Night.Status.OPEN:
         _sync_tips(night)
     location = night.location
+    existing = {s.staff_id: s for s in night.shifts.select_related("staff")}
     staff = [m.staff for m in Membership.objects.filter(location=location, active=True).select_related("staff")]
+    # someone removed from the team after working this shift stays on it
+    staff += sorted((s.staff for s in existing.values() if s.staff not in staff), key=lambda p: p.name)
     usual_role = {m.staff_id: m.default_role for m in Membership.objects.filter(location=location)}
-    existing = {s.staff_id: s for s in night.shifts.all()}
     prefill = {}
     ai_notes = []
 
@@ -610,6 +625,7 @@ def close_night(request, pk=None):
             hours_from.finish_running_entries(night)
         night.shifts.all().delete()
         role_keys = set(Role.objects.filter(location=location).values_list("key", flat=True))
+        role_keys |= {s.role for s in existing.values()}  # a role deleted since keeps working for this shift
         for member in staff:
             if not request.POST.get(f"worked_{member.pk}"):
                 continue
@@ -699,7 +715,7 @@ def review(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
     if night.status in (Night.Status.OPEN, Night.Status.CLOSED):
         return redirect("close_night_pk", pk=night.pk)
-    shares = list(night.shares.select_related("staff"))
+    shares = list(night.shares.select_related("staff", "night"))
     business = request.business
     shared_fees, personal_fees = services.fees_to_share(night)
     passed_on = (shared_fees + sum(personal_fees.values(), Decimal("0"))).quantize(Decimal("0.01"))
@@ -762,7 +778,7 @@ def payout_status(request, pk):
         try:
             for each in night.payout_batches.all():
                 if services.needs_recheck(each):
-                    services.recheck_unclear(each)
+                    each = services.recheck_unclear(each)
                 services.refresh_batch(each)
         except (PayPalError, services.TipPoolError) as exc:
             messages.error(request, f"Could not check with PayPal: {exc}")
@@ -822,9 +838,11 @@ def payout_status_json(request, pk):
         except (PayPalError, services.TipPoolError):
             pass
     night.refresh_from_db()
+    current = PayoutItem.objects.filter(batch__night=night, superseded=False)
     return JsonResponse({
         "batch_status": batch.status, "night_status": night.status,
-        "items": {str(i.pk): i.status for i in batch.items.all()},
+        "items": {str(i.pk): i.status for i in current},
+        "settled": all(i.status in services.ITEM_DONE | services.ITEM_FAILED for i in current),
     })
 
 
@@ -867,10 +885,13 @@ def settings_page(request):
             except InvalidOperation:
                 values.append(0)
         limit = 100 if style == Location.TipStyle.PERCENT else 500
+        ignored = []
         if style in Location.TipStyle.values and all(0 < v <= limit for v in values):
             restaurant.tip_style, restaurant.tip_values = style, sorted(values)
         elif style == "":
             restaurant.tip_style, restaurant.tip_values = "", []
+        elif style in Location.TipStyle.values:
+            ignored.append(f"the tip buttons (each must be between 1 and {limit})")
         if request.POST.get("tip_mode") in Location.TipMode.values:
             restaurant.tip_mode = request.POST["tip_mode"]
         if request.POST.get("after_close") in Location.AfterClose.values:
@@ -891,12 +912,17 @@ def settings_page(request):
                                                    defaults={"time": value, "enabled": enabled})
             else:
                 CloseTime.objects.filter(location=restaurant, weekday=day).update(enabled=False)
+                if enabled:
+                    ignored.append(f"{CloseTime.WEEKDAYS[day]} (it has no closing time)")
         Change.log(request, "Changed settings: " + ", ".join([
             restaurant.get_tip_mode_display().lower(),
             ("closes automatically" if restaurant.auto_close_enabled else "closes by hand"),
             restaurant.get_after_close_display().lower(),
         ]))
-        messages.success(request, "Settings saved.")
+        if ignored:
+            messages.warning(request, "Saved, except " + " and ".join(ignored) + ".")
+        else:
+            messages.success(request, "Settings saved.")
         return redirect("settings")
     existing = {c.weekday: c for c in CloseTime.objects.filter(location=restaurant)}
     days = [{"n": d, "name": CloseTime.WEEKDAYS[d], "close": existing.get(d)} for d in range(7)]
@@ -1117,6 +1143,9 @@ def location_add(request):
 @limited("staff-page", 30, 600, key=lambda request, token: token)
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
+    home = member.memberships.filter(active=True).select_related("location").first() or member.memberships.first()
+    if home is not None:
+        timezone.activate(autoclose.location_tz(home.location))
     if request.method == "POST" and request.POST.get("text"):
         return _staff_message(request, member, token)
     if request.method == "POST" and request.POST.get("payout"):
