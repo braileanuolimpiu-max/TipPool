@@ -82,24 +82,24 @@ class TipSourceTests(TestCase):
     def test_guest_can_tip_a_person_only_when_allowed(self):
         member = self.maria.memberships.get()
         body = {"amount": "10", "to": member.pk}
-        res = self.client.post(reverse("api_create_order"), data=json.dumps(body), content_type="application/json")
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({**body, "at": Location.default().slug}), content_type="application/json")
         self.assertEqual(res.status_code, 400)  # the business shares all tips
         self.location.tip_mode = Location.TipMode.BOTH
         self.location.save()
-        res = self.client.post(reverse("api_create_order"), data=json.dumps(body), content_type="application/json")
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({**body, "at": Location.default().slug}), content_type="application/json")
         self.assertEqual(Tip.objects.get(paypal_order_id=res.json()["orderId"]).staff, self.maria)
 
     def test_personal_mode_requires_a_person(self):
         self.location.tip_mode = Location.TipMode.PERSONAL
         self.location.save()
-        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "10"}),
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "10", "at": Location.default().slug}),
                                content_type="application/json")
         self.assertEqual(res.status_code, 400)
 
     def test_tip_page_lists_people_and_qr_page_has_personal_codes(self):
         self.location.tip_mode = Location.TipMode.BOTH
         self.location.save()
-        self.assertContains(self.client.get(reverse("tip_page")), "The whole team")
+        self.assertContains(self.client.get(reverse("tip_page") + "?at=" + Location.default().slug), "The whole team")
         self.assertContains(self.client.get(reverse("qr_page")), "Personal codes")
         member = self.maria.memberships.get()
         self.assertContains(self.client.get(reverse("qr_show") + f"?to={member.pk}"), "Tip Maria")

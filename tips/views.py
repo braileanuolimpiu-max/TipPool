@@ -18,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -27,6 +28,7 @@ from .models import (Alert, Change, CloseTime, Location, Membership, Night, Payo
 from .accounts import manager_required
 from .check import blocking as check_blocking
 from .middleware import public_location
+from .ratelimit import hit, limited
 from .paypal import PayPalError, checkout_config, get_client, webhook_id_for
 
 log = logging.getLogger("tips.views")
@@ -100,6 +102,8 @@ def history(request):
 # --- Customer tip page (public) -----------------------------------------------
 def tip_page(request):
     location = public_location(request)
+    if location is None:
+        raise Http404("This tip code doesn't point to a business. Ask the staff for a fresh one.")
     people = []
     if location.tip_mode != Location.TipMode.POOL:
         # who's working right now first, then the rest of the team
@@ -148,16 +152,27 @@ def tip_thanks(request):
 
 
 @require_POST
+@limited("orders", 20, 600, json=True)
 def api_create_order(request):
     try:
         data = json.loads(request.body or "{}")
+        if not isinstance(data, dict):
+            raise ValueError("bad body")
         amount = Decimal(str(data.get("amount", "")))
-        table = str(data.get("table", ""))
-        location = Location.objects.filter(slug=str(data.get("at", ""))).first() or Location.default()
+        table = str(data.get("table", ""))[:20]
+        location = Location.objects.filter(slug=str(data.get("at", ""))[:40]).first()
+        if location is None:
+            return JsonResponse({"error": "This tip page doesn't belong to a business."}, status=404)
+        if not hit(f"orders-loc:{location.pk}", 300, 3600):
+            return JsonResponse({"error": "Too many tips at once. Please try again in a minute."}, status=429)
         for_staff = None
-        if data.get("to"):
-            member = Membership.objects.filter(pk=int(data["to"]), location=location, active=True).first()
-            if member is None:
+        to = str(data.get("to") or "")
+        if to:
+            member = (Membership.objects.filter(pk=int(to), location=location, active=True).select_related("staff")
+                      .first() if to.isdigit() else None)
+            no_tips = member is not None and Role.objects.filter(location=location, key=member.default_role,
+                                                                no_tips=True).exists()
+            if member is None or no_tips:
                 return JsonResponse({"error": "That person isn't taking tips here right now."}, status=400)
             for_staff = member.staff
         order_id = services.create_tip_order(
@@ -175,6 +190,7 @@ def api_create_order(request):
 
 
 @require_POST
+@limited("capture", 40, 600, json=True)
 def api_capture_order(request, order_id):
     try:
         tip = services.capture_tip(order_id)
@@ -206,6 +222,8 @@ def qr_page(request):
 
 def qr_show(request):
     """Full-screen QR for a server's phone or a counter tablet. No login, it only links to the tip page."""
+    if request.location is None:
+        raise Http404("Unknown business.")
     table = request.GET.get("table", "")[:20]
     to = request.GET.get("to", "")
     member = Membership.objects.filter(pk=to, location=request.location).select_related("staff").first() if to.isdigit() else None
@@ -218,7 +236,7 @@ def qr_show(request):
 
 def qr_svg(request):
     url = request.GET.get("url", "")
-    if not url.startswith(request.build_absolute_uri("/")):
+    if not url.startswith(request.build_absolute_uri("/")) or len(url) > 300:
         return HttpResponseBadRequest("Only links to this site.")
     image = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage, box_size=12, border=2)
     buffer = io.BytesIO()
@@ -577,7 +595,8 @@ def pay(request, pk):
         messages.success(request, "Payout sent to PayPal.")
     except services.TipPoolError as exc:
         messages.error(request, str(exc))
-        return redirect("review", pk=pk)
+        night.refresh_from_db()
+        return redirect("payout_status" if night.status == Night.Status.PAYING else "review", pk=pk)
     except PayPalError as exc:
         messages.error(request, f"PayPal refused the payout: {exc} (debug id {exc.debug_id})")
         return redirect("review", pk=pk)
@@ -740,7 +759,9 @@ def settings_page(request):
         "after_choices": Location.AfterClose.choices, "next_close": autoclose.next_close(restaurant),
         "all_locations": _locations_overview(request.business),
         "managers": request.business.managers.select_related("user").order_by("-is_owner", "user__first_name"),
-        "invites": [(i, request.build_absolute_uri(reverse("accept_invite", args=[i.token])))
+        # invite links are as good as a key: only the owner sees them
+        "invites": [(i, request.build_absolute_uri(reverse("accept_invite", args=[i.token]))
+                     if request.user.manager.is_owner else "")
                     for i in request.business.invites.filter(accepted_at__isnull=True) if i.usable],
         "is_owner": request.user.manager.is_owner,
         "currencies": list(request.business.CURRENCIES.items()),
@@ -883,7 +904,8 @@ def location_switch(request):
     location = get_object_or_404(Location, pk=request.POST.get("location"), business=request.business)
     request.session["location_id"] = location.pk
     nxt = request.POST.get("next", "")
-    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "dashboard")
+    safe = url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure())
+    return redirect(nxt if safe and nxt.startswith("/") else "dashboard")
 
 
 @manager_required
@@ -907,6 +929,7 @@ def location_add(request):
 
 
 # --- Staff's own page (secret link, no login) ----------------------------------
+@limited("staff-page", 30, 600)
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
     if request.method == "POST" and request.POST.get("text"):
@@ -1042,36 +1065,37 @@ def _staff_message(request, member, token):
 # --- PayPal webhooks ----------------------------------------------------------
 @csrf_exempt
 @require_POST
+@limited("webhook", 120, 60)
 def paypal_webhook(request):
+    """PayPal tells us something happened. A verified (signed) event is applied as is. An unverified one
+    is never trusted: it is only a hint to ask PayPal's API what really happened."""
     try:
         event = json.loads(request.body)
     except json.JSONDecodeError:
         return HttpResponseBadRequest("bad json")
-    event_id = event.get("id", "")
+    if not isinstance(event, dict):
+        return HttpResponseBadRequest("bad event")
+    event_id = str(event.get("id", ""))[:64]
     if not event_id or WebhookEvent.objects.filter(event_id=event_id).exists():
         return HttpResponse("ok")  # duplicate or junk: acknowledge so PayPal stops retrying
 
     business = _webhook_business(event)
     webhook_id = webhook_id_for(business)
-    verified = False
-    if webhook_id:
-        try:
-            verified = get_client(business).verify_webhook(request.headers, event, webhook_id)
-        except PayPalError:
-            verified = False
-        if not verified:
-            log.warning("Rejected unverified webhook %s", event_id)
-            return HttpResponse(status=400)
-    elif not settings.DEBUG:
-        log.error("No webhook id for this PayPal account: refusing webhooks in production")
+    if not webhook_id:
+        _check_with_paypal(event, business)
+        return HttpResponse("ok")
+    try:
+        verified = get_client(business).verify_webhook(request.headers, event, webhook_id)
+    except PayPalError:
+        verified = False
+    if not verified:
+        log.warning("Rejected unverified webhook %s", event_id)
         return HttpResponse(status=400)
-    else:
-        log.warning("No webhook id: webhook %s accepted WITHOUT verification (dev only)", event_id)
 
-    WebhookEvent.objects.create(event_id=event_id, event_type=event.get("event_type", ""),
-                                verified=verified, payload=event)
+    WebhookEvent.objects.create(event_id=event_id, event_type=str(event.get("event_type", ""))[:80],
+                                verified=True, payload=event)
     event_type = event.get("event_type", "")
-    resource = event.get("resource", {})
+    resource = event.get("resource", {}) or {}
     if event_type == "PAYMENT.CAPTURE.COMPLETED":
         order_id = resource.get("supplementary_data", {}).get("related_ids", {}).get("order_id")
         if order_id:
@@ -1095,6 +1119,32 @@ def paypal_webhook(request):
             except PayPalError:
                 log.exception("Could not refresh batch %s", batch_id)
     return HttpResponse("ok")
+
+
+def _check_with_paypal(event, business):
+    """No webhook id to verify with: look the thing up at PayPal ourselves. Nothing in the event's
+    body is believed, so a forged event can at most make us ask PayPal a question."""
+    event_type = str(event.get("event_type", ""))
+    resource = event.get("resource", {}) or {}
+    try:
+        if event_type == "PAYMENT.CAPTURE.COMPLETED":
+            order_id = resource.get("supplementary_data", {}).get("related_ids", {}).get("order_id")
+            if order_id and Tip.objects.filter(paypal_order_id=order_id).exists():
+                services.sync_tip(order_id)
+        elif event_type in ("PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED"):
+            capture_id = _capture_id_of(resource)
+            if capture_id and Tip.objects.filter(paypal_capture_id=capture_id).exists():
+                services.sync_capture(capture_id)
+        elif event_type.startswith("PAYMENT.PAYOUTS"):
+            sender_item_id = resource.get("payout_item", {}).get("sender_item_id")
+            item = PayoutItem.objects.filter(sender_item_id=sender_item_id).first() if sender_item_id else None
+            batch = item.batch if item else PayoutBatch.objects.filter(
+                paypal_batch_id=resource.get("batch_header", {}).get("payout_batch_id") or "-").first()
+            if batch:
+                services.refresh_batch(batch)
+        # disputes need a signed event: without one we don't raise alarms from unverified data
+    except PayPalError:
+        log.warning("Could not check unverified webhook %s with PayPal", event.get("id"))
 
 
 def _capture_id_of(resource):

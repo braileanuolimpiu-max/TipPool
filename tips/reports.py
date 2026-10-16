@@ -114,13 +114,33 @@ def build(locations, first, last):
     }
 
 
+def _cell(value):
+    """Spreadsheets run cells that start with = + - @ as formulas: make text cells plain text."""
+    text = "" if value is None else str(value)
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r") and not _is_number(text):
+        return "'" + text
+    return text
+
+
+def _is_number(text):
+    try:
+        Decimal(text)
+        return True
+    except Exception:
+        return False
+
+
+def _row(values):
+    return [_cell(v) for v in values]
+
+
 def people_csv(report):
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(["Name", "Roles", "Shifts", "Hours", "Shared tips", "Personal tips", "Total", "Paid", "Shared per hour"])
     for p in report["people"]:
-        w.writerow([p["name"], p["roles"], p["shifts"], p["hours"], p["pool"], p["personal"], p["total"], p["paid"],
-                    p["per_hour"] if p["per_hour"] is not None else ""])
+        w.writerow(_row([p["name"], p["roles"], p["shifts"], p["hours"], p["pool"], p["personal"], p["total"],
+                         p["paid"], p["per_hour"] if p["per_hour"] is not None else ""]))
     return out.getvalue()
 
 
@@ -129,7 +149,7 @@ def shifts_csv(report):
     w = csv.writer(out)
     w.writerow(["Date", "Location", "Tips", "People paid", "Status"])
     for s in report["shifts"]:
-        w.writerow([s["date"].isoformat(), s["location"], s["total"], s["people"], s["status"]])
+        w.writerow(_row([s["date"].isoformat(), s["location"], s["total"], s["people"], s["status"]]))
     return out.getvalue()
 
 

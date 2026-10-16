@@ -22,7 +22,7 @@ class TipButtonTests(TestCase):
         self.assertEqual(Location.objects.get(pk=self.location.pk).tip_buttons, ("amounts", [1, 2, 3, 5]))
 
     def test_percent_page_asks_for_the_bill(self):
-        page = self.client.get(reverse("tip_page"))
+        page = self.client.get(reverse("tip_page") + "?at=" + Location.default().slug)
         self.assertContains(page, "Your bill")
         self.assertContains(page, 'data-percent="18"')
 
@@ -32,7 +32,7 @@ class TipButtonTests(TestCase):
                                                "after_close": "review", "timezone": "UTC", "tip_mode": "pool"})
         loc = Location.objects.get(pk=self.location.pk)
         self.assertEqual(loc.tip_buttons, ("amounts", [4, 8, 12, 20]))
-        page = self.client.get(reverse("tip_page"))
+        page = self.client.get(reverse("tip_page") + "?at=" + Location.default().slug)
         self.assertContains(page, "Thank you!")
         self.assertContains(page, 'data-amount="12"')
         self.assertNotContains(page, "Your bill")

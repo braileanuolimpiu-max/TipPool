@@ -6,6 +6,7 @@ and expires after 10 minutes. On confirm everything is checked again, through th
 """
 import calendar
 import re
+import secrets
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -121,7 +122,8 @@ def propose(kind, params, location, user):
         params = {"night": night.pk, "amount": str(amount), "source": source}
     else:
         raise ActionError("I can't do that one.")
-    token = signing.dumps({"k": kind, "p": params, "u": user.pk, "l": location.pk}, salt=SALT, compress=True)
+    token = signing.dumps({"k": kind, "p": params, "u": user.pk, "l": location.pk, "n": secrets.token_hex(16)},
+                          salt=SALT, compress=True)
     return {"text": text, "token": token}
 
 
@@ -137,6 +139,14 @@ def execute(token, request):
         raise ActionError("That suggestion isn't valid. Ask again.")
     if data["u"] != request.user.pk or data["l"] != request.location.pk:
         raise ActionError("That suggestion was made for another login or location. Ask again.")
+    from django.db import IntegrityError, transaction
+
+    from .models import UsedConfirmation
+    try:
+        with transaction.atomic():
+            UsedConfirmation.objects.create(nonce=data.get("n", ""))
+    except IntegrityError:
+        raise ActionError("That was already done.")
     kind, params, location = data["k"], data["p"], request.location
     try:
         if kind == "pay_shift":

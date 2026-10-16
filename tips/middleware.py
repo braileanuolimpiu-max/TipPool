@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -28,10 +29,10 @@ def pick_location(request):
 
 
 def public_location(request):
-    """For guest pages: the location named in the link, whoever is looking."""
+    """For guest pages: the location named in the link, whoever is looking. None when the link doesn't
+    name a real location: a tip must never land in some other business's PayPal."""
     slug = request.GET.get("at")
-    location = Location.objects.filter(slug=slug).first() if slug else None
-    return location or Location.default()
+    return Location.objects.filter(slug=slug).first() if slug else None
 
 
 class LocationMiddleware:
@@ -45,10 +46,12 @@ class LocationMiddleware:
         try:
             request.business = manager_business(request)
             request.location = pick_location(request)
-            timezone.activate(autoclose.location_tz(request.location))
         except Exception:  # e.g. before the first migration
             request.business, request.location = None, None
-        if getattr(request, "user", None) and request.user.is_authenticated and cache.add("autoclose-check", 1, 60):
+        if request.location is not None:
+            timezone.activate(autoclose.location_tz(request.location))
+        if (settings.AUTOCLOSE_IN_REQUESTS and getattr(request, "user", None) and request.user.is_authenticated
+                and cache.add("autoclose-check", 1, 60)):
             try:
                 autoclose.run()
             except Exception:

@@ -39,10 +39,12 @@ class LocationTests(TestCase):
                                content_type="application/json")
         tip = Tip.objects.get(paypal_order_id=res.json()["orderId"])
         self.assertEqual(tip.night.location, self.salon)
-        # old printed codes without ?at= still land on the first location
-        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5"}),
-                               content_type="application/json")
-        self.assertEqual(Tip.objects.get(paypal_order_id=res.json()["orderId"]).night.location, self.diner)
+        # a link that doesn't name a real location is refused: the tip must never land in another business
+        for body in ({"amount": "5"}, {"amount": "5", "at": "no-such-place"}):
+            res = self.client.post(reverse("api_create_order"), data=json.dumps(body), content_type="application/json")
+            self.assertEqual(res.status_code, 404)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("tip_page")).status_code, 404)
 
     def test_each_location_has_its_own_open_shift(self):
         self.assertNotEqual(Night.current(self.diner), Night.current(self.salon))

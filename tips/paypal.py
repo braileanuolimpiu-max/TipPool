@@ -59,7 +59,12 @@ class PayPalClient:
             # same id on every retry, so PayPal never does the same thing twice
             headers["PayPal-Request-Id"] = request_id or str(uuid.uuid4())
         for attempt in range(retries):
-            response = requests.request(method, f"{self.base_url}{path}", headers=headers, json=json, timeout=30)
+            try:
+                response = requests.request(method, f"{self.base_url}{path}", headers=headers, json=json,
+                                            timeout=30)
+            except requests.RequestException as exc:
+                # no answer at all: the caller can't know whether PayPal did it (status None = unclear)
+                raise PayPalError(f"No answer from PayPal ({exc.__class__.__name__})") from exc
             if response.status_code == 429 and attempt < retries - 1:
                 wait = int(response.headers.get("Retry-After", 2 ** attempt))
                 log.warning("PayPal rate limit, retrying in %ss", wait)
@@ -101,6 +106,9 @@ class PayPalClient:
 
     def get_order(self, order_id):
         return self._request("GET", f"/v2/checkout/orders/{order_id}")
+
+    def get_capture(self, capture_id):
+        return self._request("GET", f"/v2/payments/captures/{capture_id}")
 
     # --- Payouts API (paying the team) ---------------------------------------
     def create_payout_batch(self, sender_batch_id, items, subject="You received tips!", currency="USD"):

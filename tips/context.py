@@ -16,7 +16,9 @@ def app_context(request):
                          + Alert.objects.filter(Q(location=location) | Q(location__isnull=True), business=business,
                                                 resolved_at__isnull=True).count())
     owner = business or (location.business if location is not None else None)
+    from django.conf import settings
     return {
+        "email_enabled": settings.EMAIL_ENABLED,
         "cur": owner.symbol if owner else "$",
         "business": business,
         "open_messages": open_messages,

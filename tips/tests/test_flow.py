@@ -24,8 +24,13 @@ class FakePayPal:
         self.last_order_kwargs = kwargs
         return {"id": f"ORDER{self.orders}"}
 
+    verified = True
+
     def get_order(self, order_id):
         return {"id": order_id, "status": self.order_status.get(order_id, "CREATED")}
+
+    def verify_webhook(self, headers, event, webhook_id):
+        return self.verified
 
     def capture_order(self, order_id):
         return {"purchase_units": [{"payments": {"captures": [{"id": f"CAP-{order_id}", "status": "COMPLETED"}]}}],
@@ -55,6 +60,9 @@ class FullFlowTests(TestCase):
         patcher = mock.patch("tips.services.get_client", return_value=self.paypal)
         patcher.start()
         self.addCleanup(patcher.stop)
+        views_patcher = mock.patch("tips.views.get_client", return_value=self.paypal)
+        views_patcher.start()
+        self.addCleanup(views_patcher.stop)
         user = make_manager("manager")
         self.client.force_login(user)
         self.location = Location.default()
@@ -65,7 +73,7 @@ class FullFlowTests(TestCase):
         TipRuleSet.objects.create(location=self.location, text="x", rules=parsed["rules"], summary=parsed["summary"])
 
     def tip(self, amount):
-        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": amount, "table": "4"}),
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": amount, "table": "4", "at": Location.default().slug}),
                                content_type="application/json")
         self.assertEqual(res.status_code, 200)
         order_id = res.json()["orderId"]
@@ -114,13 +122,13 @@ class FullFlowTests(TestCase):
         self.assertEqual(set(PayoutItem.objects.values_list("status", flat=True)), {"SUCCESS"})
 
     def test_return_and_cancel_urls_sent_to_paypal(self):
-        self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5"}), content_type="application/json")
+        self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5", "at": Location.default().slug}), content_type="application/json")
         self.assertTrue(self.paypal.last_order_kwargs["return_url"].endswith(reverse("tip_thanks")))
         self.assertIn("cancelled=1", self.paypal.last_order_kwargs["cancel_url"])
 
     def test_stuck_approved_tip_is_finished_by_dashboard(self):
         """Guest approved in PayPal but the popup never came back: the dashboard captures it."""
-        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5"}),
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5", "at": Location.default().slug}),
                                content_type="application/json")
         order_id = res.json()["orderId"]
         self.client.get(reverse("dashboard"))
@@ -130,35 +138,53 @@ class FullFlowTests(TestCase):
         self.assertEqual(Tip.objects.get(paypal_order_id=order_id).status, "completed")
 
     def test_return_page_captures(self):
-        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5"}),
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5", "at": Location.default().slug}),
                                content_type="application/json")
         order_id = res.json()["orderId"]
         self.client.get(reverse("tip_thanks") + f"?token={order_id}&PayerID=X")
         self.assertEqual(Tip.objects.get(paypal_order_id=order_id).status, "completed")
 
     def test_bad_tip_amount(self):
-        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "0.50"}),
+        res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "0.50", "at": Location.default().slug}),
                                content_type="application/json")
         self.assertEqual(res.status_code, 400)
 
     def test_pages_render(self):
         self.tip("10.00")
         for name in ["dashboard", "tip_page", "rules", "staff_list", "close_night", "qr_page", "history", "settings"]:
-            self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
+            self.assertEqual(self.client.get(reverse(name) + ("?at=" + Location.default().slug if name == "tip_page" else "")).status_code, 200, name)
         member = self.staff["Maria"]
         self.assertEqual(self.client.get(reverse("my_tips", args=[member.access_token])).status_code, 200)
         self.client.logout()
-        self.assertContains(self.client.get(reverse("qr_show") + "?table=4"), "Table 4")  # works without login
+        self.assertContains(self.client.get(reverse("qr_show") + "?table=4&at=" + Location.default().slug), "Table 4")  # works without login
 
-    def test_webhook_marks_tip_completed(self):
+    def test_signed_webhook_marks_tip_completed(self):
         night = Night.current(self.location)
         Tip.objects.create(night=night, amount=Decimal("7.00"), paypal_order_id="ORD-W")
         event = {"id": "WH-1", "event_type": "PAYMENT.CAPTURE.COMPLETED",
                  "resource": {"id": "CAP-W", "supplementary_data": {"related_ids": {"order_id": "ORD-W"}}}}
-        with override_settings(DEBUG=True, PAYPAL_WEBHOOK_ID=""):
+        with override_settings(PAYPAL_WEBHOOK_ID="WEBHOOK"):
             res = self.client.post(reverse("paypal_webhook"), data=json.dumps(event), content_type="application/json")
             self.assertEqual(res.status_code, 200)
             # duplicate delivery is ignored
             self.client.post(reverse("paypal_webhook"), data=json.dumps(event), content_type="application/json")
+            self.paypal.verified = False
+            forged = {**event, "id": "WH-2"}
+            self.assertEqual(self.client.post(reverse("paypal_webhook"), data=json.dumps(forged),
+                                              content_type="application/json").status_code, 400)
         tip = Tip.objects.get(paypal_order_id="ORD-W")
         self.assertEqual((tip.status, tip.paypal_capture_id), ("completed", "CAP-W"))
+
+    def test_unsigned_webhook_is_only_a_hint(self):
+        """A forged 'tip paid' event for an order nobody paid changes nothing: PayPal is asked instead."""
+        night = Night.current(self.location)
+        Tip.objects.create(night=night, amount=Decimal("500.00"), paypal_order_id="ORD-F")
+        event = {"id": "WH-F", "event_type": "PAYMENT.CAPTURE.COMPLETED",
+                 "resource": {"id": "CAP-F", "supplementary_data": {"related_ids": {"order_id": "ORD-F"}}}}
+        with override_settings(DEBUG=True, PAYPAL_WEBHOOK_ID=""):
+            self.client.post(reverse("paypal_webhook"), data=json.dumps(event), content_type="application/json")
+            self.assertEqual(Tip.objects.get(paypal_order_id="ORD-F").status, "created")
+            self.paypal.order_status["ORD-F"] = "APPROVED"  # the guest really paid
+            self.client.post(reverse("paypal_webhook"), data=json.dumps({**event, "id": "WH-G"}),
+                             content_type="application/json")
+        self.assertEqual(Tip.objects.get(paypal_order_id="ORD-F").status, "completed")

@@ -195,7 +195,7 @@
       {% endfor %}
       {% for invite, link in invites %}
       <li class="invite-row"><div style="flex:1;min-width:0"><strong>{{ invite.email }}</strong> <span class="pill wait">Invited</span>
-          <div class="small muted">Send them this link: <input class="copy-link" type="text" readonly value="{{ link }}" aria-label="Invite link for {{ invite.email }}" onclick="this.select()"></div></div>
+          {% if link %}<div class="small muted">Send them this link: <input class="copy-link" type="text" readonly value="{{ link }}" aria-label="Invite link for {{ invite.email }}" onclick="this.select()"></div>{% endif %}</div>
         {% if is_owner %}<form method="post" action="{% url 'cancel_invite' invite.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Cancel</button></form>{% endif %}
       </li>
       {% endfor %}

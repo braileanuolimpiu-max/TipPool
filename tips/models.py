@@ -472,6 +472,9 @@ class PayoutBatch(models.Model):
     night = models.ForeignKey(Night, related_name="payout_batches", on_delete=models.CASCADE)
     # a retry sends one person's payout again (e.g. to a corrected email)
     is_retry = models.BooleanField(default=False)
+    # exactly what was sent, so an unclear answer from PayPal can be checked by sending the very same
+    # request again (same id: PayPal never pays it twice)
+    request_items = models.JSONField(default=list, blank=True)
     sender_batch_id = models.CharField(max_length=64, unique=True)
     paypal_batch_id = models.CharField(max_length=64, blank=True)
     status = models.CharField(max_length=20, default="NEW")
@@ -562,6 +565,13 @@ class Message(models.Model):
     @property
     def is_open(self):
         return self.resolved_at is None
+
+
+class UsedConfirmation(models.Model):
+    """An Ask confirmation that was already used, so the same one can't run twice (double click, resend)."""
+
+    nonce = models.CharField(max_length=40, unique=True)
+    used_at = models.DateTimeField(default=now)
 
 
 class Change(models.Model):

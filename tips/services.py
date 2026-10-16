@@ -1,6 +1,6 @@
 """Business logic: take tips, split a shift, pay it out, keep statuses in sync with PayPal."""
 import logging
-import uuid
+from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
@@ -109,6 +109,9 @@ def sync_pending_tips(night, max_checks=20):
     (e.g. the PayPal window closed before it could tell our page)."""
     finished = 0
     client = get_client(business_of(night))
+    # guests who opened PayPal and left: after 3 hours that order will never be paid
+    night.tips.filter(status=Tip.Status.CREATED,
+                      created_at__lt=timezone.now() - timedelta(hours=3)).update(status=Tip.Status.FAILED)
     for tip in night.tips.filter(status=Tip.Status.CREATED).order_by("-created_at")[:max_checks]:
         try:
             status = client.get_order(tip.paypal_order_id).get("status")
@@ -132,6 +135,30 @@ def _apply_order_result(tip, result):
         tip.fee = Decimal(fee)
     tip.status = Tip.Status.COMPLETED if capture.get("status") == "COMPLETED" else tip.status
     tip.save()
+
+
+def sync_tip(order_id):
+    """Ask PayPal for the real state of a tip's order and apply it (used instead of trusting a webhook)."""
+    tip = Tip.objects.select_related("night__location__business").get(paypal_order_id=order_id)
+    if tip.status == Tip.Status.COMPLETED:
+        return tip
+    order = get_client(business_of(tip.night)).get_order(order_id)
+    if order.get("status") == "APPROVED":
+        return capture_tip(order_id)
+    if order.get("status") == "COMPLETED":
+        _apply_order_result(tip, order)
+    return tip
+
+
+def sync_capture(capture_id):
+    """Ask PayPal whether a tip's payment was refunded or reversed (instead of trusting a webhook)."""
+    tip = Tip.objects.select_related("night__location__business").get(paypal_capture_id=capture_id)
+    status = get_client(business_of(tip.night)).get_capture(capture_id).get("status")
+    if status in ("REFUNDED", "PARTIALLY_REFUNDED"):
+        return tip_given_back(capture_id, "refund")
+    if status == "REVERSED":
+        return tip_given_back(capture_id, "reversal")
+    return tip
 
 
 def mark_capture_completed(order_id, capture_id):
@@ -296,34 +323,53 @@ def pay_night(night, allow_unconfirmed=False):
                                "they get paid on their tips page. Check their address, then pay anyway if it's right.")
         destinations = {s.pk: payout_destination(s.staff, business.currency) for s in shares}
         check_balance(business, sum((s.amount for s in shares), Decimal("0")))
-        batch = PayoutBatch.objects.create(night=night, sender_batch_id=f"tippool-{night.pk}-{uuid.uuid4().hex[:10]}")
+        # one fixed id per shift: if anything sends it twice, PayPal refuses to pay it twice
+        batch = PayoutBatch.objects.create(night=night, sender_batch_id=f"tippool-shift-{night.pk}")
         for share in shares:
             PayoutItem.objects.create(batch=batch, share=share, receiver=destinations[share.pk][1],
                                       sender_item_id=f"{batch.sender_batch_id}-{share.staff_id}")
+        batch.request_items = [{
+            **destinations[item.share_id][0],
+            "amount": str(item.share.amount),
+            # a plain note we write ourselves (never AI text) goes to PayPal
+            "note": f"Your tips for the {night} at {night.location.display_name}: {business.symbol}{item.share.amount}",
+            "sender_item_id": item.sender_item_id,
+        } for item in batch.items.select_related("share__staff")]
+        batch.save(update_fields=["request_items"])
         night.status = Night.Status.PAYING
         night.hold = ""
         night.save()
+    _send_batch(batch, business, subject=f"Your tips for {night.date:%b %d}")
+    return batch
 
-    items = [{
-        **destinations[item.share_id][0],
-        "amount": item.share.amount,
-        "note": (item.share.explanation or f"Your tips for {night}")[:4000],
-        "sender_item_id": item.sender_item_id,
-    } for item in batch.items.select_related("share__staff")]
+
+def _send_batch(batch, business, subject, replaces=None):
+    """Send a stored payout batch. A clear "no" from PayPal undoes it; an unclear answer (server error,
+    timeout) leaves it as UNKNOWN, to be checked by sending the very same request again."""
+    items = [{**i, "amount": Decimal(i["amount"])} for i in batch.request_items]
     try:
-        response = get_client(business).create_payout_batch(batch.sender_batch_id, items,
-                                                            subject=f"Your tips for {night.date:%b %d}",
+        response = get_client(business).create_payout_batch(batch.sender_batch_id, items, subject=subject,
                                                             currency=business.currency)
-    except PayPalError:
-        # nothing was sent: undo so the manager can fix and retry
-        batch.delete()
-        night.status = Night.Status.REVIEW
-        night.save()
-        raise
+    except PayPalError as exc:
+        if exc.status is not None and 400 <= exc.status < 500 and batch.status != "UNKNOWN":
+            # PayPal said no and sent nothing: undo so the manager can fix it and try again
+            night = batch.night
+            batch.delete()
+            if replaces is not None:
+                replaces.superseded = False
+                replaces.save(update_fields=["superseded"])
+            elif not batch.is_retry:
+                night.status = Night.Status.REVIEW
+                night.save(update_fields=["status"])
+            raise
+        batch.status = "UNKNOWN"
+        batch.save(update_fields=["status"])
+        raise TipPoolError("PayPal didn't answer clearly, so the payout may or may not have gone out. Don't pay "
+                           "again: TipPool checks with PayPal (\"Check PayPal again\" on the payout page).") from exc
     header = response["batch_header"]
     batch.paypal_batch_id = header["payout_batch_id"]
     batch.status = header["batch_status"]
-    batch.save()
+    batch.save(update_fields=["paypal_batch_id", "status"])
     return batch
 
 
@@ -338,25 +384,16 @@ def resend_payout(item):
         if item.superseded or not item.failed:
             raise TipPoolError("Only a failed or returned payout can be sent again.")
         fields, receiver = payout_destination(share.staff, business.currency)
-        batch = PayoutBatch.objects.create(night=night, is_retry=True,
-                                           sender_batch_id=f"tippool-{night.pk}-r{uuid.uuid4().hex[:10]}")
+        # the id is tied to the payout it replaces: resending the same failed payout twice can't pay twice
+        batch = PayoutBatch.objects.create(night=night, is_retry=True, sender_batch_id=f"tippool-again-{item.pk}")
         new = PayoutItem.objects.create(batch=batch, share=share, receiver=receiver,
                                         sender_item_id=f"{batch.sender_batch_id}-{share.staff_id}")
+        batch.request_items = [{**fields, "amount": str(share.amount), "sender_item_id": new.sender_item_id,
+                                "note": f"Your tips for the {night}, sent again: {business.symbol}{share.amount}"}]
+        batch.save(update_fields=["request_items"])
         item.superseded = True
         item.save(update_fields=["superseded"])
-    try:
-        response = get_client(business).create_payout_batch(
-            batch.sender_batch_id, [{**fields, "amount": share.amount, "sender_item_id": new.sender_item_id,
-                                     "note": f"Your tips for {night}, sent again"}],
-            subject=f"Your tips for {night.date:%b %d}", currency=business.currency)
-    except PayPalError:
-        batch.delete()
-        item.superseded = False
-        item.save(update_fields=["superseded"])
-        raise
-    batch.paypal_batch_id = response["batch_header"]["payout_batch_id"]
-    batch.status = response["batch_header"]["batch_status"]
-    batch.save()
+    _send_batch(batch, business, subject=f"Your tips for {night.date:%b %d}", replaces=item)
     return new
 
 
@@ -372,6 +409,9 @@ def cancel_unclaimed(item):
 def refresh_batch(batch):
     """Ask PayPal for the latest status of a batch and each person's payment."""
     if not batch.paypal_batch_id:
+        if batch.status == "UNKNOWN" and batch.request_items:
+            # same id + same request: PayPal answers with the batch if it exists, creates it if it doesn't
+            _send_batch(batch, business_of(batch.night), subject=f"Your tips for {batch.night.date:%b %d}")
         return batch
     data = get_client(business_of(batch.night)).get_payout_batch(batch.paypal_batch_id)
     batch.status = data["batch_header"]["batch_status"]

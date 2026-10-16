@@ -19,6 +19,7 @@ from django.views.decorators.http import require_POST
 
 from . import roles as role_presets
 from .models import Business, Change, Invite, Location, Manager
+from .ratelimit import client_ip, hit, limited
 
 User = get_user_model()
 
@@ -53,10 +54,14 @@ def owner_required(view):
 
 
 class EmailBackend(ModelBackend):
-    """Sign in with your email (or your username, for older logins)."""
+    """Sign in with your email (or your username, for older logins).
+    Password guessing is limited per address and per IP."""
 
     def authenticate(self, request, username=None, password=None, **kwargs):
         if not username or not password:
+            return None
+        ip = client_ip(request) if request is not None else "local"
+        if not (hit(f"login-ip:{ip}", 20, 900) and hit(f"login-user:{username.strip().lower()}", 8, 900)):
             return None
         user = (User.objects.filter(email__iexact=username.strip()).order_by("pk").first()
                 or User.objects.filter(username__iexact=username.strip()).first())
@@ -80,6 +85,7 @@ def _check_password(password, user=None):
 
 
 # --- Sign up ------------------------------------------------------------------
+@limited("signup", 5, 3600)
 def signup(request):
     """New business: name, type, first location, and the owner's login.
     A login that exists but has no business (e.g. made in the admin) only fills in the business part."""
@@ -129,6 +135,7 @@ def signup(request):
 
 
 # --- Staff: get your private tips link by email ---------------------------------------
+@limited("my-link", 5, 3600)
 def email_my_link(request):
     """A worker who lost their link types their email; the link goes to that inbox only.
     The answer is the same whether or not the email is on a team, so nobody can test emails here."""
@@ -195,6 +202,7 @@ def cancel_invite(request, pk):
     return redirect(f"{reverse('settings')}#managers")
 
 
+@limited("invite", 10, 3600)
 def accept_invite(request, token):
     invite = get_object_or_404(Invite, token=token)
     if not invite.usable:
@@ -203,6 +211,10 @@ def accept_invite(request, token):
     errors = []
     if request.method == "POST":
         if request.user.is_authenticated:
+            if (request.user.email or "").lower() != invite.email.lower():
+                errors.append(f"This invite is for {invite.email}. Sign in with that email to accept it.")
+                return render(request, "registration/invite.html", {
+                    "invite": invite, "existing": existing, "errors": errors})
             user = request.user
         elif existing:
             return redirect(f"{reverse('login')}?next={request.path}")

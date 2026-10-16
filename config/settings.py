@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 from config.env import load_env
@@ -25,11 +26,17 @@ load_env(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-insecure-key-change-me")
+from django.core.exceptions import ImproperlyConfigured  # noqa: E402
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+# Production is the default: debug mode only when DJANGO_DEBUG=1 (set in your local .env).
+DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
+
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    if not (DEBUG or TESTING):
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production (a long random value).")
+    SECRET_KEY = "dev-only-insecure-key-change-me"
 
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o]
@@ -82,12 +89,23 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+# Postgres in production (DATABASE_URL, e.g. from Render); SQLite only for local development.
+# Payouts rely on row locks (select_for_update), which SQLite doesn't really have.
+if os.environ.get("DATABASE_URL"):
+    import dj_database_url
+    DATABASES = {"default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=60,
+                                                  ssl_require=not DEBUG)}
+else:
+    if not (DEBUG or TESTING):
+        raise ImproperlyConfigured("DATABASE_URL (Postgres) must be set in production.")
+    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
+
+RATELIMIT_ENABLED = not TESTING  # the rate-limit tests turn it on for themselves
+# how many proxies put the visitor's address into X-Forwarded-For (Render: 1); 0 = use the connection
+TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0" if DEBUG else "1"))
+# Rate limits are counted in the cache, so every worker must share it: the database in production.
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}} if (DEBUG or TESTING) else {
+    "default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "tippool_cache"}}
 
 
 # Password validation
@@ -137,16 +155,20 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 LOGIN_URL = "login"
 AUTHENTICATION_BACKENDS = ["tips.accounts.EmailBackend"]
-# invites and password resets: printed in the terminal until real email is set up (EMAIL_HOST in .env)
+# Email (invites, password resets, alerts). Locally they print in the terminal. In production without
+# EMAIL_HOST they are dropped, never printed: reset links in server logs would let anyone take over accounts.
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_ENABLED = bool(EMAIL_HOST) or DEBUG
 if EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
     EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
     EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
     EMAIL_USE_TLS = True
-else:
+elif DEBUG:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "TipPool <no-reply@tippool.local>")
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
@@ -160,8 +182,32 @@ PAYPAL_SDK_URL = os.environ.get("PAYPAL_SDK_URL", "https://www.sandbox.paypal.co
 # businesses that haven't connected their own PayPal use the platform account above (sandbox demo).
 # In production this must be off: every business's money goes through its own PayPal account.
 PAYPAL_PLATFORM_FALLBACK = os.environ.get("PAYPAL_PLATFORM_FALLBACK", "1" if "sandbox" in PAYPAL_BASE_URL else "0") == "1"
-# encrypts each business's stored PayPal secret (Fernet key); falls back to a key derived from SECRET_KEY
+# encrypts each business's stored PayPal secret (a Fernet key). Required in production, so a leaked
+# SECRET_KEY alone can't decrypt anything; locally a key derived from SECRET_KEY is used.
 TIPPOOL_ENCRYPTION_KEY = os.environ.get("TIPPOOL_ENCRYPTION_KEY", "")
+if not TIPPOOL_ENCRYPTION_KEY and not (DEBUG or TESTING):
+    raise ImproperlyConfigured("TIPPOOL_ENCRYPTION_KEY must be set in production. Make one with: "
+                               "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"")
+# Automatic close-outs: locally they run while a manager uses the app; in production from the
+# `python manage.py autoclose` cron job only, so several web workers never race each other.
+AUTOCLOSE_IN_REQUESTS = os.environ.get("AUTOCLOSE_IN_REQUESTS", "1" if DEBUG else "0") == "1"
+
+# --- Security headers and cookies (production) ---
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_AGE = 60 * 60 * 12          # managers sign in again every 12 hours
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"     # private tips links never leak to other sites
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = os.environ.get("DJANGO_SSL_REDIRECT", "1") == "1"
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")   # behind Render's HTTPS proxy
+    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 TIP_CURRENCY = "USD"
 RESTAURANT_NAME = os.environ.get("RESTAURANT_NAME", "")
 
