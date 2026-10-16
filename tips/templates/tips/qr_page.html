@@ -12,7 +12,8 @@
 <div class="flash warning no-print">Your cards say "Your business" until you <a href="{% url 'settings' %}">add your business name</a>.</div>
 {% endif %}
 
-<section class="panel no-print">
+<div class="split-2 wide-left no-print">
+<section class="panel">
   <div class="panel-head"><h2>Shared code</h2><span class="small muted">same code on every card</span></div>
   <div class="panel-body setup-body">
     <div class="house-row">
@@ -39,6 +40,17 @@
     </div>
   </div>
 </section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Where to put it</h2></div>
+  <ol class="place-list">
+    <li><strong>Table tents</strong><span>Fold a card and stand it on each table or counter.</span></li>
+    <li><strong>With the bill</strong><span>Slip a card into the check presenter or staple it to the receipt.</span></li>
+    <li><strong>At the till</strong><span>One card by the register or the pickup counter.</span></li>
+    <li><strong>On a screen</strong><span>"Show on screen" on a phone or tablet, no printing needed.</span></li>
+  </ol>
+</section>
+</div>
 
 <!-- printable: N copies of the shared card -->
 <section class="print-house print-only">
@@ -74,7 +86,7 @@
   </div>
 </section>
 {% elif restaurant.tip_mode == "pool" %}
-<p class="muted no-print" style="margin-top:22px">Want each person to have their own code, e.g. a salon or delivery team? Choose personal tips in <a href="{% url 'settings' %}">Settings → How tips are shared</a>.</p>
+<p class="muted no-print" style="margin-top:22px">Want each person to have their own code, e.g. a salon or delivery team? Choose personal tips in <a href="{% url 'settings' %}#sharing">Settings → How tips are shared</a>.</p>
 {% endif %}
 {% endblock %}
 {% block scripts %}

@@ -63,6 +63,10 @@ def dashboard(request):
         "next_close": autoclose.next_close(location),
         "roster_count": night.shifts.count(),
         "on_clock": list(night.clock_entries.filter(ended_at__isnull=True).select_related("staff")),
+        "recent": _recent_shifts(location),
+        "waiting": list(Night.objects.filter(location=location, status__in=[
+            Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).order_by("date")[:5]),
+        "alert_count": Alert.objects.filter(location=location, resolved_at__isnull=True).count(),
         "rule_set": rule_set,
         "staff_count": staff_count,
         "setup": [
@@ -74,6 +78,17 @@ def dashboard(request):
         "ai_mode": ai.mode(),
         "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever and bool(location.name),
     })
+
+
+def _recent_shifts(location, count=8):
+    """The last closed shifts, oldest first, with bar heights for the little chart."""
+    nights = list(Night.objects.filter(location=location).exclude(status=Night.Status.OPEN)
+                  .order_by("-date", "-created_at")[:count])[::-1]
+    totals = [n.tip_total for n in nights]
+    top = max(totals, default=Decimal("0"))
+    latest = len(nights) - 1
+    return [{"night": n, "total": t, "height": int(t / top * 100) if top else 0,
+             "label": (t == top and top > 0) or i == latest} for i, (n, t) in enumerate(zip(nights, totals))]
 
 
 @manager_required

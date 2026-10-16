@@ -3,6 +3,19 @@
 {% block content %}
 <header class="page-head">
   <div><h1>Reports</h1><p>Tips per person and per shift, {{ report.first|date:"M j" }} to {{ report.last|date:"M j, Y" }}. Export for payroll or your accountant. Tips are taxable income for your team.</p></div>
+<form method="get" class="report-filter">
+    <div><label for="period">Period</label>
+      <select id="period" name="period">{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="custom-dates"{% if period != "custom" %} hidden{% endif %}>
+      <div><label for="from">From</label><input type="date" id="from" name="from" value="{{ report.first|date:'Y-m-d' }}"></div>
+      <div><label for="to">To</label><input type="date" id="to" name="to" value="{{ report.last|date:'Y-m-d' }}"></div>
+    </div>
+    {% if locations|length > 1 %}
+    <div><label for="scope">Locations</label>
+      <select id="scope" name="scope"><option value="here">{{ location.display_name }}</option><option value="all" {% if scope == "all" %}selected{% endif %}>All locations</option></select></div>
+    {% endif %}
+    <button class="btn btn-primary">Show</button>
+</form>
 </header>
 
 <form method="get" class="panel ask" role="search">
@@ -28,28 +41,22 @@
   </div>
 </form>
 
-<form method="get" class="panel report-filter" style="margin-top:22px">
-  <div class="panel-body">
-    <div><label for="period">Period</label>
-      <select id="period" name="period">{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-    <div class="custom-dates"{% if period != "custom" %} hidden{% endif %}>
-      <div><label for="from">From</label><input type="date" id="from" name="from" value="{{ report.first|date:'Y-m-d' }}"></div>
-      <div><label for="to">To</label><input type="date" id="to" name="to" value="{{ report.last|date:'Y-m-d' }}"></div>
-    </div>
-    {% if locations|length > 1 %}
-    <div><label for="scope">Locations</label>
-      <select id="scope" name="scope"><option value="here">{{ location.display_name }}</option><option value="all" {% if scope == "all" %}selected{% endif %}>All locations</option></select></div>
-    {% endif %}
-    <button class="btn btn-primary">Show</button>
-  </div>
-</form>
+
 
 <section class="kpis" aria-label="Totals">
   <div><b>{{ cur }}{{ report.collected }}</b><span>tips collected</span></div>
   <div><b>{{ cur }}{{ report.paid_out }}</b><span>paid out</span></div>
   <div><b>{{ report.shift_count }}</b><span>shift{{ report.shift_count|pluralize }}</span></div>
   <div><b>{% if report.per_shift %}{{ cur }}{{ report.per_shift }}{% else %}–{% endif %}</b><span>average per shift</span></div>
-  {% for label, amount in report.by_source %}<div class="minor"><b>{{ cur }}{{ amount }}</b><span>{{ label }}</span></div>{% endfor %}
+
+</section>
+
+<section class="source-strip" aria-label="How the tips came in">
+  <span class="small muted">How the tips came in</span>
+  <div class="source-bar" role="img" aria-label="{% for label, amount in report.by_source %}{{ label }} {{ cur }}{{ amount }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+    {% for label, amount in report.by_source %}{% if amount %}<span class="seg seg-{{ forloop.counter }}" style="flex:{{ amount }}" title="{{ label }}: {{ cur }}{{ amount }}"></span>{% endif %}{% endfor %}
+  </div>
+  <ul class="source-legend">{% for label, amount in report.by_source %}<li><i class="sw sw-{{ forloop.counter }}"></i>{{ label }} <b>{{ cur }}{{ amount }}</b></li>{% endfor %}</ul>
 </section>
 
 <section class="panel">

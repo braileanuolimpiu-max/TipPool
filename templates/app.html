@@ -1,8 +1,8 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load static %}
 {% block body %}
 {% with u=request.resolver_match.url_name %}
 <header class="topbar">
-  <a class="brand" href="{% url 'dashboard' %}"><b>TipPool</b>{% if locations|length <= 1 %}<span>{{ restaurant_name }}</span>{% endif %}</a>
+  <a class="brand" href="{% url 'dashboard' %}"><img class="brand-mark" src="{% static 'icons/tippool.svg' %}" alt=""><b>TipPool</b>{% if locations|length <= 1 %}<span>{{ restaurant_name }}</span>{% endif %}</a>
   {% if locations|length > 1 %}
   <form method="post" action="{% url 'location_switch' %}" class="loc-switch">{% csrf_token %}
     <input type="hidden" name="next" value="{{ request.path }}">
@@ -53,6 +53,7 @@
   </nav>
 </div>
 <main class="main">
+  <p class="eyebrow" aria-hidden="true"><span class="dot"></span>{{ restaurant_name }}<span class="sep">/</span>{% now "l, M j" %}</p>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </main>

@@ -55,7 +55,8 @@
         </div>
       </li>
       {% empty %}
-      <li class="muted">Nothing open. When someone flags a problem, it shows up here.</li>
+      <li class="empty-state"><span class="empty-mark" aria-hidden="true">✓</span>
+        <div><strong>All clear</strong><p class="small muted" style="margin:2px 0 0">When someone flags a problem or writes to you from their tips page, it shows up here.</p></div></li>
       {% endfor %}
     </ul>
   </section>

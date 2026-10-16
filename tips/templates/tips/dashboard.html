@@ -13,13 +13,7 @@
   </div>
 </header>
 
-{% if unfinished %}
-<div class="flash info">
-  {% if unfinished.status == "closed" %}The {{ unfinished.date|date:'l, M j' }} shift closed{% if unfinished.auto_closed %} automatically{% endif %} and is waiting for who worked. <a href="{% url 'close_night_pk' unfinished.pk %}">Add who worked</a>
-  {% elif unfinished.status == "review" %}The {{ unfinished.date|date:'l, M j' }} shift is split and waiting for your approval. <a href="{% url 'review' unfinished.pk %}">Check and pay the team</a>
-  {% else %}The {{ unfinished.date|date:'l, M j' }} shift is being paid out. <a href="{% url 'payout_status' unfinished.pk %}">See the payout</a>{% endif %}
-</div>
-{% endif %}
+
 
 <div class="split-2">
   <div class="stack">
@@ -59,6 +53,37 @@
           <span class="t">{% if item.done %}{{ item.text }}{% else %}<a href="{{ item.url }}">{{ item.text }}</a>{% endif %}</span>
         </li>
         {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if recent %}
+    <section class="panel">
+      <div class="panel-head"><h2>Tips, last {{ recent|length }} shift{{ recent|length|pluralize }}</h2><a class="small" href="{% url 'reports' %}">Reports</a></div>
+      <div class="panel-body">
+        <div class="bars" role="img" aria-label="Tips per shift: {% for r in recent %}{{ r.night.date|date:'M j' }} {{ cur }}{{ r.total }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+          {% for r in recent %}
+          <div class="bar-col" tabindex="0" data-tip="{{ r.night.date|date:'D M j' }} · {{ cur }}{{ r.total }}">
+            <span class="bar-val">{% if r.label %}{{ cur }}{{ r.total|floatformat:"0" }}{% endif %}</span>
+            <span class="bar" style="--h:{{ r.height }}"></span>
+            <span class="bar-day">{{ r.night.date|date:"D" }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if waiting or alert_count %}
+    <section class="panel">
+      <div class="panel-head"><h2>Waiting for you</h2><span class="small muted">{{ waiting|length|add:alert_count }}</span></div>
+      <ul class="rows todo">
+        {% for n in waiting %}
+        <li><span class="todo-tag {% if n.hold %}stop{% endif %}">{% if n.hold %}On hold{% elif n.status == "closed" %}Who worked{% elif n.status == "review" %}Approve{% else %}Paying{% endif %}</span>
+          <div style="flex:1;min-width:0"><strong>{{ n }}</strong><div class="small muted">{% if n.hold %}{{ n.hold }}{% else %}{{ cur }}{{ n.tip_total }} in tips{% endif %}</div></div>
+          <a class="small" href="{% if n.status == 'closed' %}{% url 'close_night_pk' n.pk %}{% elif n.status == 'review' %}{% url 'review' n.pk %}{% else %}{% url 'payout_status' n.pk %}{% endif %}">Open</a></li>
+        {% endfor %}
+        {% if alert_count %}<li><span class="todo-tag stop">Alert</span><div style="flex:1"><strong>{{ alert_count }} alert{{ alert_count|pluralize }}</strong><div class="small muted">Payouts, refunds or disputes</div></div><a class="small" href="{% url 'messages_page' %}">Open</a></li>{% endif %}
       </ul>
     </section>
     {% endif %}
