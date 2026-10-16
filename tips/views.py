@@ -15,6 +15,7 @@ from django.core.mail import send_mail
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -906,6 +907,7 @@ def my_tips(request, token):
             messages.error(request, str(exc))
         return redirect("my_tips", token=token)
     running = hours_from.running_entry(member)
+    totals = _staff_totals(member)
     shares = member.share_set.select_related("night__location").order_by("-night__date", "-night__created_at")[:30]
     locations = [m.location for m in member.memberships.filter(active=True).select_related("location")]
     shares = list(shares)
@@ -918,10 +920,37 @@ def my_tips(request, token):
     return render(request, "tips/my_tips.html", {
         "cur": member.business.symbol, "business_name": member.business.name,
         "member": member, "shares": shares, "member_locations": locations, "several": len(locations) > 1,
-        "running": running,
+        "running": running, "totals": totals,
         "general_messages": member.messages.filter(night__isnull=True, kind="message")[:10],
         "payout_request": member.messages.filter(kind="payout", resolved_at__isnull=True).first(),
     })
+
+
+def _staff_totals(member):
+    """This week / month / year for one person (their share of every shift, all locations)."""
+    from datetime import timedelta
+    today = timezone.localdate()
+    starts = [("This week", today - timedelta(days=today.weekday())), ("This month", today.replace(day=1)),
+              ("This year", today.replace(month=1, day=1))]
+    shares = member.share_set.filter(night__date__gte=starts[-1][1]).values_list("night__date", "amount")
+    return [(label, sum((a for d, a in shares if d >= start), Decimal("0.00"))) for label, start in starts]
+
+
+def staff_manifest(request, token):
+    """Lets a worker add their tips page to their phone's home screen, like an app."""
+    member = get_object_or_404(StaffMember, access_token=token)
+    start = reverse("my_tips", args=[token])
+    data = {
+        "name": f"My tips: {member.business.name}", "short_name": "My tips",
+        "start_url": start, "scope": start, "display": "standalone",
+        "background_color": "#e7e8e4", "theme_color": "#141414",
+        "icons": [{"src": static("icons/icon-192.png"), "sizes": "192x192", "type": "image/png"},
+                  {"src": static("icons/icon-512.png"), "sizes": "512x512", "type": "image/png",
+                   "purpose": "any maskable"}],
+    }
+    response = JsonResponse(data, content_type="application/manifest+json")
+    response["Cache-Control"] = "private, max-age=3600"
+    return response
 
 
 PHONE_RE = re.compile(r"^\+?[0-9][0-9 ()-]{8,18}[0-9]$")

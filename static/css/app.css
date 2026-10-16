@@ -515,3 +515,11 @@ hr.soft { border: 0; border-top: 1px solid var(--hair); margin: 4px 0; }
 .loc-now b { font: 800 1.8rem/1.1 var(--display); font-stretch: 80%; display: block; }
 .loc-todo { margin: 0; padding-left: 18px; font-size: .9rem; display: grid; gap: 4px; }
 .kpis .needs { border-color: var(--wait); background: var(--wait-soft); }
+
+/* Staff page: totals + add to home screen */
+.my-totals { width: 100%; max-width: 460px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.my-totals > div { background: var(--paper); border: 1px solid var(--hair); border-radius: 4px; padding: 10px 12px; display: grid; }
+.my-totals b { font: 800 1.25rem/1.15 var(--display); font-stretch: 85%; }
+.my-totals span { font-size: .75rem; color: var(--graphite); }
+.install-hint { width: 100%; max-width: 460px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .88rem; margin-bottom: 14px; }
+.install-hint[hidden] { display: none; }

@@ -68,3 +68,22 @@ class EmailMyLinkTests(TestCase):
         self.maria.memberships.update(active=False)
         self.client.post(reverse("email_my_link"), {"email": "maria@example.com"})
         self.assertEqual(len(mail.outbox), 0)
+
+
+class StaffAppTests(TestCase):
+    def test_totals_and_manifest(self):
+        from decimal import Decimal
+
+        from django.utils import timezone
+
+        from tips.models import Night, Share
+        maria = hire("Maria", "server")
+        night = Night.objects.create(location=Location.default(), date=timezone.localdate(), status="paid")
+        Share.objects.create(night=night, staff=maria, role="server", hours=Decimal("5"), amount=Decimal("42.50"))
+        page = self.client.get(reverse("my_tips", args=[maria.access_token]))
+        self.assertContains(page, "$42.50", count=4)  # week, month, year + the receipt
+        self.assertContains(page, 'rel="manifest"')
+        manifest = self.client.get(reverse("staff_manifest", args=[maria.access_token])).json()
+        self.assertEqual(manifest["start_url"], f"/me/{maria.access_token}/")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual(self.client.get(reverse("staff_manifest", args=["nope"])).status_code, 404)

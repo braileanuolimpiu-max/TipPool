@@ -49,6 +49,7 @@ urlpatterns = [
     path("nights/<int:pk>/payout.json", views.payout_status_json, name="payout_status_json"),
     # staff (secret link)
     path("me/<str:token>/", views.my_tips, name="my_tips"),
+    path("me/<str:token>/manifest.webmanifest", views.staff_manifest, name="staff_manifest"),
     # PayPal
     path("webhooks/paypal/", views.paypal_webhook, name="paypal_webhook"),
 ]

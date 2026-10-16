@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 {% block title %}My tips{% endblock %}
+{% block head %}{% load static %}
+  <link rel="manifest" href="{% url 'staff_manifest' member.access_token %}">
+  <meta name="theme-color" content="#141414">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="My tips">
+  <link rel="apple-touch-icon" href="{% static 'icons/icon-180.png' %}">
+{% endblock %}
 {% block body %}
 <div class="guest">
   <div style="width:100%;max-width:460px;margin-bottom:14px">
@@ -7,6 +15,14 @@
     <p class="muted" style="margin:4px 0 0">Your tips{% if member_locations %} from {% for loc in member_locations %}{{ loc.display_name }}{% if not forloop.last %}{% if forloop.revcounter == 2 %} and {% else %}, {% endif %}{% endif %}{% endfor %}{% endif %}, and the math behind each one.</p>
   </div>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status" style="width:100%;max-width:460px">{{ message }}</div>{% endfor %}
+  <section class="my-totals" aria-label="Your tips">
+    {% for label, amount in totals %}<div><b>{{ cur }}{{ amount }}</b><span>{{ label }}</span></div>{% endfor %}
+  </section>
+  <div class="install-hint" id="install-hint" hidden>
+    <span>Keep this page on your phone like an app.</span>
+    <button type="button" class="btn btn-secondary small" id="install-btn" hidden>Add to home screen</button>
+    <span class="small" id="install-ios" hidden>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</span>
+  </div>
   {% if member_locations %}
   <section class="clock-card{% if running %} on{% endif %}">
     {% if running %}
@@ -111,6 +127,32 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  // "Add to home screen": Android/Chrome gives us a prompt; on iPhone we explain the Share menu
+  (function () {
+    const hint = document.getElementById("install-hint");
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    if (standalone || !hint) return;
+    let dismissed = false;
+    try { dismissed = localStorage.getItem("tippool-install-hint") === "no"; } catch (e) {}
+    if (dismissed) return;
+    if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+      hint.hidden = false;
+      document.getElementById("install-ios").hidden = false;
+    }
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      hint.hidden = false;
+      const btn = document.getElementById("install-btn");
+      btn.hidden = false;
+      btn.addEventListener("click", async () => {
+        e.prompt();
+        await e.userChoice;
+        hint.hidden = true;
+        try { localStorage.setItem("tippool-install-hint", "no"); } catch (err) {}
+      });
+    });
+  })();
+
   // live "2h 14m" next to the clock-in time
   const el = document.getElementById("clock-elapsed");
   if (el) {
