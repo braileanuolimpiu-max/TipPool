@@ -27,6 +27,9 @@
         <div class="who">
           <span class="avatar" aria-hidden="true">{{ row.member.name|slice:":1" }}</span>
           <strong>{{ row.member.name }}</strong>
+          {% if row.source == "clock" %}<span class="src">{% if row.running %}on the clock now{% else %}from clock-in{% endif %}</span>
+          {% elif row.source == "usual" %}<span class="src">usual hours</span>
+          {% elif row.source == "photo" %}<span class="src">from the photo</span>{% endif %}
         </div>
         <div class="fields">
           <select name="role_{{ row.member.pk }}" aria-label="{{ row.member.name }}'s role this shift">

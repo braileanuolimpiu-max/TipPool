@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, roles as role_presets, services
+from . import ai, autoclose, hours as hours_from, roles as role_presets, services
 from .models import (CloseTime, Location, Membership, Night, PayoutBatch, Role, Shift, StaffMember, Tip,
                      TipRuleSet, WebhookEvent)
 from .paypal import PayPalError, get_client
@@ -54,6 +54,7 @@ def dashboard(request):
             Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).first(),
         "next_close": autoclose.next_close(location),
         "roster_count": night.shifts.count(),
+        "on_clock": list(night.clock_entries.filter(ended_at__isnull=True).select_related("staff")),
         "rule_set": rule_set,
         "staff_count": staff_count,
         "setup": [
@@ -65,6 +66,17 @@ def dashboard(request):
         "ai_mode": ai.mode(),
         "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever and bool(location.name),
     })
+
+
+@login_required
+@require_POST
+def clock_out_for(request, pk):
+    """A manager clocks out someone who forgot."""
+    from .models import ClockEntry
+    entry = get_object_or_404(ClockEntry, pk=pk, night__location=request.location, ended_at__isnull=True)
+    hours_from.clock_out(entry.staff)
+    messages.success(request, f"{entry.staff.name} is clocked out.")
+    return redirect("dashboard")
 
 
 @login_required
@@ -240,6 +252,24 @@ def staff_role(request, pk):
 
 @login_required
 @require_POST
+def staff_schedule(request, pk):
+    member = get_object_or_404(Membership, pk=pk, location=request.location)
+    week = {}
+    for day in range(7):
+        try:
+            value = Decimal(request.POST.get(f"h_{day}", "") or "0")
+        except InvalidOperation:
+            value = Decimal("0")
+        if 0 < value <= 24:
+            week[str(day)] = float(value.quantize(Decimal("0.01")))
+    member.schedule = week
+    member.save(update_fields=["schedule"])
+    messages.success(request, f"{member.staff.name}'s usual week saved: {member.schedule_summary or 'no fixed hours'}.")
+    return redirect("staff_list")
+
+
+@login_required
+@require_POST
 def staff_toggle(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
     member.active = not member.active
@@ -363,6 +393,8 @@ def close_night(request, pk=None):
         if not rule_set and not saving_only:
             messages.error(request, "Set your tip rules first.")
             return redirect("rules")
+        if not saving_only:
+            hours_from.finish_running_entries(night)
         night.shifts.all().delete()
         role_keys = set(Role.objects.filter(location=location).values_list("key", flat=True))
         for member in staff:
@@ -386,16 +418,22 @@ def close_night(request, pk=None):
             return redirect("close_night_pk", pk=night.pk)
         return redirect("review", pk=night.pk)
 
+    # hours nobody typed: clock-ins first, then each person's usual week
+    suggested = {} if existing else hours_from.suggested_roster(night)
     rows = []
     for member in staff:
         shift = existing.get(member.pk)
         guess = prefill.get(member.pk)
+        auto = suggested.get(member.pk) if not guess else None
+        source = "photo" if guess else ("saved" if shift else (auto or {}).get("source", ""))
         rows.append({
             "member": member,
-            # first visit: everyone on (managers switch off who was absent); afterwards keep their choices
-            "worked": bool(shift or guess) or (not existing and not prefill),
+            # first visit with nothing to go on: everyone on (managers switch off who was absent)
+            "worked": bool(shift or guess or auto) or (not existing and not prefill and not suggested),
             "role": (guess or {}).get("role") or (shift.role if shift else usual_role.get(member.pk)),
-            "hours": (guess or {}).get("hours") or (shift.hours if shift else ""),
+            "hours": (guess or {}).get("hours") or (shift.hours if shift else (auto["hours"] if auto else "")),
+            "source": source,
+            "running": bool(auto and auto["running"]),
         })
     return render(request, "tips/close_night.html", {
         "night": night, "rows": rows, "tip_count": night.tips.filter(status=Tip.Status.COMPLETED).count(), "roles": Role.objects.filter(location=location), "rule_set": TipRuleSet.active(location),
@@ -488,6 +526,7 @@ def settings_page(request):
     if request.method == "POST":
         restaurant.name = request.POST.get("name", "").strip()[:80]
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
+        restaurant.use_usual_schedule = bool(request.POST.get("use_usual_schedule"))
         if request.POST.get("after_close") in Location.AfterClose.values:
             restaurant.after_close = request.POST["after_close"]
         if request.POST.get("timezone") in dict(TIMEZONES):
@@ -549,10 +588,23 @@ def location_add(request):
 # --- Staff's own page (secret link, no login) ----------------------------------
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
+    if request.method == "POST":
+        try:
+            if request.POST.get("clock") == "in":
+                location = get_object_or_404(Location, pk=request.POST.get("location"))
+                hours_from.clock_in(member, location)
+                messages.success(request, f"Clocked in at {location.display_name}. Have a good shift!")
+            elif request.POST.get("clock") == "out":
+                entry = hours_from.clock_out(member)
+                messages.success(request, f"Clocked out. {entry.hours().normalize():f} hours this time.")
+        except hours_from.ClockError as exc:
+            messages.error(request, str(exc))
+        return redirect("my_tips", token=token)
+    running = hours_from.running_entry(member)
     shares = member.share_set.select_related("night__location").order_by("-night__date", "-night__created_at")[:30]
     locations = [m.location for m in member.memberships.filter(active=True).select_related("location")]
     return render(request, "tips/my_tips.html", {"member": member, "shares": shares, "member_locations": locations,
-                                                 "several": len(locations) > 1})
+                                                 "several": len(locations) > 1, "running": running})
 
 
 # --- PayPal webhooks ----------------------------------------------------------

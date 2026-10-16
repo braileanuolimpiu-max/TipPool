@@ -20,6 +20,8 @@ class Location(models.Model):
     timezone = models.CharField(max_length=64, default="America/New_York")
     auto_close_enabled = models.BooleanField(default=False)
     after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)
+    # at an automatic close with nobody on the roster and nobody clocked in: use everyone's usual week
+    use_usual_schedule = models.BooleanField(default=False)
     # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
     table_count = models.PositiveSmallIntegerField(default=0)
     spots = models.JSONField(default=list, blank=True)
@@ -119,6 +121,10 @@ class Membership(models.Model):
     location = models.ForeignKey(Location, related_name="memberships", on_delete=models.CASCADE)
     default_role = models.CharField(max_length=20)
     active = models.BooleanField(default=True)
+    # usual week: {"0": 6, "4": 8} = 6 h on Mondays, 8 h on Fridays (weekday as text, 0 = Monday)
+    schedule = models.JSONField(default=dict, blank=True)
+
+    DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     class Meta:
         ordering = ["staff__name"]
@@ -130,6 +136,34 @@ class Membership(models.Model):
     @property
     def role_name(self):
         return Role.label(self.default_role, self.location_id)
+
+    def usual_hours(self, weekday):
+        try:
+            return Decimal(str(self.schedule.get(str(weekday), 0) or 0))
+        except Exception:
+            return Decimal("0")
+
+    @property
+    def week(self):
+        """[(0, "Mon", Decimal hours), ...] for the schedule form."""
+        return [(d, self.DAY_SHORT[d], self.usual_hours(d)) for d in range(7)]
+
+    @property
+    def schedule_summary(self):
+        """'Mon–Fri 6h · Sat 8h', or '' when there's no usual week."""
+        parts, d = [], 0
+        while d < 7:
+            hours = self.usual_hours(d)
+            if not hours:
+                d += 1
+                continue
+            end = d
+            while end + 1 < 7 and self.usual_hours(end + 1) == hours:
+                end += 1
+            days = self.DAY_SHORT[d] if end == d else f"{self.DAY_SHORT[d]}–{self.DAY_SHORT[end]}"
+            parts.append(f"{days} {hours.normalize():f}h")
+            d = end + 1
+        return " · ".join(parts)
 
 
 class TipRuleSet(models.Model):
@@ -216,6 +250,29 @@ class Tip(models.Model):
 
     def __str__(self):
         return f"${self.amount} ({self.get_status_display()})"
+
+
+class ClockEntry(models.Model):
+    """Someone clocked in (and later out) from their own tips page. Gives the hours for the shift."""
+
+    staff = models.ForeignKey(StaffMember, related_name="clock_entries", on_delete=models.CASCADE)
+    night = models.ForeignKey("Night", related_name="clock_entries", on_delete=models.CASCADE)
+    started_at = models.DateTimeField(default=now)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    # clocked out by the close-out because they forgot: the manager should check these hours
+    auto_ended = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    @property
+    def running(self):
+        return self.ended_at is None
+
+    def hours(self, until=None):
+        end = self.ended_at or until or timezone.now()
+        seconds = max((end - self.started_at).total_seconds(), 0)
+        return (Decimal(seconds) / 3600).quantize(Decimal("0.01"))
 
 
 class RoleLabelMixin:

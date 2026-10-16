@@ -9,6 +9,30 @@
     <h1>Hi {{ member.name }}</h1>
     <p class="muted" style="margin:4px 0 0">Your tips{% if member_locations %} from {% for loc in member_locations %}{{ loc.display_name }}{% if not forloop.last %}{% if forloop.revcounter == 2 %} and {% else %}, {% endif %}{% endif %}{% endfor %}{% endif %}, and the math behind each one.</p>
   </div>
+  {% for message in messages %}<div class="flash {{ message.tags }}" role="status" style="width:100%;max-width:460px">{{ message }}</div>{% endfor %}
+  {% if member_locations %}
+  <section class="clock-card{% if running %} on{% endif %}">
+    {% if running %}
+    <div>
+      <p class="clock-state">On the clock{% if several %} at {{ running.night.location.display_name }}{% endif %}</p>
+      <p class="clock-time">since {{ running.started_at|time:"g:i A" }} · <span id="clock-elapsed" data-start="{{ running.started_at|date:'c' }}"></span></p>
+    </div>
+    <form method="post">{% csrf_token %}<input type="hidden" name="clock" value="out">
+      <button class="btn btn-primary">Clock out</button></form>
+    {% else %}
+    <div>
+      <p class="clock-state">Not clocked in</p>
+      <p class="clock-time">Clock in when your shift starts. Your hours go into the tip split.</p>
+    </div>
+    <div class="actions">
+      {% for loc in member_locations %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="clock" value="in"><input type="hidden" name="location" value="{{ loc.pk }}">
+        <button class="btn btn-primary">Clock in{% if several %} at {{ loc.display_name }}{% endif %}</button></form>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
   {% for s in shares %}
   <div class="receipt-wrap" style="width:100%;margin-bottom:22px">
     <div class="receipt">
@@ -33,4 +57,18 @@
   <div class="receipt-wrap" style="width:100%"><div class="receipt"><p style="margin:0;text-align:center">No tips yet. After the next close-out, your share and how it was calculated show up here.</p></div></div>
   {% endfor %}
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  // live "2h 14m" next to the clock-in time
+  const el = document.getElementById("clock-elapsed");
+  if (el) {
+    const start = new Date(el.dataset.start);
+    const tick = () => {
+      const m = Math.max(0, Math.floor((Date.now() - start) / 60000));
+      el.textContent = (m >= 60 ? Math.floor(m / 60) + "h " : "") + (m % 60) + "m";
+    };
+    tick(); setInterval(tick, 30000);
+  }
+</script>
 {% endblock %}

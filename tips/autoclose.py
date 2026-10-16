@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from django.db import transaction
 from django.utils import timezone
 
-from . import services
+from . import hours, services
 from .models import CloseTime, Location, Night, TipRuleSet
 from .paypal import PayPalError
 
@@ -81,9 +81,14 @@ def close_night(night, location):
         night.auto_closed = True
         night.save()
 
+    hours.finish_running_entries(night, at=night.closed_at)
+    needs_check = False
     if not night.shifts.exists():
-        log.info("%s closed automatically; waiting for who worked", night)
-        return f"{night}: closed, waiting for who worked"
+        # nothing saved: use clock-ins (and the usual week, if the location allows it)
+        added, needs_check = hours.fill_roster(night, location.use_usual_schedule)
+        if not added:
+            log.info("%s closed automatically; waiting for who worked", night)
+            return f"{night}: closed, waiting for who worked"
     if night.tip_total <= 0:
         return f"{night}: closed, no tips"
 
@@ -96,6 +101,8 @@ def close_night(night, location):
         log.warning("Auto split failed for %s: %s", night, exc)
         return f"{night}: closed, split needs attention ({exc})"
 
+    if needs_check:
+        return f"{night}: closed and split; someone forgot to clock out, so check the hours before paying"
     if location.after_close == Location.AfterClose.PAY:
         try:
             services.pay_night(night)

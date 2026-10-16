@@ -55,7 +55,10 @@
             <span class="small muted">{% if value == "review" %}You check the split, then press pay.{% else %}PayPal pays everyone as soon as the shift closes. Only happens if you saved who's working.{% endif %}</span></span>
         </label>
         {% endfor %}
-        <p class="hint" style="margin:0">If nobody saved who worked, the shift closes and waits for you. Nobody is paid by guesswork.</p>
+        <label class="choice"><input type="checkbox" name="use_usual_schedule" {% if restaurant.use_usual_schedule %}checked{% endif %}>
+          <span><strong>Use the usual week when nobody clocked in</strong>
+            <span class="small muted">Without it, a shift with nobody saved and no clock-ins waits for you.</span></span></label>
+        <p class="hint" style="margin:0">Hours come from clock-ins first. If someone forgets to clock out, the split waits for you to check it. Nobody is paid by guesswork.</p>
       </div>
     </section>
 

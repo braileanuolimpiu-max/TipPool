@@ -367,6 +367,8 @@ fieldset.chips legend { font-weight: 700; font-size: .9rem; margin-bottom: 8px; 
   .team-rows > li { flex-wrap: wrap; padding: 13px 16px; }
   .team-rows > li > div { flex-basis: calc(100% - 52px) !important; }
   .team-rows .role-pick { margin-left: 46px; }
+  .week-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .week-edit { margin-left: 0; }
   .team-rows .role-pick select { min-width: 0; max-width: 140px; }
   .team-rows > li { column-gap: 10px; row-gap: 8px; }
 }
@@ -380,3 +382,25 @@ fieldset.chips legend { font-weight: 700; font-size: .9rem; margin-bottom: 8px; 
 /* Location switcher (only when there are several) */
 .loc-switch { margin-right: auto; }
 .loc-switch select { width: auto; min-width: 0; max-width: 46vw; padding: 6px 30px 6px 10px; font-weight: 700; font-size: .9rem; }
+
+/* Where an hours number came from (close-out) */
+.src { font: 600 .68rem/1.4 var(--mono); color: var(--graphite); border: 1px solid var(--hair); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+/* Usual week editor (Team) */
+.team-rows > li { flex-wrap: wrap; align-content: flex-start; }
+.team-rows > li:has(details[open]) > :not(details) { align-self: flex-start; }
+.week-edit { flex-basis: 100%; margin: -4px 0 0 46px; }
+.week-edit summary { cursor: pointer; font-size: .82rem; font-weight: 600; color: var(--ink); width: fit-content; }
+.week-edit summary::marker { color: var(--graphite); }
+.week-edit form { margin-top: 10px; display: grid; gap: 10px; }
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 64px)); gap: 6px; }
+.week-grid label { display: grid; gap: 3px; margin: 0; font-size: .72rem; font-weight: 700; color: var(--graphite); text-align: center; }
+.week-grid input { padding: 6px 2px; text-align: center; font-family: var(--mono); font-size: .85rem; }
+
+/* Clock in / out on the staff page */
+.clock-card { width: 100%; max-width: 460px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  background: var(--paper); border: 1.5px solid var(--hair); border-radius: 4px; padding: 16px 18px; margin-bottom: 22px; }
+.clock-card.on { border-color: var(--go); background: var(--go-soft); }
+.clock-card p { margin: 0; }
+.clock-state { font-weight: 800; font-size: 1.05rem; }
+.clock-card.on .clock-state { color: var(--go); }
+.clock-time { font-size: .85rem; color: var(--graphite); }

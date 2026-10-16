@@ -33,6 +33,22 @@
       </div>
     </section>
 
+    {% if on_clock %}
+    <section class="panel">
+      <div class="panel-head"><h2>On the clock now</h2><span class="small muted">{{ on_clock|length }} working</span></div>
+      <ul class="rows">
+        {% for e in on_clock %}
+        <li><span class="avatar" aria-hidden="true">{{ e.staff.name|slice:":1" }}</span>
+          <div style="flex:1;min-width:0"><strong>{{ e.staff.name }}</strong>
+            <div class="small muted">since {{ e.started_at|time:"g:i A" }} · {{ e.hours.normalize }} h so far</div></div>
+          <form method="post" action="{% url 'clock_out_for' e.pk %}">{% csrf_token %}
+            <button class="btn btn-quiet small" title="For someone who forgot to clock out">Clock out</button></form>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
     {% if not setup_done %}
     <section class="panel">
       <div class="panel-head"><h2>Before your first close-out</h2></div>
