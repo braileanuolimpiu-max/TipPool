@@ -836,3 +836,14 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible { box-shadow
   .sheet { zoom: 1; box-shadow: none; break-after: page; page-break-after: always; }
   .sheet:last-child { break-after: auto; page-break-after: auto; }
 }
+
+/* print studio: 6 per page, and a preview that grows with the pages (no scroll box) */
+.layout-six .sheet { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); }
+.layout-six .qr-item { outline: 1px dashed #c9c7bf; outline-offset: -0.5px; }
+.layout-six .qr-face { gap: 1.6mm; padding: 4mm; }
+.layout-six .qf-title { font-size: 6.5mm; }
+.layout-six .qf-code { width: 38mm; height: 38mm; }
+.layout-six .qf-note { display: none; }
+.sheets { max-height: none; overflow: visible; }
+@media screen { .sheet { zoom: .7; } }
+@media screen and (max-width: 1000px) { .sheet { zoom: .42; } }

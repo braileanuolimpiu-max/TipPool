@@ -282,6 +282,7 @@ QR_LAYOUTS = {
     # key: (label, per page, what it is)
     "tent": ("Table tents", 2, "Fold in half: it stands up and reads from both sides"),
     "card": ("Cards", 4, "For the check presenter, the counter or a frame"),
+    "six": ("Small cards", 6, "Business-card size, for check presenters, the till or handing out"),
     "sticker": ("Stickers", 12, "For tables, menus, the till or name badges"),
     "poster": ("Poster", 1, "One big code for the door, the wall or the counter"),
 }

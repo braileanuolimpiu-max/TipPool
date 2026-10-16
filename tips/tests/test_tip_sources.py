@@ -136,3 +136,7 @@ class QrPrintTests(TestCase):
         svg = self.client.get(reverse("qr_svg") + "?download=1&url=" + url)
         self.assertIn("attachment", svg["Content-Disposition"])
         self.assertEqual(self.client.get(reverse("qr_png") + "?url=https://evil.example/").status_code, 400)
+
+    def test_six_per_page(self):
+        page = self.client.get(reverse("qr_print") + "?layout=six&copies=7")
+        self.assertEqual([len(p) for p in page.context["pages"]], [6, 1])
