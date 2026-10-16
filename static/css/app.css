@@ -326,6 +326,8 @@ fieldset.chips legend { font-weight: 700; font-size: .9rem; margin-bottom: 8px; 
   .receipt-wrap { filter: none; }
   .receipt { border: 1px dashed #999; break-inside: avoid; -webkit-mask: none; mask: none; }
   body[data-print="house"] .print-tables, body[data-print="tables"] .print-house { display: none !important; }
+  body[data-print="house"] .print-people, body[data-print="tables"] .print-people,
+  body[data-print="people"] .print-tables, body[data-print="people"] .print-house { display: none !important; }
   body[data-print="house"] .print-only { display: block; }
   .tent-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .tent { border-style: dashed; }
@@ -404,3 +406,14 @@ fieldset.chips legend { font-weight: 700; font-size: .9rem; margin-bottom: 8px; 
 .clock-state { font-weight: 800; font-size: 1.05rem; }
 .clock-card.on .clock-state { color: var(--go); }
 .clock-time { font-size: .85rem; color: var(--graphite); }
+.tip-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.tip-add input { font-family: var(--mono); }
+
+/* Guest picks who the tip is for */
+.who-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.who-btn { font: 700 .95rem var(--body); text-align: left; padding: 10px 12px; border: 1.5px solid #c4c7c9; background: transparent; color: #1d1f21; border-radius: 4px; cursor: pointer; }
+.who-btn small { display: block; font: 500 .75rem var(--mono); color: #5c5f62; }
+.who-btn:hover { border-color: #1d1f21; }
+.who-btn[aria-pressed="true"] { border-color: #1d1f21; background: #1d1f21; color: var(--thermal); }
+.who-btn[aria-pressed="true"] small { color: #c9cbcc; }
+.who-btn:focus-visible { box-shadow: var(--focus); outline: 0; }

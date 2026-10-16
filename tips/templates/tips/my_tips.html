@@ -38,7 +38,7 @@
     <div class="receipt">
       <div class="head"><h2>Tips receipt</h2><p>{% if several %}{{ s.night.location.display_name }} · {% endif %}{{ s.night.date|date:"l, M j, Y" }}</p></div>
       <hr>
-      <div class="line"><span class="what">{{ s.role_name }}<small>{{ s.hours|floatformat:"-2" }} hours worked</small></span>
+      <div class="line"><span class="what">{{ s.role_name }}<small>{% if s.hours %}{{ s.hours|floatformat:"-2" }} hours worked{% else %}personal tips{% endif %}</small></span>
         <span class="amt">${{ s.amount }}
           {% with item=s.payout_item %}{% if item and item.status == "SUCCESS" %}<span class="stamp ok">PAID</span>{% elif item %}<span class="stamp wait">SENDING</span>{% else %}<span class="stamp wait">PENDING</span>{% endif %}{% endwith %}
         </span></div>
@@ -46,7 +46,7 @@
       <hr>
       <div class="lines">
         {% for b in s.breakdown %}
-        <div class="line"><span class="what">{{ b.group }} pool ${{ b.pool }}<small>your part: {{ b.basis }}</small></span><span class="amt">${{ b.amount }}</span></div>
+        <div class="line"><span class="what">{% if b.personal %}Tips left for you<small>by name, all yours</small>{% else %}{{ b.group }} pool ${{ b.pool }}<small>your part: {{ b.basis }}</small>{% endif %}</span><span class="amt">${{ b.amount }}</span></div>
         {% endfor %}
       </div>
       {% endif %}

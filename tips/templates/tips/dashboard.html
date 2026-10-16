@@ -84,8 +84,8 @@
         <div class="lines">
           {% for tip in tips %}
           <div class="line">
-            <span class="what">{{ tip.created_at|time:"g:i A" }}  {% if tip.table %}Table {{ tip.table }}{% else %}Walk-up{% endif %}
-              {% if tip.payer_name %}<small>{{ tip.payer_name }}</small>{% endif %}</span>
+            <span class="what">{{ tip.created_at|time:"g:i A" }}  {% if tip.source != "paypal" %}{{ tip.get_source_display }}{% elif tip.table %}Table {{ tip.table }}{% else %}Walk-up{% endif %}
+              {% if tip.staff %}<small>for {{ tip.staff.name }}</small>{% elif tip.payer_name %}<small>{{ tip.payer_name }}</small>{% endif %}</span>
             <span class="amt">${{ tip.amount }}</span>
           </div>
           {% endfor %}

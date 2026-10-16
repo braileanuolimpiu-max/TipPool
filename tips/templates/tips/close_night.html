@@ -12,7 +12,7 @@
 </header>
 {% include "tips/_stepper.html" with step=1 %}
 
-{% if not rule_set %}<div class="flash warning">You need house rules before the split can be calculated. <a href="{% url 'rules' %}">Describe how you share tips</a></div>{% endif %}
+{% if not rule_set and night.pool_total %}<div class="flash warning">You need house rules before the split can be calculated. <a href="{% url 'rules' %}">Describe how you share tips</a></div>{% endif %}
 
 <div class="split-2 wide-left">
   <form method="post" class="panel" id="roster-form">{% csrf_token %}
@@ -44,11 +44,41 @@
     </ul>
     <div class="sticky-bar">
       {% if night.status == "open" %}<button class="btn btn-secondary" name="save_roster">Save for later</button>{% else %}<span class="small muted">You can change this after checking the split.</span>{% endif %}
-      <button class="btn btn-primary" {% if not rule_set %}disabled{% endif %}>{% if night.status == "open" %}Close out and calculate{% else %}Calculate the split{% endif %}</button>
+      <button class="btn btn-primary" {% if not rule_set and night.pool_total %}disabled{% endif %}>{% if night.status == "open" %}Close out and calculate{% else %}Calculate the split{% endif %}</button>
     </div>
   </form>
 
   <div class="stack">
+    <section class="panel" id="other-tips">
+      <div class="panel-head"><h2>Card and cash tips</h2><span class="small muted">PayPal ${{ paypal_total }}</span></div>
+      {% if manual_tips %}
+      <ul class="rows">
+        {% for t in manual_tips %}
+        <li><div style="flex:1;min-width:0"><strong>${{ t.amount }}</strong> <span class="small muted">{{ t.get_source_display }}</span>
+          <div class="small muted">{% if t.staff %}For {{ t.staff.name }}{% else %}Shared by the team{% endif %}{% if t.note %} · {{ t.note }}{% endif %}</div></div>
+          <form method="post" action="{% url 'night_tip_remove' t.pk %}">{% csrf_token %}<button class="role-x" aria-label="Remove this tip" title="Remove">&times;</button></form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <form method="post" action="{% url 'night_tip_add' night.pk %}" class="panel-body stack"{% if manual_tips %} style="border-top:1px solid var(--hair-soft)"{% endif %}>{% csrf_token %}
+        <p class="muted small" style="margin:0">Tips that came through the card machine or in cash, so they're shared too. PayPal tips are already counted.</p>
+        <div class="tip-add">
+          <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="$ 0.00" required aria-label="Amount">
+          <select name="source" aria-label="Card or cash"><option value="card">Card machine</option><option value="cash">Cash</option></select>
+        </div>
+        {% if tip_mode != "pool" %}
+        <select name="for" aria-label="Who the tip is for">
+          <option value="">Shared by the team</option>
+          {% for m in team %}<option value="{{ m.pk }}">For {{ m.name }} only</option>{% endfor %}
+        </select>
+        {% endif %}
+        <input type="text" name="note" maxlength="120" placeholder="Note (optional), e.g. card machine total" aria-label="Note">
+        <button class="btn btn-secondary">Add tips</button>
+        <p class="hint" style="margin:0">Everyone is paid their full share through PayPal, so keep the cash and card tips in the business account.</p>
+      </form>
+    </section>
+
     <form method="post" enctype="multipart/form-data" class="panel">{% csrf_token %}
       <div class="panel-head"><h2>Fill it from a photo</h2></div>
       <div class="panel-body stack">

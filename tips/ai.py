@@ -297,9 +297,12 @@ def _template_explanation(share, role):
         return f"{share.name} worked as {role}, which doesn't receive tips under the house rules."
     parts = []
     for b in share.breakdown:
-        basis = b["basis"]
-        parts.append(f"from the {b['group']} pool of ${b['pool']} you get {basis} = ${b['amount']}")
-    return f"You worked {share.hours.normalize()}h as {role}: " + "; ".join(parts) + f". Total: ${share.amount}."
+        if b.get("personal"):
+            parts.append(f"guests left ${b['amount']} for you by name, all yours")
+        else:
+            parts.append(f"from the {b['group']} pool of ${b['pool']} you get {b['basis']} = ${b['amount']}")
+    start = f"You worked {share.hours.normalize()}h as {role}: " if share.hours else "You got personal tips: "
+    return start + "; ".join(parts) + f". Total: ${share.amount}."
 
 
 # ---------------------------------------------------------------------------

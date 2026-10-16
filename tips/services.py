@@ -7,9 +7,9 @@ from django.conf import settings
 from django.db import transaction
 
 from . import ai
-from .models import Night, PayoutBatch, PayoutItem, Role, Share, Tip
+from .models import Membership, Night, PayoutBatch, PayoutItem, Role, Share, Tip
 from .paypal import PayPalError, get_client
-from .split import RulesError, ShiftInput, calculate_split
+from .split import PersonShare, RulesError, ShiftInput, SplitResult, calculate_split
 
 log = logging.getLogger("tips.services")
 
@@ -23,18 +23,57 @@ class TipPoolError(Exception):
 
 
 # --- Tips (money in) ---------------------------------------------------------
-def create_tip_order(location, amount, table="", return_url=None, cancel_url=None):
-    """Create a PayPal order for a tip on this location's current shift."""
+def create_tip_order(location, amount, table="", return_url=None, cancel_url=None, for_staff=None):
+    """Create a PayPal order for a tip on this location's current shift.
+    `for_staff`: a personal tip for that person (only when the location allows personal tips)."""
     amount = Decimal(str(amount)).quantize(Decimal("0.01"))
     if amount < Decimal("1.00") or amount > Decimal("500.00"):
         raise TipPoolError("Tips must be between $1 and $500.")
+    if for_staff is not None and location.tip_mode == location.TipMode.POOL:
+        raise TipPoolError("Tips here are shared by the whole team.")
+    if for_staff is None and location.tip_mode == location.TipMode.PERSONAL:
+        raise TipPoolError("Please choose who you'd like to tip.")
     night = Night.current(location)
+    who = f" for {for_staff.name}" if for_staff else ""
     order = get_client().create_order(amount, settings.TIP_CURRENCY,
-                                      description=f"Tip{f' - table {table}' if table else ''}",
+                                      description=f"Tip{who}{f' - table {table}' if table else ''}"[:127],
                                       reference_id=f"night-{night.pk}",
                                       return_url=return_url, cancel_url=cancel_url)
-    Tip.objects.create(night=night, amount=amount, paypal_order_id=order["id"], table=table[:20])
+    Tip.objects.create(night=night, amount=amount, paypal_order_id=order["id"], table=table[:20], staff=for_staff)
     return order["id"]
+
+
+def add_manual_tip(night, amount, source, staff=None, note=""):
+    """Card-machine or cash tips the manager adds at close-out."""
+    if night.status in (Night.Status.PAYING, Night.Status.PAID):
+        raise TipPoolError("This shift has already been paid out.")
+    if source not in (Tip.Source.CARD, Tip.Source.CASH):
+        raise TipPoolError("Choose card or cash.")
+    amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+    if amount <= 0 or amount > Decimal("20000"):
+        raise TipPoolError("Enter an amount above $0.")
+    tip = Tip.objects.create(night=night, amount=amount, source=source, staff=staff, note=note[:120],
+                             status=Tip.Status.COMPLETED)
+    _invalidate_split(night)
+    return tip
+
+
+def remove_manual_tip(tip):
+    night = tip.night
+    if night.status in (Night.Status.PAYING, Night.Status.PAID):
+        raise TipPoolError("This shift has already been paid out.")
+    if tip.source == Tip.Source.PAYPAL:
+        raise TipPoolError("PayPal tips can't be removed here.")
+    tip.delete()
+    _invalidate_split(night)
+
+
+def _invalidate_split(night):
+    """Tips changed after the split was calculated: it has to be calculated again."""
+    if night.status == Night.Status.REVIEW:
+        night.shares.all().delete()
+        night.status = Night.Status.CLOSED
+        night.save(update_fields=["status"])
 
 
 def capture_tip(order_id):
@@ -93,23 +132,30 @@ def build_split(night, rule_set):
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
         raise TipPoolError("This shift has already been paid out.")
     shifts = list(night.shifts.select_related("staff"))
-    if not shifts:
-        raise TipPoolError("Add who worked this shift first.")
-    total = night.tip_total
-    if total <= 0:
+    if night.tip_total <= 0:
         raise TipPoolError("There are no completed tips for this shift yet.")
+    pool = night.pool_total
+    if pool > 0 and not shifts:
+        raise TipPoolError("Add who worked this shift first.")
+    if pool > 0 and rule_set is None:
+        raise TipPoolError("Set your tip rules first.")
 
-    inputs = [ShiftInput(str(s.staff_id), s.staff.name, s.role, s.hours) for s in shifts]
     roles = list(Role.objects.filter(location_id=night.location_id))
     role_names = {r.key: r.name for r in roles}
     # roles marked "no tips" today count even if the saved rules are older than that setting
     no_tips = {r.key for r in roles if r.no_tips}
-    try:
-        result = calculate_split(total, inputs, rule_set.rules, never_in_pool=no_tips, role_names=role_names)
-    except RulesError as exc:
-        raise TipPoolError(str(exc)) from exc
+    if pool > 0:
+        inputs = [ShiftInput(str(s.staff_id), s.staff.name, s.role, s.hours) for s in shifts]
+        try:
+            result = calculate_split(pool, inputs, rule_set.rules, never_in_pool=no_tips, role_names=role_names)
+        except RulesError as exc:
+            raise TipPoolError(str(exc)) from exc
+    else:
+        result = SplitResult(total=Decimal("0.00"), shares=[], notes=[])
+    _add_personal_tips(night, result, role_names)
 
-    explanations = ai.explain_shares(result.total, rule_set.summary, result.shares, result.notes, role_names)
+    explanations = ai.explain_shares(result.total, rule_set.summary if rule_set else "Personal tips only.",
+                                     result.shares, result.notes, role_names)
     night.shares.all().delete()
     for person in result.shares:
         Share.objects.create(
@@ -121,6 +167,31 @@ def build_split(night, rule_set):
     night.status = Night.Status.REVIEW
     night.save()
     return result
+
+
+def _add_personal_tips(night, result, role_names):
+    """Tips a guest left for one person go to that person in full, on top of their pool share.
+    Someone who only got personal tips (not on the roster) still gets a share."""
+    personal = {}
+    for tip in night.tips.filter(status=Tip.Status.COMPLETED, staff__isnull=False).select_related("staff"):
+        personal.setdefault(tip.staff, Decimal("0"))
+        personal[tip.staff] += tip.amount
+    if not personal:
+        return
+    by_key = {p.key: p for p in result.shares}
+    usual = dict(Membership.objects.filter(location_id=night.location_id).values_list("staff_id", "default_role"))
+    for staff, amount in personal.items():
+        person = by_key.get(str(staff.pk))
+        if person is None:
+            person = PersonShare(str(staff.pk), staff.name, usual.get(staff.pk, ""), Decimal("0"))
+            result.shares.append(person)
+            by_key[person.key] = person
+        amount = amount.quantize(Decimal("0.01"))
+        person.amount += amount
+        person.breakdown.append({"group": "Tips left for you", "pool": str(amount), "basis": "by name",
+                                 "amount": str(amount), "personal": True})
+    result.total += sum(personal.values(), Decimal("0")).quantize(Decimal("0.01"))
+    result.shares.sort(key=lambda p: (-p.amount, p.name))
 
 
 # --- Payouts (money out) -----------------------------------------------------

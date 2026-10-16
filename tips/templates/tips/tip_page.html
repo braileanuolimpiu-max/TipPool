@@ -12,7 +12,16 @@
         <p>{% if table %}Table {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
       </div>
       <hr>
+      {% if tip_mode == "pool" or not people %}
       <p style="margin:0">Thank you. Your tip is shared with the whole team who looked after you today.</p>
+      {% else %}
+      <p style="margin:0 0 10px" id="who-label">{% if tip_mode == "personal" %}Who would you like to tip?{% else %}Who is this tip for?{% endif %}</p>
+      <div class="who-pick" role="group" aria-labelledby="who-label">
+        {% if tip_mode == "both" %}<button type="button" class="who-btn" data-to="" aria-pressed="{% if not to %}true{% else %}false{% endif %}">The whole team</button>{% endif %}
+        {% for m in people %}<button type="button" class="who-btn" data-to="{{ m.pk }}" aria-pressed="{% if to == m.pk %}true{% else %}false{% endif %}">{{ m.staff.name }}<small>{{ m.role_name }}</small></button>{% endfor %}
+      </div>
+      <p class="small" style="margin:8px 0 0;color:#5c5f62" id="who-note">{% if tip_mode == "both" %}Tips for the whole team are shared fairly. A tip for one person goes to them in full.{% else %}Your whole tip goes to the person you choose.{% endif %}</p>
+      {% endif %}
       <hr>
       {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">No tip was taken. Choose an amount to try again.</p>{% endif %}
       <div class="amounts" role="group" aria-label="Tip amount">
@@ -33,12 +42,23 @@
 {% block scripts %}
 {{ table|json_script:"table-data" }}
 {{ at|json_script:"at-data" }}
+{{ to|json_script:"to-data" }}
+{{ tip_mode|json_script:"mode-data" }}
 <script>
   const CSRF = "{{ csrf_token }}";
   const TABLE = JSON.parse(document.getElementById("table-data").textContent);
   const AT = JSON.parse(document.getElementById("at-data").textContent);
   const statusEl = document.getElementById("status");
   let amount = "10.00";
+  let to = JSON.parse(document.getElementById("to-data").textContent) || "";
+  const MODE = JSON.parse(document.getElementById("mode-data").textContent);
+
+  const whoButtons = document.querySelectorAll(".who-btn");
+  whoButtons.forEach((btn) => btn.addEventListener("click", () => {
+    whoButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
+    btn.setAttribute("aria-pressed", "true");
+    to = btn.dataset.to;
+  }));
 
   const amountButtons = document.querySelectorAll(".amount");
   amountButtons.forEach((btn) => btn.addEventListener("click", () => {
@@ -55,10 +75,11 @@
   // Our server creates the PayPal order, so the amount can't be tampered with in the browser
   async function createOrder() {
     if (!amount || Number(amount) < 1) throw new Error("Please choose a tip amount.");
+    if (MODE === "personal" && whoButtons.length && !to) throw new Error("Please choose who you'd like to tip.");
     const res = await fetch("{% url 'api_create_order' %}", {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-CSRFToken": CSRF},
-      body: JSON.stringify({amount: amount, table: TABLE, at: AT}),
+      body: JSON.stringify({amount: amount, table: TABLE, at: AT, to: to}),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Could not start the payment.");

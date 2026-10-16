@@ -92,6 +92,28 @@
   </div>
 </section>
 {% endif %}
+
+{% if people %}
+<section class="print-people">
+  <div class="row-head no-print">
+    <h2>Personal codes</h2>
+    <button type="button" class="btn btn-secondary" data-print="people">Print personal cards</button>
+  </div>
+  <p class="muted no-print" style="margin:-6px 0 14px">One for each person's station, mirror or name badge. A guest who scans it tips that person directly.</p>
+  <div class="tent-grid">
+    {% for name, role, url, pk in people %}
+    <div class="tent">
+      <p class="tent-place">{{ restaurant_name }}</p>
+      <p class="tent-label"><span class="hl">{{ name }}</span></p>
+      <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code to tip {{ name }}" loading="lazy">
+      <p class="tent-how">Scan to tip {{ name }}</p>
+      <p class="tent-note">{{ role }} · PayPal, Venmo or card</p>
+      <a class="tent-show no-print" href="{% url 'qr_show' %}?at={{ restaurant.slug }}&to={{ pk }}" target="_blank" rel="noopener">Show on screen</a>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 <script>

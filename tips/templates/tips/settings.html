@@ -47,6 +47,18 @@
     </section>
 
     <section class="panel">
+      <div class="panel-head"><h2>How tips are shared</h2></div>
+      <div class="panel-body stack">
+        {% for value, label in tip_modes %}
+        <label class="choice"><input type="radio" name="tip_mode" value="{{ value }}" {% if restaurant.tip_mode == value %}checked{% endif %}>
+          <span><strong>{{ label }}</strong>
+            <span class="small muted">{% if value == "pool" %}Usual for restaurants and bars. Your tip rules split everything.{% elif value == "personal" %}Usual for salons, barbers and delivery. The guest picks a person, who gets the whole tip.{% else %}The guest picks "the whole team" or one person. Team tips follow your rules.{% endif %}</span></span>
+        </label>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel">
       <div class="panel-head"><h2>When a shift closes</h2></div>
       <div class="panel-body stack">
         {% for value, label in after_choices %}

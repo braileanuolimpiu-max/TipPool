@@ -20,6 +20,12 @@ class Location(models.Model):
     timezone = models.CharField(max_length=64, default="America/New_York")
     auto_close_enabled = models.BooleanField(default=False)
     after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)
+    class TipMode(models.TextChoices):
+        POOL = "pool", "Shared by the team"
+        PERSONAL = "personal", "Each person keeps their own tips"
+        BOTH = "both", "Guests choose: the team or one person"
+
+    tip_mode = models.CharField(max_length=10, choices=TipMode.choices, default=TipMode.POOL)
     # at an automatic close with nobody on the roster and nobody clocked in: use everyone's usual week
     use_usual_schedule = models.BooleanField(default=False)
     # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
@@ -214,8 +220,17 @@ class Night(models.Model):
 
     @property
     def tip_total(self):
-        total = self.tips.filter(status=Tip.Status.COMPLETED).aggregate(s=models.Sum("amount"))["s"]
-        return (total or Decimal("0")).quantize(Decimal("0.01"))
+        """Every completed tip: shared and personal, PayPal, card and cash."""
+        return self._sum(self.tips.filter(status=Tip.Status.COMPLETED))
+
+    @property
+    def pool_total(self):
+        """The tips the team shares under the rules (personal tips go straight to their person)."""
+        return self._sum(self.tips.filter(status=Tip.Status.COMPLETED, staff__isnull=True))
+
+    @staticmethod
+    def _sum(qs):
+        return (qs.aggregate(s=models.Sum("amount"))["s"] or Decimal("0")).quantize(Decimal("0.01"))
 
     @classmethod
     def current(cls, location):
@@ -228,7 +243,7 @@ class Night(models.Model):
 
 
 class Tip(models.Model):
-    """A tip a customer paid with PayPal (one PayPal order)."""
+    """One tip: paid by a guest with PayPal / Venmo, or card / cash tips the manager adds at close-out."""
 
     class Status(models.TextChoices):
         CREATED = "created", "Created"
@@ -236,9 +251,18 @@ class Tip(models.Model):
         FAILED = "failed", "Failed"
         REFUNDED = "refunded", "Refunded"
 
+    class Source(models.TextChoices):
+        PAYPAL = "paypal", "PayPal / Venmo"
+        CARD = "card", "Card machine"
+        CASH = "cash", "Cash"
+
     night = models.ForeignKey(Night, related_name="tips", on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    paypal_order_id = models.CharField(max_length=64, unique=True)
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.PAYPAL)
+    # set = a personal tip for this person; empty = shared by the team under the tip rules
+    staff = models.ForeignKey(StaffMember, null=True, blank=True, related_name="personal_tips", on_delete=models.PROTECT)
+    note = models.CharField(max_length=120, blank=True)
+    paypal_order_id = models.CharField(max_length=64, unique=True, null=True, blank=True)
     paypal_capture_id = models.CharField(max_length=64, blank=True)
     payer_name = models.CharField(max_length=120, blank=True)
     table = models.CharField(max_length=20, blank=True)

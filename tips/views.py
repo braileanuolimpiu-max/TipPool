@@ -39,7 +39,7 @@ def dashboard(request):
     location = request.location
     night = Night.current(location)
     _sync_tips(night)
-    tips = list(night.tips.filter(status=Tip.Status.COMPLETED))
+    tips = list(night.tips.filter(status=Tip.Status.COMPLETED).select_related("staff"))
     total = night.tip_total
     staff_count = Membership.objects.filter(location=location, active=True).count()
     rule_set = TipRuleSet.active(location)
@@ -92,8 +92,21 @@ def history(request):
 
 # --- Customer tip page (public) -----------------------------------------------
 def tip_page(request):
+    location = request.location
+    people = []
+    if location.tip_mode != Location.TipMode.POOL:
+        # who's working right now first, then the rest of the team
+        working = set(Night.current(location).clock_entries.filter(ended_at__isnull=True).values_list("staff_id", flat=True))
+        working |= set(Night.current(location).shifts.values_list("staff_id", flat=True))
+        members = Membership.objects.filter(location=location, active=True).select_related("staff")
+        members = [m for m in members if not Role.objects.filter(location=location, key=m.default_role, no_tips=True).exists()]
+        people = sorted(members, key=lambda m: (m.staff_id not in working, m.staff.name))
+    to = request.GET.get("to", "")
     return render(request, "tips/tip_page.html", {
-        "at": request.location.slug,
+        "at": location.slug,
+        "tip_mode": location.tip_mode,
+        "people": people,
+        "to": int(to) if to.isdigit() and any(m.pk == int(to) for m in people) else None,
         "cancelled": "cancelled" in request.GET,
         "presets": TIP_PRESETS,
         "table": request.GET.get("table", "")[:20],
@@ -126,8 +139,14 @@ def api_create_order(request):
         amount = Decimal(str(data.get("amount", "")))
         table = str(data.get("table", ""))
         location = Location.objects.filter(slug=str(data.get("at", ""))).first() or Location.default()
+        for_staff = None
+        if data.get("to"):
+            member = Membership.objects.filter(pk=int(data["to"]), location=location, active=True).first()
+            if member is None:
+                return JsonResponse({"error": "That person isn't taking tips here right now."}, status=400)
+            for_staff = member.staff
         order_id = services.create_tip_order(
-            location, amount, table,
+            location, amount, table, for_staff=for_staff,
             return_url=request.build_absolute_uri(reverse("tip_thanks")),
             cancel_url=request.build_absolute_uri(reverse("tip_page")) + f"?at={location.slug}&cancelled=1",
         )
@@ -181,14 +200,21 @@ def qr_page(request):
                    for label in restaurant.table_labels],
         "suggestions": Location.SPOT_SUGGESTIONS,
         "custom_spots": [sp for sp in restaurant.spots if sp not in Location.SPOT_SUGGESTIONS],
+        "people": [(m.staff.name, m.role_name, f"{base}&to={m.pk}", m.pk)
+                   for m in Membership.objects.filter(location=restaurant, active=True).select_related("staff")
+                   ] if restaurant.tip_mode != Location.TipMode.POOL else [],
     })
 
 
 def qr_show(request):
     """Full-screen QR for a server's phone or a counter tablet. No login, it only links to the tip page."""
     table = request.GET.get("table", "")[:20]
-    url = request.build_absolute_uri(reverse("tip_page")) + f"?at={request.location.slug}" + (f"&table={table}" if table else "")
-    label = (f"Table {table}" if table.isdigit() else table) if table else "Leave a tip"
+    to = request.GET.get("to", "")
+    member = Membership.objects.filter(pk=to, location=request.location).select_related("staff").first() if to.isdigit() else None
+    url = request.build_absolute_uri(reverse("tip_page")) + f"?at={request.location.slug}" + (
+        f"&table={table}" if table else "") + (f"&to={member.pk}" if member else "")
+    label = f"Tip {member.staff.name}" if member else (
+        (f"Table {table}" if table.isdigit() else table) if table else "Leave a tip")
     return render(request, "tips/qr_show.html", {"url": url, "label": label, "table": table})
 
 
@@ -390,7 +416,7 @@ def close_night(request, pk=None):
     elif request.method == "POST":
         rule_set = TipRuleSet.active(location)
         saving_only = "save_roster" in request.POST
-        if not rule_set and not saving_only:
+        if not rule_set and not saving_only and night.pool_total > 0:
             messages.error(request, "Set your tip rules first.")
             return redirect("rules")
         if not saving_only:
@@ -438,7 +464,42 @@ def close_night(request, pk=None):
     return render(request, "tips/close_night.html", {
         "night": night, "rows": rows, "tip_count": night.tips.filter(status=Tip.Status.COMPLETED).count(), "roles": Role.objects.filter(location=location), "rule_set": TipRuleSet.active(location),
         "ai_notes": ai_notes, "ai_mode": ai.mode(),
+        "manual_tips": list(night.tips.exclude(source=Tip.Source.PAYPAL).select_related("staff")),
+        "paypal_total": Night._sum(night.tips.filter(status=Tip.Status.COMPLETED, source=Tip.Source.PAYPAL)),
+        "personal_total": night.tip_total - night.pool_total,
+        "team": staff, "tip_mode": location.tip_mode,
     })
+
+
+@login_required
+@require_POST
+def night_tip_add(request, pk):
+    night = get_object_or_404(Night, pk=pk, location=request.location)
+    staff = None
+    if request.POST.get("for"):
+        member = Membership.objects.filter(location=night.location, staff_id=request.POST["for"]).first()
+        staff = member.staff if member else None
+    try:
+        tip = services.add_manual_tip(night, request.POST.get("amount") or "0", request.POST.get("source", ""),
+                                      staff=staff, note=request.POST.get("note", "").strip())
+        messages.success(request, f"Added ${tip.amount} {tip.get_source_display().lower()} tips"
+                                  f"{f' for {staff.name}' if staff else ' to the shared pool'}.")
+    except (services.TipPoolError, InvalidOperation) as exc:
+        messages.error(request, str(exc) if isinstance(exc, services.TipPoolError) else "Enter a valid amount.")
+    return redirect("close_night_pk", pk=night.pk)
+
+
+@login_required
+@require_POST
+def night_tip_remove(request, pk):
+    tip = get_object_or_404(Tip, pk=pk, night__location=request.location)
+    night_pk = tip.night_id
+    try:
+        services.remove_manual_tip(tip)
+        messages.success(request, "Removed.")
+    except services.TipPoolError as exc:
+        messages.error(request, str(exc))
+    return redirect("close_night_pk", pk=night_pk)
 
 
 @login_required
@@ -527,6 +588,8 @@ def settings_page(request):
         restaurant.name = request.POST.get("name", "").strip()[:80]
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
         restaurant.use_usual_schedule = bool(request.POST.get("use_usual_schedule"))
+        if request.POST.get("tip_mode") in Location.TipMode.values:
+            restaurant.tip_mode = request.POST["tip_mode"]
         if request.POST.get("after_close") in Location.AfterClose.values:
             restaurant.after_close = request.POST["after_close"]
         if request.POST.get("timezone") in dict(TIMEZONES):
@@ -551,6 +614,7 @@ def settings_page(request):
     days = [{"n": d, "name": CloseTime.WEEKDAYS[d], "close": existing.get(d)} for d in range(7)]
     return render(request, "tips/settings.html", {
         "restaurant": restaurant, "days": days, "timezones": TIMEZONES,
+        "tip_modes": Location.TipMode.choices,
         "after_choices": Location.AfterClose.choices, "next_close": autoclose.next_close(restaurant),
         "all_locations": _locations_overview(),
         "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
