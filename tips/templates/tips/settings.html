@@ -67,6 +67,11 @@
             <span class="small muted">{% if value == "review" %}You check the split, then press pay.{% else %}PayPal pays everyone as soon as the shift closes. Only happens if you saved who's working.{% endif %}</span></span>
         </label>
         {% endfor %}
+        <div><label for="review_minutes">Before an automatic payout, wait</label>
+          <select id="review_minutes" name="review_minutes">
+            {% for value, label in review_choices %}<option value="{{ value }}" {% if restaurant.review_minutes == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          <p class="hint">Gives the team time to check their share on their tips page and flag a mistake. A flagged shift waits for you.</p></div>
         <label class="choice"><input type="checkbox" name="use_usual_schedule" {% if restaurant.use_usual_schedule %}checked{% endif %}>
           <span><strong>Use the usual week when nobody clocked in</strong>
             <span class="small muted">Without it, a shift with nobody saved and no clock-ins waits for you.</span></span></label>
@@ -115,6 +120,22 @@
       <button class="btn btn-secondary">Add location</button>
     </form>
   </div>
+</section>
+
+<section class="panel" id="changes" style="margin-top:28px">
+  <div class="panel-head"><h2>Recent changes</h2><span class="small muted">who changed what at {{ restaurant.display_name }}</span></div>
+  {% if changes %}
+  <div class="table-wrap"><table class="data changes">
+    <tbody>
+    {% for c in changes %}
+      <tr><td class="when">{{ c.at|date:"M j, g:i A" }}</td><td class="who">{{ c.who }}</td><td>{{ c.what }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if not show_all_changes and changes|length >= 12 %}<div class="panel-body" style="border-top:1px solid var(--hair-soft)"><a href="?all=1#changes">Show all changes</a></div>{% endif %}
+  {% else %}
+  <div class="panel-body"><p class="muted" style="margin:0">Nothing yet. Changes to rules, hours, tips, the team and payouts are listed here.</p></div>
+  {% endif %}
 </section>
 {% endblock %}
 {% block scripts %}

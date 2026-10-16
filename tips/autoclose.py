@@ -16,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import hours, services
-from .models import CloseTime, Location, Night, TipRuleSet
+from .models import Change, CloseTime, Location, Night, TipRuleSet
 from .paypal import PayPalError
 
 log = logging.getLogger("tips.autoclose")
@@ -64,10 +64,37 @@ def run(now=None):
     results = []
     for location in Location.objects.filter(auto_close_enabled=True):
         tz = location_tz(location)
+        done = []
         for night in Night.objects.filter(location=location, status=Night.Status.OPEN):
             due = close_due_at(night, tz)
             if due and now >= due:
-                results.append(close_night(night, location))
+                done.append(close_night(night, location))
+        done += pay_after_review(location, now)
+        for what in done:
+            Change.log("Automatic close-out", what, location=location)
+        results += done
+    return results
+
+
+def pay_after_review(location, now):
+    """Automatic payouts that waited for the review window: pay them unless someone flagged a problem."""
+    if location.after_close != Location.AfterClose.PAY or not location.review_minutes:
+        return []
+    results = []
+    waiting = Night.objects.filter(location=location, status=Night.Status.REVIEW, auto_closed=True, hold="",
+                                   closed_at__lte=now - timedelta(minutes=location.review_minutes))
+    for night in waiting:
+        if night.messages.filter(resolved_at__isnull=True).exists():
+            night.hold = "Someone flagged a problem with this shift."
+            night.save(update_fields=["hold"])
+            results.append(f"{night}: held, a problem was flagged")
+            continue
+        try:
+            services.pay_night(night)
+            results.append(f"{night}: paid after the review window")
+        except (services.TipPoolError, PayPalError) as exc:
+            log.warning("Auto payout failed for %s: %s", night, exc)
+            results.append(f"{night}: payout needs attention ({exc})")
     return results
 
 
@@ -102,7 +129,11 @@ def close_night(night, location):
         return f"{night}: closed, split needs attention ({exc})"
 
     if needs_check:
+        night.hold = "Someone forgot to clock out. Check their hours."
+        night.save(update_fields=["hold"])
         return f"{night}: closed and split; someone forgot to clock out, so check the hours before paying"
+    if location.after_close == Location.AfterClose.PAY and location.review_minutes:
+        return f"{night}: closed and split; pays in {location.review_minutes} minutes unless someone flags a problem"
     if location.after_close == Location.AfterClose.PAY:
         try:
             services.pay_night(night)

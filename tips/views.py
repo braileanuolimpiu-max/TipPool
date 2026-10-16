@@ -13,11 +13,12 @@ from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import ai, autoclose, hours as hours_from, roles as role_presets, services
-from .models import (CloseTime, Location, Membership, Night, PayoutBatch, Role, Shift, StaffMember, Tip,
+from .models import (Change, CloseTime, Location, Membership, Night, PayoutBatch, Role, Shift, StaffMember, Tip,
                      TipRuleSet, WebhookEvent)
 from .paypal import PayPalError, get_client
 
@@ -75,6 +76,7 @@ def clock_out_for(request, pk):
     from .models import ClockEntry
     entry = get_object_or_404(ClockEntry, pk=pk, night__location=request.location, ended_at__isnull=True)
     hours_from.clock_out(entry.staff)
+    Change.log(request, f"Clocked out {entry.staff.name} (forgot to clock out)")
     messages.success(request, f"{entry.staff.name} is clocked out.")
     return redirect("dashboard")
 
@@ -190,6 +192,7 @@ def qr_page(request):
             spots.append(extra)
         restaurant.spots = list(dict.fromkeys(spots))[:24]  # keep order, drop duplicates
         restaurant.save()
+        Change.log(request, f"Table codes: {restaurant.table_count} tables" + (f", {', '.join(restaurant.spots)}" if restaurant.spots else ""))
         messages.success(request, "Table codes updated.")
         return redirect("qr_page")
     base = request.build_absolute_uri(reverse("tip_page")) + f"?at={restaurant.slug}"
@@ -248,6 +251,7 @@ def staff_list(request):
         if not made:
             membership.active, membership.default_role = True, role
             membership.save()
+        Change.log(request, f"Added {person.name} ({Role.label(role, location.pk)}) to the team")
         others = person.memberships.exclude(location=location).count()
         messages.success(request, f"{person.name} added." + (
             f" They also work at {others} other location{'s' if others > 1 else ''}, so their tips page "
@@ -272,6 +276,7 @@ def staff_role(request, pk):
     if Role.objects.filter(location=request.location, key=role).exists():
         member.default_role = role
         member.save(update_fields=["default_role"])
+        Change.log(request, f"Changed {member.staff.name}'s usual role to {member.role_name}")
         messages.success(request, f"{member.staff.name} is now {member.role_name.lower()}.")
     return redirect("staff_list")
 
@@ -290,6 +295,7 @@ def staff_schedule(request, pk):
             week[str(day)] = float(value.quantize(Decimal("0.01")))
     member.schedule = week
     member.save(update_fields=["schedule"])
+    Change.log(request, f"Set {member.staff.name}'s usual week: {member.schedule_summary or 'no fixed hours'}")
     messages.success(request, f"{member.staff.name}'s usual week saved: {member.schedule_summary or 'no fixed hours'}.")
     return redirect("staff_list")
 
@@ -300,6 +306,7 @@ def staff_toggle(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
     member.active = not member.active
     member.save()
+    Change.log(request, f"{'Brought back' if member.active else 'Removed'} {member.staff.name}")
     return redirect("staff_list")
 
 
@@ -314,6 +321,7 @@ def role_add(request):
     role, made = role_presets.add_role(request.location, name, request.POST.get("aliases", "").strip(),
                                        no_tips=bool(request.POST.get("no_tips")))
     if made:
+        Change.log(request, f"Added the role {role.name}" + (" (never gets tips)" if role.no_tips else ""))
         messages.success(request, f"Role added: {role.name}. Mention it in your tip rules so it gets a share.")
     else:
         messages.error(request, f"You already have the role {role.name}.")
@@ -328,6 +336,7 @@ def role_remove(request, pk):
         messages.error(request, f"Someone on your team is a {role.name.lower()}. Change their role first.")
     else:
         role.delete()
+        Change.log(request, f"Removed the role {role.name}")
         messages.success(request, f"Role removed: {role.name}. Past shifts keep it.")
     return redirect("staff_list")
 
@@ -340,6 +349,7 @@ def role_preset(request):
         return redirect("staff_list")
     kept = role_presets.apply_preset(request.location, business_type)
     label = role_presets.PRESETS[business_type]["label"]
+    Change.log(request, f"Switched roles to the {label.lower()} preset")
     msg = f"Roles set up for a {label.lower()}."
     if kept:
         msg += f" Kept {', '.join(kept)} because someone on your team still has it."
@@ -360,6 +370,7 @@ def rules_page(request):
         TipRuleSet.objects.filter(location=request.location, is_active=True).update(is_active=False)
         TipRuleSet.objects.create(location=request.location, text=preview["text"], rules=preview["rules"], summary=preview["summary"],
                                   warnings=preview["warnings"])
+        Change.log(request, f"Changed the tip rules: {preview['summary']}")
         messages.success(request, "Tip rules saved.")
         return redirect("rules")
     if request.method == "POST":
@@ -433,6 +444,8 @@ def close_night(request, pk=None):
             role = request.POST.get(f"role_{member.pk}", usual_role.get(member.pk))
             if hours > 0 and role in role_keys:
                 Shift.objects.create(night=night, staff=member, role=role, hours=hours)
+        roster = ", ".join(f"{s.staff.name} {s.hours.normalize():f}h" for s in night.shifts.select_related("staff"))
+        Change.log(request, f"{'Saved' if saving_only else 'Closed out with'} who worked on the {night}: {roster or 'nobody'}")
         if saving_only:
             messages.success(request, f"Saved {night.shifts.count()} people on tonight's roster. "
                                       "Update the hours any time before closing.")
@@ -482,6 +495,8 @@ def night_tip_add(request, pk):
     try:
         tip = services.add_manual_tip(night, request.POST.get("amount") or "0", request.POST.get("source", ""),
                                       staff=staff, note=request.POST.get("note", "").strip())
+        Change.log(request, f"Added ${tip.amount} {tip.get_source_display().lower()} tips to the {night}"
+                            + (f" for {staff.name}" if staff else ""))
         messages.success(request, f"Added ${tip.amount} {tip.get_source_display().lower()} tips"
                                   f"{f' for {staff.name}' if staff else ' to the shared pool'}.")
     except (services.TipPoolError, InvalidOperation) as exc:
@@ -496,6 +511,7 @@ def night_tip_remove(request, pk):
     night_pk = tip.night_id
     try:
         services.remove_manual_tip(tip)
+        Change.log(request, f"Removed ${tip.amount} {tip.get_source_display().lower()} tips from the {tip.night}")
         messages.success(request, "Removed.")
     except services.TipPoolError as exc:
         messages.error(request, str(exc))
@@ -512,6 +528,7 @@ def review(request, pk):
         "night": night, "shares": shares, "total": night.tip_total,
         "paid_total": sum((s.amount for s in shares), Decimal("0")),
         "paying_count": sum(1 for s in shares if s.amount > 0),
+        "flags": night.messages.filter(resolved_at__isnull=True).select_related("staff"),
         "rule_set": night.rule_set,
     })
 
@@ -522,6 +539,7 @@ def pay(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
     try:
         services.pay_night(night)
+        Change.log(request, f"Paid the {night}: ${night.tip_total} to {night.shares.filter(amount__gt=0).count()} people")
         messages.success(request, "Payout sent to PayPal.")
     except services.TipPoolError as exc:
         messages.error(request, str(exc))
@@ -573,6 +591,10 @@ TIMEZONES = [
 ]
 
 
+REVIEW_CHOICES = [(0, "Don't wait: pay right away"), (30, "30 minutes"), (60, "1 hour"), (120, "2 hours"),
+                  (720, "12 hours"), (1440, "24 hours")]
+
+
 def _locations_overview():
     rows = list(Location.objects.annotate(team_count=Count("memberships", filter=Q(memberships__active=True))))
     for loc in rows:
@@ -588,6 +610,8 @@ def settings_page(request):
         restaurant.name = request.POST.get("name", "").strip()[:80]
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
         restaurant.use_usual_schedule = bool(request.POST.get("use_usual_schedule"))
+        if request.POST.get("review_minutes", "").isdigit() and int(request.POST["review_minutes"]) in dict(REVIEW_CHOICES):
+            restaurant.review_minutes = int(request.POST["review_minutes"])
         if request.POST.get("tip_mode") in Location.TipMode.values:
             restaurant.tip_mode = request.POST["tip_mode"]
         if request.POST.get("after_close") in Location.AfterClose.values:
@@ -608,16 +632,72 @@ def settings_page(request):
                                                    defaults={"time": value, "enabled": enabled})
             else:
                 CloseTime.objects.filter(location=restaurant, weekday=day).update(enabled=False)
-        messages.success(request, "Close-out settings saved.")
+        Change.log(request, "Changed settings: " + ", ".join([
+            restaurant.get_tip_mode_display().lower(),
+            ("closes automatically" if restaurant.auto_close_enabled else "closes by hand"),
+            restaurant.get_after_close_display().lower(),
+        ]))
+        messages.success(request, "Settings saved.")
         return redirect("settings")
     existing = {c.weekday: c for c in CloseTime.objects.filter(location=restaurant)}
     days = [{"n": d, "name": CloseTime.WEEKDAYS[d], "close": existing.get(d)} for d in range(7)]
     return render(request, "tips/settings.html", {
         "restaurant": restaurant, "days": days, "timezones": TIMEZONES,
         "tip_modes": Location.TipMode.choices,
+        "review_choices": REVIEW_CHOICES,
+        "changes": Change.objects.filter(location=restaurant)[:200 if request.GET.get("all") else 12],
+        "show_all_changes": bool(request.GET.get("all")),
         "after_choices": Location.AfterClose.choices, "next_close": autoclose.next_close(restaurant),
         "all_locations": _locations_overview(),
         "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
+    })
+
+
+# --- Reports -------------------------------------------------------------------
+@login_required
+def reports_page(request):
+    from datetime import date
+    from . import reports
+    period = request.GET.get("period", "this_month")
+    scope = "all" if request.GET.get("scope") == "all" else "here"
+
+    def parse(value):
+        try:
+            return date.fromisoformat(value)
+        except (TypeError, ValueError):
+            return None
+    today = timezone.localdate()
+    first, last = reports.period_range(period, today, parse(request.GET.get("from")), parse(request.GET.get("to")))
+    report = reports.build(reports.scope_locations(request.location, scope), first, last)
+    export = request.GET.get("export")
+    if export in ("people", "shifts"):
+        body = reports.people_csv(report) if export == "people" else reports.shifts_csv(report)
+        response = HttpResponse(body, content_type="text/csv")
+        name = f"tips-{export}-{first.isoformat()}-to-{last.isoformat()}.csv"
+        response["Content-Disposition"] = f'attachment; filename="{name}"'
+        return response
+    return render(request, "tips/reports.html", {
+        "report": report, "periods": reports.PERIODS, "period": period, "scope": scope,
+        "query": request.GET.urlencode(),
+    })
+
+
+# --- Messages from staff ------------------------------------------------------
+@login_required
+def messages_page(request):
+    from .models import Message
+    if request.method == "POST":
+        msg = get_object_or_404(Message, pk=request.POST.get("message"), location=request.location)
+        msg.reply = request.POST.get("reply", "").strip()[:1000]
+        msg.resolved_at = timezone.now()
+        msg.resolved_by = request.user.get_username()
+        msg.save()
+        Change.log(request, f"Resolved {msg.staff.name}'s message" + (f" about the {msg.night}" if msg.night else ""))
+        messages.success(request, f"Resolved. {msg.staff.name} sees your reply on their tips page.")
+        return redirect("messages_page")
+    qs = Message.objects.filter(location=request.location).select_related("staff", "night")
+    return render(request, "tips/messages.html", {
+        "open": [m for m in qs if m.is_open], "resolved": [m for m in qs if not m.is_open][:40],
     })
 
 
@@ -644,6 +724,7 @@ def location_add(request):
     location = Location.objects.create(name=name, slug=Location.new_slug(name), business_type=business_type,
                                        timezone=request.location.timezone)
     role_presets.apply_preset(location, business_type)
+    Change.log(request, f"Added the location {name}", location=location)
     request.session["location_id"] = location.pk
     messages.success(request, f"{name} added and selected. Add its team, tip rules and QR codes next.")
     return redirect("dashboard")
@@ -652,6 +733,8 @@ def location_add(request):
 # --- Staff's own page (secret link, no login) ----------------------------------
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
+    if request.method == "POST" and request.POST.get("text"):
+        return _staff_message(request, member, token)
     if request.method == "POST":
         try:
             if request.POST.get("clock") == "in":
@@ -667,8 +750,37 @@ def my_tips(request, token):
     running = hours_from.running_entry(member)
     shares = member.share_set.select_related("night__location").order_by("-night__date", "-night__created_at")[:30]
     locations = [m.location for m in member.memberships.filter(active=True).select_related("location")]
-    return render(request, "tips/my_tips.html", {"member": member, "shares": shares, "member_locations": locations,
-                                                 "several": len(locations) > 1, "running": running})
+    shares = list(shares)
+    by_night = {}
+    for msg in member.messages.filter(night__isnull=False):
+        by_night.setdefault(msg.night_id, []).append(msg)
+    for share in shares:
+        share.night_messages = by_night.get(share.night_id, [])
+        share.paid = share.night.status == Night.Status.PAID
+    return render(request, "tips/my_tips.html", {
+        "member": member, "shares": shares, "member_locations": locations, "several": len(locations) > 1,
+        "running": running, "general_messages": member.messages.filter(night__isnull=True)[:10],
+    })
+
+
+def _staff_message(request, member, token):
+    from .models import Message
+    text = request.POST.get("text", "").strip()[:1000]
+    night = None
+    if request.POST.get("flag_night"):
+        night = Night.objects.filter(pk=request.POST["flag_night"], shares__staff=member).first()
+        location = night.location if night else None
+    else:
+        location = Location.objects.filter(pk=request.POST.get("location"), memberships__staff=member).first()
+    if not (text and location):
+        messages.error(request, "Please write a message.")
+        return redirect("my_tips", token=token)
+    Message.objects.create(staff=member, location=location, night=night, text=text)
+    if night and night.status == Night.Status.REVIEW and not night.hold:
+        night.hold = f"{member.name} flagged a problem."
+        night.save(update_fields=["hold"])
+    messages.success(request, "Sent. Your manager will see it" + (" before the money goes out." if night else "."))
+    return redirect("my_tips", token=token)
 
 
 # --- PayPal webhooks ----------------------------------------------------------

@@ -51,11 +51,40 @@
       </div>
       {% endif %}
       {% if s.explanation %}<hr><p style="margin:0;font-size:.85rem">{{ s.explanation }}</p>{% endif %}
+      {% for msg in s.night_messages %}
+      <hr><div class="flag-note"><strong>You wrote:</strong> {{ msg.text }}
+        {% if msg.reply %}<br><strong>Manager:</strong> {{ msg.reply }}{% endif %}
+        <span class="small">{% if msg.is_open %}Waiting for the manager{% else %}Resolved{% endif %}</span></div>
+      {% endfor %}
+      {% if not s.paid %}
+      <details class="flag">
+        <summary>Something wrong with this one?</summary>
+        <form method="post">{% csrf_token %}<input type="hidden" name="flag_night" value="{{ s.night_id }}">
+          <textarea name="text" maxlength="1000" required rows="3" placeholder="e.g. I worked 7 hours, not 6"></textarea>
+          <button class="btn btn-secondary small">Send to the manager</button>
+          <p class="small" style="margin:0">Your manager sees this before the money is sent.</p>
+        </form>
+      </details>
+      {% endif %}
     </div>
   </div>
   {% empty %}
   <div class="receipt-wrap" style="width:100%"><div class="receipt"><p style="margin:0;text-align:center">No tips yet. After the next close-out, your share and how it was calculated show up here.</p></div></div>
   {% endfor %}
+  {% if member_locations %}
+  <details class="flag general">
+    <summary>Message your manager</summary>
+    <form method="post">{% csrf_token %}
+      {% if several %}<select name="location" aria-label="Which location">{% for loc in member_locations %}<option value="{{ loc.pk }}">{{ loc.display_name }}</option>{% endfor %}</select>{% else %}<input type="hidden" name="location" value="{{ member_locations.0.pk }}">{% endif %}
+      <textarea name="text" maxlength="1000" required rows="3" placeholder="Anything about your tips or hours"></textarea>
+      <button class="btn btn-secondary small">Send</button>
+    </form>
+  </details>
+  {% for msg in general_messages %}
+  <div class="flag-note general"><strong>You wrote:</strong> {{ msg.text }}{% if msg.reply %}<br><strong>Manager:</strong> {{ msg.reply }}{% endif %}
+    <span class="small">{% if msg.is_open %}Waiting for the manager{% else %}Resolved{% endif %}</span></div>
+  {% endfor %}
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}

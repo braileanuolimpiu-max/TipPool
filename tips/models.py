@@ -26,6 +26,8 @@ class Location(models.Model):
         BOTH = "both", "Guests choose: the team or one person"
 
     tip_mode = models.CharField(max_length=10, choices=TipMode.choices, default=TipMode.POOL)
+    # automatic payouts wait this long after closing, so staff can flag a mistake first (0 = pay right away)
+    review_minutes = models.PositiveIntegerField(default=0)
     # at an automatic close with nobody on the roster and nobody clocked in: use everyone's usual week
     use_usual_schedule = models.BooleanField(default=False)
     # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
@@ -211,6 +213,8 @@ class Night(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     auto_closed = models.BooleanField(default=False)
+    # why an automatic payout was held back for the manager (empty = nothing to check)
+    hold = models.CharField(max_length=200, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -393,3 +397,45 @@ class CloseTime(models.Model):
     def after_midnight(self):
         """1:00 AM on a Friday service means Saturday 1:00 AM."""
         return self.time.hour < 6
+
+
+class Message(models.Model):
+    """A staff member flags a problem ("my hours are wrong") or writes to the manager."""
+
+    staff = models.ForeignKey(StaffMember, related_name="messages", on_delete=models.CASCADE)
+    location = models.ForeignKey(Location, related_name="messages", on_delete=models.CASCADE)
+    night = models.ForeignKey(Night, null=True, blank=True, related_name="messages", on_delete=models.SET_NULL)
+    text = models.TextField(max_length=1000)
+    created_at = models.DateTimeField(default=now)
+    reply = models.TextField(blank=True, max_length=1000)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def is_open(self):
+        return self.resolved_at is None
+
+
+class Change(models.Model):
+    """History: who changed what, and when (rules, hours, tips, team, settings, payouts)."""
+
+    location = models.ForeignKey(Location, null=True, blank=True, related_name="changes", on_delete=models.CASCADE)
+    who = models.CharField(max_length=150)
+    what = models.CharField(max_length=300)
+    at = models.DateTimeField(default=now)
+
+    class Meta:
+        ordering = ["-at", "-pk"]
+
+    @classmethod
+    def log(cls, request_or_who, what, location=None):
+        if hasattr(request_or_who, "user"):
+            request = request_or_who
+            who = request.user.get_username() if request.user.is_authenticated else "someone"
+            location = location or getattr(request, "location", None)
+        else:
+            who = request_or_who
+        return cls.objects.create(location=location, who=who[:150], what=what[:300])

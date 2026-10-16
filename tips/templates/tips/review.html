@@ -10,6 +10,10 @@
 </header>
 {% include "tips/_stepper.html" with step=2 %}
 
+{% if flags %}<div class="flash warning"><strong>Check before paying.</strong>
+  {% for f in flags %}{{ f.staff.name }} wrote: "{{ f.text }}"{% if not forloop.last %} · {% endif %}{% endfor %}
+  <a href="{% url 'messages_page' %}">Answer in Messages</a></div>
+{% elif night.hold %}<div class="flash warning">{{ night.hold }} Automatic payout is on hold until you pay.</div>{% endif %}
 {% if paid_total != total %}<div class="flash error">The shares add up to ${{ paid_total }}, but ${{ total }} was collected. Go back to who worked and calculate again.</div>{% endif %}
 
 <div class="split-2 reverse">

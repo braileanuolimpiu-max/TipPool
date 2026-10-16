@@ -1,0 +1,45 @@
+{% extends "app.html" %}
+{% block title %}Messages{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Messages</h1><p>Problems your team flagged on their tips page, and anything they wrote to you. A flagged shift isn't paid automatically.</p></div>
+</header>
+<div class="split-2">
+  <section class="panel">
+    <div class="panel-head"><h2>Open</h2><span class="small muted">{{ open|length }}</span></div>
+    <ul class="rows msg-list">
+      {% for m in open %}
+      <li>
+        <span class="avatar" aria-hidden="true">{{ m.staff.name|slice:":1" }}</span>
+        <div style="flex:1;min-width:0">
+          <strong>{{ m.staff.name }}</strong> <span class="small muted">{{ m.created_at|date:"D M j, g:i A" }}</span>
+          {% if m.night %}<div class="small"><a href="{% if m.night.status == 'paid' or m.night.status == 'paying' %}{% url 'payout_status' m.night.pk %}{% else %}{% url 'review' m.night.pk %}{% endif %}">About the {{ m.night.date|date:"l, M j" }} shift</a></div>{% endif %}
+          <p class="msg-text">{{ m.text }}</p>
+          <form method="post" class="stack" style="gap:8px">{% csrf_token %}<input type="hidden" name="message" value="{{ m.pk }}">
+            <textarea name="reply" rows="2" maxlength="1000" placeholder="Reply (they see it on their tips page)" aria-label="Reply to {{ m.staff.name }}"></textarea>
+            <div class="actions"><button class="btn btn-primary small" name="resolve">Reply and resolve</button>
+              {% if m.night and m.night.status != 'paid' and m.night.status != 'paying' %}<a class="small" href="{% url 'close_night_pk' m.night.pk %}">Fix the hours</a>{% endif %}</div>
+          </form>
+        </div>
+      </li>
+      {% empty %}
+      <li class="muted">Nothing open. When someone flags a problem, it shows up here.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Resolved</h2></div>
+    <ul class="rows msg-list">
+      {% for m in resolved %}
+      <li><div style="flex:1;min-width:0">
+        <strong>{{ m.staff.name }}</strong> <span class="small muted">{{ m.created_at|date:"M j" }}{% if m.night %} · {{ m.night.date|date:"D M j" }} shift{% endif %}</span>
+        <p class="msg-text muted">{{ m.text }}</p>
+        {% if m.reply %}<p class="msg-text small"><strong>{{ m.resolved_by }}:</strong> {{ m.reply }}</p>{% endif %}
+      </div></li>
+      {% empty %}
+      <li class="muted">Nothing yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}

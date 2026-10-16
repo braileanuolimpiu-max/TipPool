@@ -1,0 +1,75 @@
+{% extends "app.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Reports</h1><p>Tips per person and per shift, {{ report.first|date:"M j" }} to {{ report.last|date:"M j, Y" }}. Export for payroll or your accountant. Tips are taxable income for your team.</p></div>
+</header>
+
+<form method="get" class="panel report-filter">
+  <div class="panel-body">
+    <div><label for="period">Period</label>
+      <select id="period" name="period">{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="custom-dates"{% if period != "custom" %} hidden{% endif %}>
+      <div><label for="from">From</label><input type="date" id="from" name="from" value="{{ report.first|date:'Y-m-d' }}"></div>
+      <div><label for="to">To</label><input type="date" id="to" name="to" value="{{ report.last|date:'Y-m-d' }}"></div>
+    </div>
+    {% if locations|length > 1 %}
+    <div><label for="scope">Locations</label>
+      <select id="scope" name="scope"><option value="here">{{ location.display_name }}</option><option value="all" {% if scope == "all" %}selected{% endif %}>All locations</option></select></div>
+    {% endif %}
+    <button class="btn btn-primary">Show</button>
+  </div>
+</form>
+
+<section class="kpis" aria-label="Totals">
+  <div><b>${{ report.collected }}</b><span>tips collected</span></div>
+  <div><b>${{ report.paid_out }}</b><span>paid out</span></div>
+  <div><b>{{ report.shift_count }}</b><span>shift{{ report.shift_count|pluralize }}</span></div>
+  <div><b>{% if report.per_shift %}${{ report.per_shift }}{% else %}–{% endif %}</b><span>average per shift</span></div>
+  {% for label, amount in report.by_source %}<div class="minor"><b>${{ amount }}</b><span>{{ label }}</span></div>{% endfor %}
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Per person</h2>
+    <a class="btn btn-secondary small" href="?{{ query }}{% if query %}&{% endif %}export=people">Download CSV</a></div>
+  {% if report.people %}
+  <div class="table-wrap"><table class="data">
+    <thead><tr><th>Name</th><th>Role</th><th class="r">Shifts</th><th class="r">Hours</th><th class="r">Shared</th><th class="r">Personal</th><th class="r">Total</th><th class="r">Shared / hour</th></tr></thead>
+    <tbody>
+    {% for p in report.people %}
+      <tr><td><strong>{{ p.name }}</strong></td><td class="muted">{{ p.roles }}</td><td class="r">{{ p.shifts }}</td><td class="r">{{ p.hours|floatformat:"-2" }}</td>
+        <td class="r">${{ p.pool }}</td><td class="r">{% if p.personal %}${{ p.personal }}{% else %}–{% endif %}</td><td class="r"><strong>${{ p.total }}</strong></td>
+        <td class="r">{% if p.per_hour %}${{ p.per_hour }}{% else %}–{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div class="panel-body"><p class="muted" style="margin:0">No closed shifts in this period.</p></div>
+  {% endif %}
+</section>
+
+<section class="panel" style="margin-top:22px">
+  <div class="panel-head"><h2>Per shift</h2>
+    <a class="btn btn-secondary small" href="?{{ query }}{% if query %}&{% endif %}export=shifts">Download CSV</a></div>
+  {% if report.shifts %}
+  <div class="table-wrap"><table class="data">
+    <thead><tr><th>Shift</th>{% if report.several_locations %}<th>Location</th>{% endif %}<th class="r">Tips</th><th class="r">People paid</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for s in report.shifts %}
+      <tr><td>{{ s.date|date:"D, M j" }}</td>{% if report.several_locations %}<td>{{ s.location }}</td>{% endif %}<td class="r">${{ s.total }}</td><td class="r">{{ s.people }}</td><td class="muted">{{ s.status }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div class="panel-body"><p class="muted" style="margin:0">No closed shifts in this period.</p></div>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  const period = document.getElementById("period");
+  period.addEventListener("change", () => {
+    document.querySelector(".custom-dates").hidden = period.value !== "custom";
+  });
+</script>
+{% endblock %}

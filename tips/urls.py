@@ -14,6 +14,8 @@ urlpatterns = [
     # manager
     path("qr/", views.qr_page, name="qr_page"),
     path("history/", views.history, name="history"),
+    path("messages/", views.messages_page, name="messages_page"),
+    path("reports/", views.reports_page, name="reports"),
     path("clock/<int:pk>/out/", views.clock_out_for, name="clock_out_for"),
     path("settings/", views.settings_page, name="settings"),
     path("locations/switch/", views.location_switch, name="location_switch"),
