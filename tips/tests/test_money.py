@@ -109,8 +109,11 @@ class MoneyTests(TestCase):
         services.build_split(night, self.rules)
         with self.assertRaises(services.TipPoolError):
             services.pay_night(night)
-        self.assertContains(self.client.get(reverse("review", args=[night.pk])), "Not confirmed yet")
-        self.client.post(reverse("pay", args=[night.pk]), {"allow_unconfirmed": "on"})
+        self.assertContains(self.client.get(reverse("review", args=[night.pk])), "Sam hasn&#x27;t confirmed")
+        self.client.post(reverse("pay", args=[night.pk]))  # not ticked: refused
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.REVIEW)
+        self.client.post(reverse("pay", args=[night.pk]), {"checked": "on"})
         night.refresh_from_db()
         self.assertEqual(night.status, Night.Status.PAYING)
 

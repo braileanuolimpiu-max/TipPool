@@ -25,6 +25,7 @@ from . import ai, autoclose, hours as hours_from, roles as role_presets, service
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Shift,
                      StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required
+from .check import blocking as check_blocking
 from .middleware import public_location
 from .paypal import PayPalError, checkout_config, get_client, webhook_id_for
 
@@ -549,6 +550,7 @@ def review(request, pk):
         "fee_mode": business.fee_mode, "balance": balance,
         "balance_short": balance is not None and balance < paid_total,
         "unconfirmed": services.unconfirmed(shares),
+        "check": night.review_check, "stops": check_blocking(night) if night.status == Night.Status.REVIEW else [],
         "paid_total": paid_total,
         "paying_count": sum(1 for s in shares if s.amount > 0),
         "flags": night.messages.filter(resolved_at__isnull=True).select_related("staff"),
@@ -560,13 +562,18 @@ def review(request, pk):
 @require_POST
 def pay(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
-    allow = bool(request.POST.get("allow_unconfirmed"))
+    from . import check
+    stops = check.blocking(night)
+    allow = bool(request.POST.get("checked"))
+    if stops and not allow:
+        messages.error(request, "The close-out check found things to look at. Tick \"I checked these\" to pay anyway.")
+        return redirect("review", pk=pk)
     try:
         services.pay_night(night, allow_unconfirmed=allow)
         paid = sum((s.amount for s in night.shares.all()), Decimal("0"))
         Change.log(request, f"Paid the {night}: {request.business.symbol}{paid} to "
                             f"{night.shares.filter(amount__gt=0).count()} people"
-                            + (" (some hadn't confirmed where they're paid)" if allow else ""))
+                            + (" after checking: " + "; ".join(f["text"] for f in stops)[:150] if stops else ""))
         messages.success(request, "Payout sent to PayPal.")
     except services.TipPoolError as exc:
         messages.error(request, str(exc))

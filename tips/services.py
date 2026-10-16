@@ -226,6 +226,8 @@ def build_split(night, rule_set):
     night.rule_set = rule_set
     night.status = Night.Status.REVIEW
     night.save()
+    from . import check
+    check.run(night)
     return result
 
 

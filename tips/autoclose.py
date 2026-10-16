@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from django.db import transaction
 from django.utils import timezone
 
-from . import hours, services
+from . import check, hours, services
 from .alerts import raise_alert
 from .models import Change, CloseTime, Location, Night, TipRuleSet
 from .paypal import PayPalError
@@ -85,9 +85,10 @@ def pay_after_review(location, now):
     waiting = Night.objects.filter(location=location, status=Night.Status.REVIEW, auto_closed=True, hold="",
                                    closed_at__lte=now - timedelta(minutes=location.review_minutes))
     for night in waiting:
-        if night.messages.filter(resolved_at__isnull=True).exists():
-            hold(night, "Someone flagged a problem with this shift.")
-            results.append(f"{night}: held, a problem was flagged")
+        stops = check.blocking(night)
+        if stops:
+            hold(night, stops[0]["text"])
+            results.append(f"{night}: held, {stops[0]['text']}")
             continue
         try:
             services.pay_night(night)
@@ -138,6 +139,11 @@ def close_night(night, location):
         hold(night, f"The split couldn't be calculated: {exc}")
         return f"{night}: closed, split needs attention ({exc})"
 
+    night.refresh_from_db()
+    if not night.review_check.get("ok", True):
+        stops = [f["text"] for f in night.review_check.get("findings", []) if f["level"] == check.STOP]
+        hold(night, " ".join(stops) or night.review_check.get("summary", "The close-out check found something."))
+        return f"{night}: closed and split; the check wants a person to look before paying"
     if needs_check:
         hold(night, "Someone forgot to clock out. Check their hours.")
         return f"{night}: closed and split; someone forgot to clock out, so check the hours before paying"

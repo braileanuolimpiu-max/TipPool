@@ -523,3 +523,14 @@ hr.soft { border: 0; border-top: 1px solid var(--hair); margin: 4px 0; }
 .my-totals span { font-size: .75rem; color: var(--graphite); }
 .install-hint { width: 100%; max-width: 460px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .88rem; margin-bottom: 14px; }
 .install-hint[hidden] { display: none; }
+
+/* Close-out check */
+.check-panel.stop { border-color: var(--void); }
+.check-panel.warn { border-color: var(--wait); }
+.check-panel.ok { border-color: var(--go); }
+.check-summary { margin: 0; font-weight: 700; font-size: 1.02rem; }
+.check-list, .check-fixes { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: .9rem; }
+.check-fixes { list-style: disc; padding-left: 18px; margin-top: 4px; }
+.check-list .tag { font: 700 .68rem/1.5 var(--mono); text-transform: uppercase; border-radius: 3px; padding: 0 5px; margin-right: 6px; }
+.check-list .stop .tag { background: var(--void-soft); color: var(--void); }
+.check-list .warn .tag { background: var(--wait-soft); color: var(--wait); }
