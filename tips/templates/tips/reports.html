@@ -14,7 +14,14 @@
       <button class="btn btn-primary">Ask</button>
     </div>
     {% if asked %}
-    <div class="answer" role="status"><p>{{ asked.answer|linebreaksbr }}</p><span class="small muted">{% if asked.by == "Claude" %}Claude, from your closed shifts{% else %}Calculated from your closed shifts{% endif %}</span></div>
+    <div class="answer" role="status"><p>{{ asked.answer|linebreaksbr }}</p><span class="small muted" style="display:block">{% if asked.proposal %}Nothing happens until you confirm.{% elif asked.by == "Claude" %}Claude, from your numbers{% else %}Calculated from your numbers{% endif %}</span>
+      {% if asked.proposal %}
+      <form method="post" action="{% url 'ask_confirm' %}" class="actions" style="margin-top:12px;display:flex;width:100%">{% csrf_token %}
+        <input type="hidden" name="token" value="{{ asked.proposal.token }}">
+        <button class="btn btn-primary" aria-label="Confirm: {{ asked.proposal.text }}">Confirm</button>
+        <a class="btn btn-quiet" href="{% url 'reports' %}">Cancel</a>
+      </form>
+      {% endif %}</div>
     {% else %}
     <div class="actions">{% for e in examples %}<a class="chip-link" href="?q={{ e|urlencode }}{% if scope == 'all' %}&scope=all{% endif %}">{{ e }}</a>{% endfor %}</div>
     {% endif %}

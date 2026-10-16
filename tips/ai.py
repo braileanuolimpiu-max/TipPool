@@ -11,6 +11,7 @@ AI_MODE=claude -> real Claude API (needs ANTHROPIC_API_KEY)
 Important: the AI never decides amounts. It writes the rules; split.py does the math.
 """
 import base64
+import os
 import logging
 import re
 from typing import Literal, Optional  # noqa: F401
@@ -315,6 +316,8 @@ def _claude_parse(system, content, output_model, effort="medium"):
     except ImportError as exc:  # pragma: no cover
         raise AIError("The anthropic package is not installed.") from exc
 
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise AIError("The Claude API key is missing (ANTHROPIC_API_KEY).")
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
     try:
         response = client.messages.parse(

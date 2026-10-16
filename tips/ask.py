@@ -8,24 +8,39 @@ The numbers always come from reports.py (plain sums). The AI only reads and expl
 import calendar
 import re
 from datetime import date, timedelta
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field
 
-from . import ai, reports
+from . import actions, ai, reports
 from .roles import plural
 
 EXAMPLES = [
     "Who earned the most this month?",
     "How much did servers make last week?",
     "What were our total tips this year?",
-    "How much did Maria make last month?",
+    "Pay yesterday's shift",
+    "Add $40 cash tips",
 ]
 
 MONTHS = {name.lower(): i for i, name in enumerate(calendar.month_name) if name}
 MONTHS.update({name.lower(): i for i, name in enumerate(calendar.month_abbr) if name})
 
 
+class ActionOut(BaseModel):
+    kind: Literal["pay_shift", "set_week", "add_tip"]
+    shift_date: Optional[str] = Field(default=None, description="YYYY-MM-DD of the shift, if one is meant")
+    person: Optional[str] = Field(default=None, description="For set_week: the person's name")
+    week: Optional[dict[str, float]] = Field(default=None, description="For set_week: hours per weekday, "
+                                             "keys '0'..'6' (0 = Monday), only the days they work")
+    amount: Optional[float] = Field(default=None, description="For add_tip")
+    source: Optional[Literal["card", "cash"]] = None
+
+
 class AnswerOut(BaseModel):
     answer: str = Field(description="The answer in 1-4 short plain sentences, or a short list. Exact numbers.")
+    action: Optional[ActionOut] = Field(default=None, description="Only when the manager asks you to DO one of "
+                                        "the actions. It is shown to them to confirm; never say it's done.")
 
 
 ASK_SYSTEM = """You answer a manager's questions about their team's tips, using ONLY the data given.
@@ -33,31 +48,61 @@ ASK_SYSTEM = """You answer a manager's questions about their team's tips, using 
 - If the data can't answer the question, say so in one sentence and say what's missing.
 - Be short: 1-4 plain sentences, or a short list of up to 6 lines.
 - "Shared" = from the tip pool under the rules; "personal" = tips guests left for one person by name.
-- You may point out something notable (e.g. a big change), but don't give legal or tax advice."""
+- You may point out something notable (e.g. a big change), but don't give legal or tax advice.
+- You can propose ONE action when asked to do something: pay a shift that is ready, set someone's usual
+  week, or add card/cash tips. Fill "action" and say in "answer" what will happen once they confirm."""
 
 
 # ---------------------------------------------------------------------------
-def answer(question, locations, today):
+def answer(question, locations, today, location=None, user=None):
+    """Answer a question, or propose an action to confirm (only for `location`, by `user`)."""
     question = (question or "").strip()[:300]
     if not question:
         return None
     if ai.mode() == "claude":
         try:
-            content = [{"type": "text", "text": _data_summary(locations, today) + "\n\nQuestion: " + question}]
+            content = [{"type": "text", "text": _data_summary(locations, today)
+                        + (_waiting(location) if location else "") + "\n\nQuestion: " + question}]
             out = ai._claude_parse(ASK_SYSTEM, content, AnswerOut, effort="low")
-            return {"answer": out.answer, "by": "Claude"}
+            result = {"answer": out.answer, "by": "Claude"}
+            if out.action and location and user:
+                result.update(_proposal(out.action.kind, out.action.model_dump(exclude_none=True), location, user))
+            return result
         except ai.AIError as exc:
             return {"answer": f"{exc} Here's what I can work out offline: " + _offline(question, locations, today),
                     "by": "offline"}
+    parsed = actions.parse(question, today) if location and user else None
+    if parsed:
+        return {"by": "offline", **_proposal(parsed[0], parsed[1], location, user)}
     return {"answer": _offline(question, locations, today), "by": "offline"}
 
 
-def _money(value):
-    return f"${value:,.2f}"
+def _proposal(kind, params, location, user):
+    try:
+        proposal = actions.propose(kind, params, location, user)
+        return {"answer": f"{proposal['text']} Confirm below to do it.", "proposal": proposal}
+    except actions.ActionError as exc:
+        return {"answer": str(exc)}
+
+
+def _waiting(location):
+    from .models import Night
+    rows = Night.objects.filter(location=location, status__in=[Night.Status.CLOSED, Night.Status.REVIEW])
+    team = ", ".join(m.staff.name for m in location.memberships.filter(active=True).select_related("staff"))
+    lines = ["", f"## Now at {location.display_name}", f"Team: {team or 'nobody yet'}"]
+    lines += [f"- shift {n.date.isoformat()} ({n.date:%A}): {n.get_status_display()}, "
+              f"{location.business.symbol}{n.tip_total}" for n in rows]
+    return "\n".join(lines)
+
+
+def _money_in(locations):
+    symbol = locations[0].business.symbol if locations else "$"
+    return lambda value: f"{symbol}{value:,.2f}"
 
 
 # --- data for Claude ------------------------------------------------------
 def _data_summary(locations, today):
+    _money = _money_in(locations)
     lines = [f"Today is {today:%A, %B %d, %Y}. Locations: " + ", ".join(l.display_name for l in locations) + "."]
     first_of_month = today.replace(day=1)
     months = []
@@ -111,6 +156,7 @@ def _period(question, today):
 
 
 def _offline(question, locations, today):
+    _money = _money_in(locations)
     first, last, when = _period(question, today)
     r = reports.build(locations, first, last)
     q = question.lower()

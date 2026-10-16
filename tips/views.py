@@ -810,7 +810,8 @@ def reports_page(request):
         return response
     from . import ask
     question = request.GET.get("q", "").strip()
-    asked = ask.answer(question, reports.scope_locations(request, scope), today) if question else None
+    asked = ask.answer(question, reports.scope_locations(request, scope), today,
+                       location=request.location, user=request.user) if question else None
     params = request.GET.copy()
     params.pop("q", None)
     return render(request, "tips/reports.html", {
@@ -818,6 +819,17 @@ def reports_page(request):
         "query": params.urlencode(), "question": question, "asked": asked, "examples": ask.EXAMPLES,
         "ai_mode": ai.mode(),
     })
+
+
+@manager_required
+@require_POST
+def ask_confirm(request):
+    from . import actions
+    try:
+        messages.success(request, actions.execute(request.POST.get("token", ""), request))
+    except actions.ActionError as exc:
+        messages.error(request, str(exc))
+    return redirect("reports")
 
 
 # --- Messages from staff ------------------------------------------------------

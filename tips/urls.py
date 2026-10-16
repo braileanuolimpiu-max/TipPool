@@ -24,6 +24,7 @@ urlpatterns = [
     path("history/", views.history, name="history"),
     path("messages/", views.messages_page, name="messages_page"),
     path("reports/", views.reports_page, name="reports"),
+    path("reports/ask/confirm/", views.ask_confirm, name="ask_confirm"),
     path("overview/", views.overview, name="overview"),
     path("clock/<int:pk>/out/", views.clock_out_for, name="clock_out_for"),
     path("settings/", views.settings_page, name="settings"),
