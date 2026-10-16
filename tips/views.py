@@ -61,7 +61,7 @@ def dashboard(request):
             {"done": bool(location.name), "text": "Add your business name", "url": reverse("settings")},
             {"done": staff_count > 0, "text": "Add your team and their PayPal emails", "url": reverse("staff_list")},
             {"done": bool(rule_set), "text": "Describe how your house shares tips", "url": reverse("rules")},
-            {"done": any_tip_ever, "text": "Print table QR codes so guests can tip", "url": reverse("qr_page")},
+            {"done": any_tip_ever, "text": "Print your QR code so guests can tip", "url": reverse("qr_page")},
         ],
         "ai_mode": ai.mode(),
         "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever and bool(location.name),
@@ -181,32 +181,14 @@ def api_capture_order(request, order_id):
                          "redirect": reverse("tip_thanks") + f"?order={order_id}"})
 
 
-# --- QR code for tables -------------------------------------------------------
+# --- QR codes ----------------------------------------------------------------------
 @manager_required
 def qr_page(request):
     restaurant = request.location
-    if request.method == "POST":
-        try:
-            restaurant.table_count = max(0, min(200, int(request.POST.get("table_count", 0))))
-        except ValueError:
-            pass
-        spots = [sp.strip()[:20] for sp in request.POST.getlist("spots") if sp.strip()]
-        extra = request.POST.get("new_spot", "").strip()[:20]
-        if extra:
-            spots.append(extra)
-        restaurant.spots = list(dict.fromkeys(spots))[:24]  # keep order, drop duplicates
-        restaurant.save()
-        Change.log(request, f"Table codes: {restaurant.table_count} tables" + (f", {', '.join(restaurant.spots)}" if restaurant.spots else ""))
-        messages.success(request, "Table codes updated.")
-        return redirect("qr_page")
     base = request.build_absolute_uri(reverse("tip_page")) + f"?at={restaurant.slug}"
     return render(request, "tips/qr_page.html", {
         "restaurant": restaurant,
         "house_url": base,
-        "tables": [(f"Table {label}" if label.isdigit() else label, f"{base}&table={label}", label)
-                   for label in restaurant.table_labels],
-        "suggestions": Location.SPOT_SUGGESTIONS,
-        "custom_spots": [sp for sp in restaurant.spots if sp not in Location.SPOT_SUGGESTIONS],
         "people": [(m.staff.name, m.role_name, f"{base}&to={m.pk}", m.pk)
                    for m in Membership.objects.filter(location=restaurant, active=True).select_related("staff")
                    ] if restaurant.tip_mode != Location.TipMode.POOL else [],

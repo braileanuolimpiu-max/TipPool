@@ -86,12 +86,7 @@ class Location(models.Model):
     tip_message = models.CharField(max_length=160, blank=True, help_text="A line for guests on the tip page")
     # at an automatic close with nobody on the roster and nobody clocked in: use everyone's usual week
     use_usual_schedule = models.BooleanField(default=False)
-    # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
-    table_count = models.PositiveSmallIntegerField(default=0)
-    spots = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(default=now)
-
-    SPOT_SUGGESTIONS = ["Bar", "Patio", "Counter", "Takeout"]
 
     class Meta:
         ordering = ["created_at", "pk"]
@@ -110,10 +105,6 @@ class Location(models.Model):
         if self.tip_style and len(self.tip_values) == 4:
             return self.tip_style, list(self.tip_values)
         return tip_buttons_for(self.business_type)
-
-    @property
-    def table_labels(self):
-        return [str(n) for n in range(1, self.table_count + 1)] + list(self.spots)
 
     @classmethod
     def default(cls):

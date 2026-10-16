@@ -4,94 +4,54 @@
 <header class="page-head no-print">
   <div>
     <h1>QR codes for tipping</h1>
-    <p>Print them for tables, the check presenter or the counter, or open one full screen on a phone or tablet. Every code feeds the same tip pool; a table code also records which table the tip came from.</p>
+    <p>{% if restaurant.tip_mode == "pool" %}One code is all you need: every tip goes to the same pool, so print as many copies as you have tables, counters or check presenters.{% elif restaurant.tip_mode == "personal" %}Give each person their own code for their station, chair or name badge. The shared code lets guests pick the person themselves.{% else %}Guests choose "the whole team" or one person on the tip page. Use the shared code everywhere, and personal codes for anyone who wants their own.{% endif %}</p>
   </div>
 </header>
 
 {% if not restaurant_named %}
-<div class="flash warning no-print">Your cards say "Your restaurant" until you <a href="{% url 'settings' %}">add your business name</a>.</div>
+<div class="flash warning no-print">Your cards say "Your business" until you <a href="{% url 'settings' %}">add your business name</a>.</div>
 {% endif %}
 
-<div class="qr-setup no-print">
-  <section class="panel">
-    <div class="panel-head"><h2>Whole business</h2></div>
-    <div class="panel-body setup-body">
-      <div class="house-row">
-        <div class="tent tent-mini">
-          <p class="tent-place">{{ restaurant_name }}</p>
-          <p class="tent-label">Leave a tip</p>
-          <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
-          <p class="tent-note">PayPal, Venmo or card</p>
-        </div>
-        <p style="margin:0">One code for the counter, the check presenter or printed receipts. Enough for most places.</p>
+<section class="panel no-print">
+  <div class="panel-head"><h2>Shared code</h2><span class="small muted">same code on every card</span></div>
+  <div class="panel-body setup-body">
+    <div class="house-row">
+      <div class="tent tent-mini">
+        <p class="tent-place">{{ restaurant_name }}</p>
+        <p class="tent-label">Leave a tip</p>
+        <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
+        <p class="tent-note">PayPal, Venmo or card</p>
       </div>
-      <div class="setup-action actions">
-        <button type="button" class="btn btn-primary" data-print="house">Print this code</button>
-        <a class="btn btn-secondary" href="{% url 'qr_show' %}?at={{ restaurant.slug }}" target="_blank" rel="noopener">Show on screen</a>
-      </div>
-    </div>
-  </section>
-
-  <form method="post" class="panel">{% csrf_token %}
-    <div class="panel-head"><h2>Each table</h2><span class="small muted">optional</span></div>
-    <div class="panel-body setup-body">
-      <div class="table-count-row">
-        <div>
-          <label for="table_count">How many tables?</label>
+      <div class="stack" style="gap:10px">
+        <p style="margin:0">{% if restaurant.tip_mode == "pool" %}Tips are shared by the team under your rules, so it doesn't matter where the card sits.{% elif restaurant.tip_mode == "personal" %}Guests pick who served them from a list of today's team.{% else %}Guests pick "the whole team" or one person.{% endif %}</p>
+        <div><label for="copies">Copies to print</label>
           <div class="counter-input">
-            <button type="button" class="btn btn-secondary" data-step="-1" aria-label="One table less">−</button>
-            <input type="number" id="table_count" name="table_count" min="0" max="200" value="{{ restaurant.table_count }}" inputmode="numeric">
-            <button type="button" class="btn btn-secondary" data-step="1" aria-label="One table more">+</button>
+            <button type="button" class="btn btn-secondary" data-step="-1" aria-label="One copy less">−</button>
+            <input type="number" id="copies" min="1" max="60" value="4" inputmode="numeric">
+            <button type="button" class="btn btn-secondary" data-step="1" aria-label="One copy more">+</button>
           </div>
-        </div>
-        <p class="hint" style="margin:0">{% if restaurant.table_count %}Cards are numbered Table 1 to Table {{ restaurant.table_count }}.{% else %}Leave at 0 if you don't number your tables.{% endif %}</p>
+          <p class="hint">Cut them out, fold them as table tents, or slip one into each check presenter.</p></div>
       </div>
-      <fieldset class="chips">
-        <legend>Other spots guests tip from</legend>
-        {% for spot in suggestions %}
-        <label class="chip"><input type="checkbox" name="spots" value="{{ spot }}" {% if spot in restaurant.spots %}checked{% endif %}><span>{{ spot }}</span></label>
-        {% endfor %}
-        {% for spot in custom_spots %}
-        <label class="chip"><input type="checkbox" name="spots" value="{{ spot }}" checked><span>{{ spot }}</span></label>
-        {% endfor %}
-        <input type="text" name="new_spot" placeholder="Add another, e.g. Rooftop" maxlength="20" aria-label="Add another spot" class="chip-input">
-      </fieldset>
-      <div class="setup-action"><button class="btn btn-primary">Make table cards</button></div>
     </div>
-  </form>
-</div>
-
-<!-- printable: the house card -->
-<div class="print-house print-only">
-  <div class="tent tent-large">
-    <p class="tent-place">{{ restaurant_name }}</p>
-    <p class="tent-label">Leave a tip</p>
-    <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="">
-    <p class="tent-how">Scan with your phone camera. Pay with PayPal, Venmo or card.</p>
-    <p class="tent-note">Shared with everyone who served you</p>
-  </div>
-</div>
-
-{% if tables %}
-<section class="print-tables">
-  <div class="row-head no-print">
-    <h2>{{ tables|length }} table card{{ tables|pluralize }}</h2>
-    <button type="button" class="btn btn-secondary" data-print="tables">Print table cards</button>
-  </div>
-  <div class="tent-grid">
-    {% for label, url, raw in tables %}
-    <div class="tent">
-      <p class="tent-place">{{ restaurant_name }}</p>
-      <p class="tent-label"><span class="hl">{{ label }}</span></p>
-      <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code to tip at {{ label }}" loading="lazy">
-      <p class="tent-how">Scan to leave a tip</p>
-      <p class="tent-note">PayPal, Venmo or card</p>
-      <a class="tent-show no-print" href="{% url 'qr_show' %}?at={{ restaurant.slug }}&table={{ raw|urlencode }}" target="_blank" rel="noopener">Show on screen</a>
+    <div class="setup-action actions">
+      <button type="button" class="btn btn-primary" data-print="house">Print cards</button>
+      <a class="btn btn-secondary" href="{% url 'qr_show' %}?at={{ restaurant.slug }}" target="_blank" rel="noopener">Show on screen</a>
     </div>
-    {% endfor %}
   </div>
 </section>
-{% endif %}
+
+<!-- printable: N copies of the shared card -->
+<section class="print-house print-only">
+  <div class="tent-grid" id="house-copies">
+    <div class="tent">
+      <p class="tent-place">{{ restaurant_name }}</p>
+      <p class="tent-label"><span class="hl">Leave a tip</span></p>
+      <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="">
+      <p class="tent-how">Scan with your phone camera</p>
+      <p class="tent-note">{% if restaurant.tip_mode == "pool" %}Shared with the whole team · {% endif %}PayPal, Venmo or card</p>
+    </div>
+  </div>
+</section>
 
 {% if people %}
 <section class="print-people">
@@ -99,7 +59,7 @@
     <h2>Personal codes</h2>
     <button type="button" class="btn btn-secondary" data-print="people">Print personal cards</button>
   </div>
-  <p class="muted no-print" style="margin:-6px 0 14px">One for each person's station, mirror or name badge. A guest who scans it tips that person directly.</p>
+  <p class="muted no-print" style="margin:-6px 0 14px">One for each person's station, mirror or name badge. A guest who scans it tips that person directly, and they get the whole tip.</p>
   <div class="tent-grid">
     {% for name, role, url, pk in people %}
     <div class="tent">
@@ -113,16 +73,25 @@
     {% endfor %}
   </div>
 </section>
+{% elif restaurant.tip_mode == "pool" %}
+<p class="muted no-print" style="margin-top:22px">Want each person to have their own code, e.g. a salon or delivery team? Choose personal tips in <a href="{% url 'settings' %}">Settings → How tips are shared</a>.</p>
 {% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
-  const count = document.getElementById("table_count");
+  const copies = document.getElementById("copies");
   document.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", () => {
-    count.value = Math.max(0, Math.min(200, (parseInt(count.value, 10) || 0) + Number(b.dataset.step)));
+    copies.value = Math.max(1, Math.min(60, (parseInt(copies.value, 10) || 1) + Number(b.dataset.step)));
   }));
-  // print only the cards the manager asked for
+  // print only the cards the manager asked for; the shared card is repeated N times
   document.querySelectorAll("[data-print]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.print === "house") {
+      const grid = document.getElementById("house-copies");
+      const card = grid.firstElementChild;
+      grid.replaceChildren(card);
+      const n = Math.max(1, Math.min(60, parseInt(copies.value, 10) || 1));
+      for (let i = 1; i < n; i++) grid.appendChild(card.cloneNode(true));
+    }
     document.body.dataset.print = b.dataset.print;
     window.print();
   }));
