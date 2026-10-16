@@ -10,6 +10,7 @@ MANAGER = ("Manager", "owner, supervisor, me, myself", True)
 
 PRESETS = {
     "restaurant": {
+        "tips": ("percent", [15, 18, 20, 25]),
         "label": "Restaurant",
         "roles": [
             ("Server", "waiter, waitress, waitstaff", False),
@@ -28,6 +29,7 @@ PRESETS = {
         ],
     },
     "cafe": {
+        "tips": ("amounts", [1, 2, 3, 5]),
         "label": "Café or coffee shop",
         "roles": [
             ("Barista", "", False),
@@ -42,6 +44,7 @@ PRESETS = {
         ],
     },
     "bar": {
+        "tips": ("amounts", [1, 2, 5, 10]),
         "label": "Bar or club",
         "roles": [
             ("Bartender", "bar staff, mixologist", False),
@@ -56,6 +59,7 @@ PRESETS = {
         ],
     },
     "salon": {
+        "tips": ("percent", [15, 20, 25, 30]),
         "label": "Salon or spa",
         "roles": [
             ("Stylist", "hairdresser, hair stylist, barber, colorist", False),
@@ -71,6 +75,7 @@ PRESETS = {
         ],
     },
     "hotel": {
+        "tips": ("amounts", [5, 10, 20, 50]),
         "label": "Hotel",
         "roles": [
             ("Housekeeper", "housekeeping, room attendant, maid", False),
@@ -86,6 +91,7 @@ PRESETS = {
         ],
     },
     "delivery": {
+        "tips": ("amounts", [3, 5, 10, 15]),
         "label": "Delivery or moving",
         "roles": [
             ("Driver", "courier, delivery driver", False),
@@ -101,6 +107,13 @@ PRESETS = {
 }
 
 GENERIC_EXAMPLES = [("Everyone by hours", "Everyone shares the tips by hours worked.")]
+GENERIC_TIPS = ("amounts", [5, 10, 15, 20])
+
+
+def tip_buttons_for(business_type):
+    """The usual tip buttons for a kind of business: ("percent" | "amounts", [values])."""
+    preset = PRESETS.get(business_type)
+    return preset["tips"] if preset else GENERIC_TIPS
 
 
 def examples_for(business_type):

@@ -28,6 +28,14 @@ class Location(models.Model):
     tip_mode = models.CharField(max_length=10, choices=TipMode.choices, default=TipMode.POOL)
     # automatic payouts wait this long after closing, so staff can flag a mistake first (0 = pay right away)
     review_minutes = models.PositiveIntegerField(default=0)
+    class TipStyle(models.TextChoices):
+        AMOUNTS = "amounts", "Fixed amounts ($5, $10...)"
+        PERCENT = "percent", "Percent of the bill (15%, 20%...)"
+
+    # tip buttons on the guest page; empty = the usual for this kind of business
+    tip_style = models.CharField(max_length=10, choices=TipStyle.choices, blank=True)
+    tip_values = models.JSONField(default=list, blank=True)
+    tip_message = models.CharField(max_length=160, blank=True, help_text="A line for guests on the tip page")
     # at an automatic close with nobody on the roster and nobody clocked in: use everyone's usual week
     use_usual_schedule = models.BooleanField(default=False)
     # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
@@ -46,6 +54,14 @@ class Location(models.Model):
     @property
     def display_name(self):
         return self.name or "Your business"
+
+    @property
+    def tip_buttons(self):
+        """("percent" | "amounts", [4 numbers]) for the guest tip page."""
+        from .roles import tip_buttons_for
+        if self.tip_style and len(self.tip_values) == 4:
+            return self.tip_style, list(self.tip_values)
+        return tip_buttons_for(self.business_type)
 
     @property
     def table_labels(self):

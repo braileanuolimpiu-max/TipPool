@@ -47,6 +47,25 @@
     </section>
 
     <section class="panel">
+      <div class="panel-head"><h2>Tip page</h2><a class="small" href="{% url 'tip_page' %}?at={{ restaurant.slug }}" target="_blank" rel="noopener">See it</a></div>
+      <div class="panel-body stack">
+        <label class="choice"><input type="radio" name="tip_style" value="" {% if not restaurant.tip_style %}checked{% endif %}>
+          <span><strong>The usual for a {{ type_label }}</strong>
+            <span class="small muted">{% if usual_tips.0 == "percent" %}{% for v in usual_tips.1 %}{{ v }}%{% if not forloop.last %}, {% endif %}{% endfor %} of the bill{% else %}{% for v in usual_tips.1 %}${{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></span></label>
+        {% for value, label in tip_styles %}
+        <label class="choice"><input type="radio" name="tip_style" value="{{ value }}" {% if restaurant.tip_style == value %}checked{% endif %}>
+          <span><strong>{{ label }}</strong></span></label>
+        {% endfor %}
+        <div class="tip-values" aria-label="Your four tip buttons">
+          {% for v in tip_values_now %}<input type="number" name="tip_value_{{ forloop.counter0 }}" value="{{ v }}" min="1" max="500" aria-label="Tip button {{ forloop.counter }}">{% endfor %}
+        </div>
+        <p class="hint" style="margin:0">Your four buttons, used when you choose amounts or percent above. Guests can always type their own amount.</p>
+        <div><label for="tip_message">A line for guests <span class="muted">(optional)</span></label>
+          <input type="text" id="tip_message" name="tip_message" maxlength="160" value="{{ restaurant.tip_message }}" placeholder="e.g. Thanks for visiting! See you soon."></div>
+      </div>
+    </section>
+
+    <section class="panel">
       <div class="panel-head"><h2>How tips are shared</h2></div>
       <div class="panel-body stack">
         {% for value, label in tip_modes %}

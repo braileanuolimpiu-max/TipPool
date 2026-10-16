@@ -5,7 +5,23 @@
   <div><h1>Reports</h1><p>Tips per person and per shift, {{ report.first|date:"M j" }} to {{ report.last|date:"M j, Y" }}. Export for payroll or your accountant. Tips are taxable income for your team.</p></div>
 </header>
 
-<form method="get" class="panel report-filter">
+<form method="get" class="panel ask" role="search">
+  <div class="panel-head"><h2>Ask about your tips</h2><span class="small muted">{% if ai_mode == "claude" %}Answered by Claude from your numbers{% else %}Offline answers (turn on Claude for any question){% endif %}</span></div>
+  <div class="panel-body stack">
+    <div class="ask-row">
+      <input type="search" name="q" value="{{ question }}" maxlength="300" placeholder="e.g. How much did servers make last week?" aria-label="Your question">
+      {% if scope == "all" %}<input type="hidden" name="scope" value="all">{% endif %}
+      <button class="btn btn-primary">Ask</button>
+    </div>
+    {% if asked %}
+    <div class="answer" role="status"><p>{{ asked.answer|linebreaksbr }}</p><span class="small muted">{% if asked.by == "Claude" %}Claude, from your closed shifts{% else %}Calculated from your closed shifts{% endif %}</span></div>
+    {% else %}
+    <div class="actions">{% for e in examples %}<a class="chip-link" href="?q={{ e|urlencode }}{% if scope == 'all' %}&scope=all{% endif %}">{{ e }}</a>{% endfor %}</div>
+    {% endif %}
+  </div>
+</form>
+
+<form method="get" class="panel report-filter" style="margin-top:22px">
   <div class="panel-body">
     <div><label for="period">Period</label>
       <select id="period" name="period">{% for value, label in periods %}<option value="{{ value }}" {% if value == period %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>

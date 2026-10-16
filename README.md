@@ -14,17 +14,26 @@ Built for the PayPal AI Hackathon 2026 ("Build What's Next with PayPal and AI").
    the rest goes to servers by hours."* AI converts it into structured rules and flags problems,
    e.g. a manager taking from the pool (not allowed under US federal law, FLSA).
 2. **Tips in (PayPal Orders API v2 + JS SDK v6).** Each table has a QR code that opens a tip page
-   with PayPal and Venmo buttons. Orders are created and captured on the server.
-3. **Who worked.** The manager ticks who worked and their hours, or uploads a photo of the
-   schedule and AI reads it.
-4. **The split.** Plain Python does the money math in exact cents (the AI never decides amounts),
+   with PayPal and Venmo buttons. Orders are created and captured on the server. The tip buttons fit
+   the business: % of the bill for restaurants and salons, small amounts for cafés.
+3. **Card and cash tips too.** At close-out the manager adds the card-machine and cash tips, so the
+   whole day's tips are shared, not only the QR ones.
+4. **Who worked, without typing.** Staff clock in and out from their own tips page. Each person can
+   also have a usual week (Mon–Fri 6h). The close-out fills itself in; the manager fixes exceptions.
+5. **The split.** Plain Python does the money math in exact cents (the AI never decides amounts),
    so the shares always add up to the total. AI writes a short explanation for every person.
-5. **Tips out (PayPal Payouts API).** One batch pays everyone straight to their PayPal account.
-   Status updates live from PayPal (polling + webhooks).
-6. **Your own roles.** Pick a business type (restaurant, café, bar, salon or spa, hotel, delivery) to get
-   its usual roles, or add your own (e.g. "Stylist", "Housekeeper"). Roles marked *manager or owner* never
-   get tips. The AI reads the rules using your roles.
-7. **Staff page.** Each person has a private link showing their tips and how each was calculated.
+6. **Team tips or personal tips.** Pooled (restaurants), personal (salons, delivery), or the guest
+   chooses. Personal tips go in full to that person, with personal QR codes for their station.
+7. **Tips out (PayPal Payouts API).** One batch pays everyone straight to their PayPal account.
+   Status updates live from PayPal (polling + webhooks). Automatic payouts can wait a review window.
+8. **Staff can flag a mistake** ("my hours are wrong") before the money goes out. A flagged shift
+   is never paid automatically; the manager answers in Messages.
+9. **Several locations, any kind of business.** Each location has its own roles (presets for
+   restaurant, café, bar, salon, hotel, delivery, or your own), rules, codes and closing times.
+   People can work at several and keep one tips page.
+10. **Reports and history.** Tips per person, per role and per shift, CSV export for payroll, and a
+    log of who changed what. **Ask about your tips** ("How much did bussers make last week?"): Claude
+    answers from your numbers.
 
 ## PayPal APIs used
 | API | Used for |
@@ -37,9 +46,9 @@ Built for the PayPal AI Hackathon 2026 ("Build What's Next with PayPal and AI").
 
 ## AI used
 - **Claude API** (`claude-opus-5-5`, structured outputs) for: reading tip rules, reading schedule
-  photos (vision), and writing per-person explanations.
-- `AI_MODE=mock` runs a free built-in rule parser and template explanations, so the app works
-  without an API key.
+  photos (vision), writing per-person explanations, and answering questions about your tips.
+- `AI_MODE=mock` runs a free built-in rule parser, template explanations and offline answers for
+  common questions, so the app works without an API key.
 
 ## Run it locally (sandbox)
 
@@ -67,7 +76,7 @@ python manage.py runserver 8765
 
 Open http://127.0.0.1:8765 and log in with `manager` / `tippool-demo`.
 
-**Try the full flow:** open `/tip/?table=4` → pay with a sandbox *personal* account → "Close the night"
+**Try the full flow:** open `/tip/?table=4` → pay with a sandbox *personal* account → "Close out"
 → tick who worked → review the split → "Approve & pay" → watch the payouts turn SUCCESS.
 
 ## Tests

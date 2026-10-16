@@ -12,6 +12,7 @@
         <p>{% if table %}Table {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
       </div>
       <hr>
+      {% if tip_message %}<p style="margin:0 0 10px;font-weight:700">{{ tip_message }}</p>{% endif %}
       {% if tip_mode == "pool" or not people %}
       <p style="margin:0">Thank you. Your tip is shared with the whole team who looked after you today.</p>
       {% else %}
@@ -24,9 +25,17 @@
       {% endif %}
       <hr>
       {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">No tip was taken. Choose an amount to try again.</p>{% endif %}
-      <div class="amounts" role="group" aria-label="Tip amount">
-        {% for p in presets %}<button type="button" class="amount" data-amount="{{ p }}" aria-pressed="{% if p == 10 %}true{% else %}false{% endif %}">${{ p }}</button>{% endfor %}
+      {% if tip_style == "percent" %}
+      <label for="bill">Your bill</label>
+      <input type="number" id="bill" min="1" max="10000" step="0.01" inputmode="decimal" placeholder="$ 0.00">
+      <div class="amounts" role="group" aria-label="Tip percent">
+        {% for p in presets %}<button type="button" class="amount pct" data-percent="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">{{ p }}%<small>–</small></button>{% endfor %}
       </div>
+      {% else %}
+      <div class="amounts" role="group" aria-label="Tip amount">
+        {% for p in presets %}<button type="button" class="amount" data-amount="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">${{ p }}</button>{% endfor %}
+      </div>
+      {% endif %}
       <label for="custom">Other amount</label>
       <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="$ 0.00">
       <div class="pay-buttons">
@@ -44,12 +53,17 @@
 {{ at|json_script:"at-data" }}
 {{ to|json_script:"to-data" }}
 {{ tip_mode|json_script:"mode-data" }}
+{{ default_pick|json_script:"pick-data" }}
+{{ tip_style|json_script:"style-data" }}
 <script>
   const CSRF = "{{ csrf_token }}";
   const TABLE = JSON.parse(document.getElementById("table-data").textContent);
   const AT = JSON.parse(document.getElementById("at-data").textContent);
   const statusEl = document.getElementById("status");
-  let amount = "10.00";
+  const STYLE = JSON.parse(document.getElementById("style-data").textContent);
+  const PICK = JSON.parse(document.getElementById("pick-data").textContent);
+  let amount = STYLE === "percent" ? "" : Number(PICK).toFixed(2);
+  let percent = STYLE === "percent" ? Number(PICK) : null;
   let to = JSON.parse(document.getElementById("to-data").textContent) || "";
   const MODE = JSON.parse(document.getElementById("mode-data").textContent);
 
@@ -61,19 +75,42 @@
   }));
 
   const amountButtons = document.querySelectorAll(".amount");
+  const bill = document.getElementById("bill");
+  // percent of the bill: each button shows its dollar amount (at least $1)
+  function fromPercent(p) {
+    const b = bill ? Number(bill.value) : 0;
+    return b > 0 ? Math.max(1, Math.round(b * p) / 100).toFixed(2) : "";
+  }
+  function refreshPercents() {
+    document.querySelectorAll(".amount.pct").forEach((btn) => {
+      const v = fromPercent(Number(btn.dataset.percent));
+      btn.querySelector("small").textContent = v ? "$" + v : "–";
+    });
+    if (percent !== null) amount = fromPercent(percent);
+  }
+  if (bill) bill.addEventListener("input", refreshPercents);
   amountButtons.forEach((btn) => btn.addEventListener("click", () => {
     amountButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
     btn.setAttribute("aria-pressed", "true");
     document.getElementById("custom").value = "";
-    amount = Number(btn.dataset.amount).toFixed(2);
+    if (btn.dataset.percent) {
+      percent = Number(btn.dataset.percent);
+      amount = fromPercent(percent);
+      if (!amount && bill) bill.focus();
+    } else {
+      percent = null;
+      amount = Number(btn.dataset.amount).toFixed(2);
+    }
   }));
   document.getElementById("custom").addEventListener("input", (e) => {
     amountButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
+    percent = null;
     amount = e.target.value ? Number(e.target.value).toFixed(2) : "";
   });
 
   // Our server creates the PayPal order, so the amount can't be tampered with in the browser
   async function createOrder() {
+    if (!amount && percent !== null) throw new Error("Enter your bill to tip a percent, or type an amount.");
     if (!amount || Number(amount) < 1) throw new Error("Please choose a tip amount.");
     if (MODE === "personal" && whoButtons.length && !to) throw new Error("Please choose who you'd like to tip.");
     const res = await fetch("{% url 'api_create_order' %}", {

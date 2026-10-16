@@ -58,6 +58,7 @@ def build(locations, first, last):
         tips_per_night[row["night_id"]] = row["total"].quantize(ZERO)
 
     people = {}
+    roles = {}
     shifts_people = defaultdict(int)
     paid_out = ZERO
     for share in Share.objects.filter(night_id__in=night_ids).select_related("staff", "night"):
@@ -72,8 +73,13 @@ def build(locations, first, last):
         p["hours"] += share.hours
         if share.hours:
             p["shifts"] += 1
-        if share.role:
-            p["roles"].add(role_names.get((share.night.location_id, share.role), share.role))
+        role_name = role_names.get((share.night.location_id, share.role), share.role) if share.role else ""
+        if role_name:
+            p["roles"].add(role_name)
+            r = roles.setdefault(role_name, {"name": role_name, "people": set(), "hours": ZERO, "total": ZERO})
+            r["people"].add(share.staff_id)
+            r["hours"] += share.hours
+            r["total"] += share.amount
         p["locations"].add(share.night.location_id)
         if share.night.status == Night.Status.PAID:
             p["paid"] += share.amount
@@ -88,6 +94,10 @@ def build(locations, first, last):
         people_rows.append(p)
     people_rows.sort(key=lambda p: (-p["total"], p["name"]))
 
+    role_rows = sorted(({**r, "people": len(r["people"]),
+                         "per_hour": (r["total"] / r["hours"]).quantize(ZERO) if r["hours"] else None}
+                        for r in roles.values()), key=lambda r: -r["total"])
+
     shift_rows = [{
         "night": n, "date": n.date, "location": n.location.display_name, "total": tips_per_night[n.pk],
         "people": shifts_people[n.pk], "status": n.get_status_display(),
@@ -99,7 +109,7 @@ def build(locations, first, last):
         "by_source": [(label, by_source[key]) for key, label in Tip.Source.choices],
         "shift_count": len(nights),
         "per_shift": (collected / len(nights)).quantize(ZERO) if nights else None,
-        "people": people_rows, "shifts": shift_rows,
+        "people": people_rows, "shifts": shift_rows, "roles": role_rows,
         "several_locations": len({n.location_id for n in nights}) > 1,
     }
 

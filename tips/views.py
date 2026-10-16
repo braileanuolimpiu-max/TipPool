@@ -24,8 +24,6 @@ from .paypal import PayPalError, get_client
 
 log = logging.getLogger("tips.views")
 
-TIP_PRESETS = [5, 10, 15, 20]
-
 
 # --- Manager dashboard -------------------------------------------------------
 def _sync_tips(night):
@@ -104,13 +102,17 @@ def tip_page(request):
         members = [m for m in members if not Role.objects.filter(location=location, key=m.default_role, no_tips=True).exists()]
         people = sorted(members, key=lambda m: (m.staff_id not in working, m.staff.name))
     to = request.GET.get("to", "")
+    style, values = location.tip_buttons
     return render(request, "tips/tip_page.html", {
         "at": location.slug,
+        "tip_style": style,
+        "presets": values,
+        "default_pick": values[1] if len(values) > 1 else values[0],
+        "tip_message": location.tip_message,
         "tip_mode": location.tip_mode,
         "people": people,
         "to": int(to) if to.isdigit() and any(m.pk == int(to) for m in people) else None,
         "cancelled": "cancelled" in request.GET,
-        "presets": TIP_PRESETS,
         "table": request.GET.get("table", "")[:20],
         "paypal_client_id": settings.PAYPAL_CLIENT_ID,
         "paypal_sdk_url": settings.PAYPAL_SDK_URL,
@@ -612,6 +614,19 @@ def settings_page(request):
         restaurant.use_usual_schedule = bool(request.POST.get("use_usual_schedule"))
         if request.POST.get("review_minutes", "").isdigit() and int(request.POST["review_minutes"]) in dict(REVIEW_CHOICES):
             restaurant.review_minutes = int(request.POST["review_minutes"])
+        restaurant.tip_message = request.POST.get("tip_message", "").strip()[:160]
+        style = request.POST.get("tip_style", "")
+        values = []
+        for i in range(4):
+            try:
+                values.append(int(Decimal(request.POST.get(f"tip_value_{i}", "") or "0")))
+            except InvalidOperation:
+                values.append(0)
+        limit = 100 if style == Location.TipStyle.PERCENT else 500
+        if style in Location.TipStyle.values and all(0 < v <= limit for v in values):
+            restaurant.tip_style, restaurant.tip_values = style, sorted(values)
+        elif style == "":
+            restaurant.tip_style, restaurant.tip_values = "", []
         if request.POST.get("tip_mode") in Location.TipMode.values:
             restaurant.tip_mode = request.POST["tip_mode"]
         if request.POST.get("after_close") in Location.AfterClose.values:
@@ -645,6 +660,10 @@ def settings_page(request):
         "restaurant": restaurant, "days": days, "timezones": TIMEZONES,
         "tip_modes": Location.TipMode.choices,
         "review_choices": REVIEW_CHOICES,
+        "tip_styles": Location.TipStyle.choices,
+        "tip_style_now": restaurant.tip_buttons[0], "tip_values_now": restaurant.tip_buttons[1],
+        "usual_tips": role_presets.tip_buttons_for(restaurant.business_type),
+        "type_label": role_presets.PRESETS.get(restaurant.business_type, {}).get("label", "business").lower(),
         "changes": Change.objects.filter(location=restaurant)[:200 if request.GET.get("all") else 12],
         "show_all_changes": bool(request.GET.get("all")),
         "after_choices": Location.AfterClose.choices, "next_close": autoclose.next_close(restaurant),
@@ -676,9 +695,15 @@ def reports_page(request):
         name = f"tips-{export}-{first.isoformat()}-to-{last.isoformat()}.csv"
         response["Content-Disposition"] = f'attachment; filename="{name}"'
         return response
+    from . import ask
+    question = request.GET.get("q", "").strip()
+    asked = ask.answer(question, reports.scope_locations(request.location, scope), today) if question else None
+    params = request.GET.copy()
+    params.pop("q", None)
     return render(request, "tips/reports.html", {
         "report": report, "periods": reports.PERIODS, "period": period, "scope": scope,
-        "query": request.GET.urlencode(),
+        "query": params.urlencode(), "question": question, "asked": asked, "examples": ask.EXAMPLES,
+        "ai_mode": ai.mode(),
     })
 
 
