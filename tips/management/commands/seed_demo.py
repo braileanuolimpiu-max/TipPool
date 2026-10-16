@@ -37,7 +37,7 @@ class Command(BaseCommand):
             if len(parts) != 3 or not parts[0]:
                 continue
             name, role, email = parts
-            if role not in Role.values:
+            if not Role.objects.filter(key=role).exists():
                 self.stderr.write(f"Skipping {name}: unknown role '{role}'")
                 continue
             # also accept one line per person in .env, e.g. MARIA_EMAIL=...

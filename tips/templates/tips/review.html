@@ -25,7 +25,7 @@
       <div class="lines roomy">
         {% for s in shares %}
         <div class="line">
-          <span class="what">{{ s.staff.name }}<small>{{ s.get_role_display }}, {{ s.hours|floatformat:"-2" }} h</small></span>
+          <span class="what">{{ s.staff.name }}<small>{{ s.role_name }}, {{ s.hours|floatformat:"-2" }} h</small></span>
           <span class="amt">${{ s.amount }}</span>
         </div>
         {% endfor %}

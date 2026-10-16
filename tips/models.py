@@ -5,15 +5,42 @@ from django.db import models
 from django.utils import timezone
 
 
-class Role(models.TextChoices):
-    SERVER = "server", "Server"
-    BARTENDER = "bartender", "Bartender"
-    BUSSER = "busser", "Busser"
-    HOST = "host", "Host"
-    RUNNER = "runner", "Food runner"
-    COOK = "cook", "Cook"
-    DISHWASHER = "dishwasher", "Dishwasher"
-    MANAGER = "manager", "Manager"
+class Role(models.Model):
+    """A job at this business (server, stylist, housekeeper...). The business sets its own list."""
+
+    # short id used in the tip rules and on past shifts; it never changes, even when the name does
+    key = models.SlugField(max_length=20, unique=True)
+    name = models.CharField(max_length=40)
+    aliases = models.CharField(max_length=200, blank=True,
+                               help_text="Other words for this role, comma separated (helps read the rules)")
+    no_tips = models.BooleanField(default=False, help_text="Managers and owners: never in the tip pool")
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "name"]
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def label(cls, key):
+        role = cls.objects.filter(key=key).first()
+        return role.name if role else (key or "").replace("-", " ").capitalize()
+
+    @classmethod
+    def new_key(cls, name):
+        from django.utils.text import slugify
+        base = slugify(name)[:16] or "role"
+        key, n = base, 2
+        while cls.objects.filter(key=key).exists():
+            key, n = f"{base}-{n}", n + 1
+        return key
+
+
+class RoleLabelMixin:
+    @property
+    def role_name(self):
+        return Role.label(self.role)
 
 
 def new_access_token():
@@ -22,7 +49,7 @@ def new_access_token():
 
 class StaffMember(models.Model):
     name = models.CharField(max_length=80)
-    default_role = models.CharField(max_length=20, choices=Role.choices, default=Role.SERVER)
+    default_role = models.CharField(max_length=20)
     paypal_email = models.EmailField(help_text="Where their tips are paid (PayPal account email)")
     active = models.BooleanField(default=True)
     # secret link so a staff member can see their own tips without a login
@@ -33,6 +60,10 @@ class StaffMember(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def role_name(self):
+        return Role.label(self.default_role)
 
 
 class TipRuleSet(models.Model):
@@ -119,12 +150,12 @@ class Tip(models.Model):
         return f"${self.amount} ({self.get_status_display()})"
 
 
-class Shift(models.Model):
+class Shift(RoleLabelMixin, models.Model):
     """Who worked a night, in which role, for how many hours."""
 
     night = models.ForeignKey(Night, related_name="shifts", on_delete=models.CASCADE)
     staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT)
-    role = models.CharField(max_length=20, choices=Role.choices)
+    role = models.CharField(max_length=20)
     hours = models.DecimalField(max_digits=5, decimal_places=2)
 
     class Meta:
@@ -135,12 +166,12 @@ class Shift(models.Model):
         return f"{self.staff} - {self.role} {self.hours}h"
 
 
-class Share(models.Model):
+class Share(RoleLabelMixin, models.Model):
     """One person's calculated share of a night's tips."""
 
     night = models.ForeignKey(Night, related_name="shares", on_delete=models.CASCADE)
     staff = models.ForeignKey(StaffMember, on_delete=models.PROTECT)
-    role = models.CharField(max_length=20, choices=Role.choices)
+    role = models.CharField(max_length=20)
     hours = models.DecimalField(max_digits=5, decimal_places=2)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     breakdown = models.JSONField(default=list)
@@ -193,6 +224,7 @@ class RestaurantSettings(models.Model):
         PAY = "pay", "Pay the team automatically"
 
     name = models.CharField(max_length=80, blank=True)
+    business_type = models.CharField(max_length=20, default="restaurant", blank=True)
     timezone = models.CharField(max_length=64, default="America/New_York")
     auto_close_enabled = models.BooleanField(default=False)
     after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)

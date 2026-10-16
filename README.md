@@ -1,6 +1,6 @@
 # TipPool
 
-**AI tip pooling for restaurants, built on PayPal.**
+**AI tip pooling for any business where staff share tips (restaurants, cafés, bars, salons, hotels...), built on PayPal.**
 
 Guests tip with PayPal or Venmo by scanning a QR code on the table. At closing time the manager
 uploads the shift schedule, AI turns the restaurant's plain-language tip rules into an exact,
@@ -21,7 +21,10 @@ Built for the PayPal AI Hackathon 2026 ("Build What's Next with PayPal and AI").
    so the shares always add up to the total. AI writes a short explanation for every person.
 5. **Tips out (PayPal Payouts API).** One batch pays everyone straight to their PayPal account.
    Status updates live from PayPal (polling + webhooks).
-6. **Staff page.** Each person has a private link showing their tips and how each was calculated.
+6. **Your own roles.** Pick a business type (restaurant, café, bar, salon or spa, hotel, delivery) to get
+   its usual roles, or add your own (e.g. "Stylist", "Housekeeper"). Roles marked *manager or owner* never
+   get tips. The AI reads the rules using your roles.
+7. **Staff page.** Each person has a private link showing their tips and how each was calculated.
 
 ## PayPal APIs used
 | API | Used for |

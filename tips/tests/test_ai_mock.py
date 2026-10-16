@@ -1,10 +1,10 @@
-from django.test import SimpleTestCase, override_settings
+from django.test import TestCase, override_settings
 
 from tips import ai
 
 
 @override_settings(AI_MODE="mock")
-class MockRuleParserTests(SimpleTestCase):
+class MockRuleParserTests(TestCase):
     def test_standard_sentence(self):
         out = ai.parse_rules("Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours worked.")
         pools = out["rules"]["pools"]

@@ -1,4 +1,5 @@
 import io
+from collections import Counter
 import json
 import logging
 from decimal import Decimal, InvalidOperation
@@ -14,7 +15,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, services
+from . import ai, autoclose, roles as role_presets, services
 from .models import (CloseTime, Night, PayoutBatch, RestaurantSettings, Role, Shift, StaffMember, Tip,
                      TipRuleSet, WebhookEvent)
 from .paypal import PayPalError, get_client
@@ -53,7 +54,7 @@ def dashboard(request):
         "rule_set": rule_set,
         "staff_count": staff_count,
         "setup": [
-            {"done": bool(RestaurantSettings.load().name), "text": "Add your restaurant's name", "url": reverse("settings")},
+            {"done": bool(RestaurantSettings.load().name), "text": "Add your business name", "url": reverse("settings")},
             {"done": staff_count > 0, "text": "Add your team and their PayPal emails", "url": reverse("staff_list")},
             {"done": bool(rule_set), "text": "Describe how your house shares tips", "url": reverse("rules")},
             {"done": any_tip_ever, "text": "Print table QR codes so guests can tip", "url": reverse("qr_page")},
@@ -185,16 +186,80 @@ def staff_list(request):
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
         email = request.POST.get("paypal_email", "").strip()
-        role = request.POST.get("default_role", Role.SERVER)
-        if name and email and role in Role.values:
+        role = request.POST.get("default_role", "")
+        if name and email and Role.objects.filter(key=role).exists():
             StaffMember.objects.create(name=name, paypal_email=email, default_role=role)
             messages.success(request, f"{name} added.")
         else:
             messages.error(request, "Name, PayPal email and role are required.")
         return redirect("staff_list")
+    roles = list(Role.objects.all())
+    counts = Counter(StaffMember.objects.filter(active=True).values_list("default_role", flat=True))
     return render(request, "tips/staff_list.html", {
-        "staff": StaffMember.objects.all(), "roles": Role.choices,
+        "staff": StaffMember.objects.all(), "roles": roles,
+        "role_rows": [{"role": r, "count": counts[r.key]} for r in roles],
+        "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
+        "business_type": RestaurantSettings.load().business_type,
     })
+
+
+@login_required
+@require_POST
+def staff_role(request, pk):
+    member = get_object_or_404(StaffMember, pk=pk)
+    role = request.POST.get("default_role", "")
+    if Role.objects.filter(key=role).exists():
+        member.default_role = role
+        member.save(update_fields=["default_role"])
+        messages.success(request, f"{member.name} is now {Role.label(role).lower()}.")
+    return redirect("staff_list")
+
+
+# --- Roles: each business has its own ------------------------------------------
+@login_required
+@require_POST
+def role_add(request):
+    name = request.POST.get("name", "").strip()
+    if not name:
+        messages.error(request, "Type a role name, e.g. Stylist or Housekeeper.")
+        return redirect("staff_list")
+    role, made = role_presets.add_role(name, request.POST.get("aliases", "").strip(),
+                                       no_tips=bool(request.POST.get("no_tips")))
+    if made:
+        messages.success(request, f"Role added: {role.name}. Mention it in your tip rules so it gets a share.")
+    else:
+        messages.error(request, f"You already have the role {role.name}.")
+    return redirect("staff_list")
+
+
+@login_required
+@require_POST
+def role_remove(request, pk):
+    role = get_object_or_404(Role, pk=pk)
+    if role.key in role_presets.roles_in_use():
+        messages.error(request, f"Someone on your team is a {role.name.lower()}. Change their role first.")
+    else:
+        role.delete()
+        messages.success(request, f"Role removed: {role.name}. Past shifts keep it.")
+    return redirect("staff_list")
+
+
+@login_required
+@require_POST
+def role_preset(request):
+    business_type = request.POST.get("business_type", "")
+    if business_type not in role_presets.PRESETS:
+        return redirect("staff_list")
+    kept = role_presets.apply_preset(business_type)
+    business = RestaurantSettings.load()
+    business.business_type = business_type
+    business.save(update_fields=["business_type"])
+    label = role_presets.PRESETS[business_type]["label"]
+    msg = f"Roles set up for a {label.lower()}."
+    if kept:
+        msg += f" Kept {', '.join(kept)} because someone on your team still has it."
+    messages.success(request, msg + " Check your tip rules: they should use these roles.")
+    return redirect("staff_list")
 
 
 @login_required
@@ -233,7 +298,8 @@ def rules_page(request):
     return render(request, "tips/rules.html", {
         "active": active, "preview": preview, "text": text or (active.text if active else ""),
         "ai_mode": ai.mode(),
-        "example": "Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours worked.",
+        "examples": role_presets.examples_for(RestaurantSettings.load().business_type),
+        "roles": Role.objects.all(),
     })
 
 
@@ -276,6 +342,7 @@ def close_night(request, pk=None):
             messages.error(request, "Set your tip rules first.")
             return redirect("rules")
         night.shifts.all().delete()
+        role_keys = set(Role.objects.values_list("key", flat=True))
         for member in staff:
             if not request.POST.get(f"worked_{member.pk}"):
                 continue
@@ -284,7 +351,7 @@ def close_night(request, pk=None):
             except InvalidOperation:
                 hours = Decimal("0")
             role = request.POST.get(f"role_{member.pk}", member.default_role)
-            if hours > 0 and role in Role.values:
+            if hours > 0 and role in role_keys:
                 Shift.objects.create(night=night, staff=member, role=role, hours=hours)
         if saving_only:
             messages.success(request, f"Saved {night.shifts.count()} people on tonight's roster. "
@@ -309,7 +376,7 @@ def close_night(request, pk=None):
             "hours": (guess or {}).get("hours") or (shift.hours if shift else ""),
         })
     return render(request, "tips/close_night.html", {
-        "night": night, "rows": rows, "tip_count": night.tips.filter(status=Tip.Status.COMPLETED).count(), "roles": Role.choices, "rule_set": TipRuleSet.active(),
+        "night": night, "rows": rows, "tip_count": night.tips.filter(status=Tip.Status.COMPLETED).count(), "roles": Role.objects.all(), "rule_set": TipRuleSet.active(),
         "ai_notes": ai_notes, "ai_mode": ai.mode(),
     })
 

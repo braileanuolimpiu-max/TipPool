@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import transaction
 
 from . import ai
-from .models import Night, PayoutBatch, PayoutItem, Share, Tip
+from .models import Night, PayoutBatch, PayoutItem, Role, Share, Tip
 from .paypal import PayPalError, get_client
 from .split import RulesError, ShiftInput, calculate_split
 
@@ -100,12 +100,16 @@ def build_split(night, rule_set):
         raise TipPoolError("There are no completed tips for this shift yet.")
 
     inputs = [ShiftInput(str(s.staff_id), s.staff.name, s.role, s.hours) for s in shifts]
+    roles = list(Role.objects.all())
+    role_names = {r.key: r.name for r in roles}
+    # roles marked "no tips" today count even if the saved rules are older than that setting
+    no_tips = {r.key for r in roles if r.no_tips}
     try:
-        result = calculate_split(total, inputs, rule_set.rules)
+        result = calculate_split(total, inputs, rule_set.rules, never_in_pool=no_tips, role_names=role_names)
     except RulesError as exc:
         raise TipPoolError(str(exc)) from exc
 
-    explanations = ai.explain_shares(result.total, rule_set.summary, result.shares, result.notes)
+    explanations = ai.explain_shares(result.total, rule_set.summary, result.shares, result.notes, role_names)
     night.shares.all().delete()
     for person in result.shares:
         Share.objects.create(

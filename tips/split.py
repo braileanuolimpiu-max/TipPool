@@ -90,14 +90,18 @@ def validate_rules(rules):
     return rules
 
 
-def compliance_warnings(rules):
-    """Rule checks that don't need AI (the AI can add more on top)."""
+def compliance_warnings(rules, never_in_pool=frozenset()):
+    """Rule checks that don't need AI (the AI can add more on top).
+
+    `never_in_pool`: this business's own manager/owner roles, on top of the built-in ones.
+    """
+    never = NEVER_IN_POOL | {_norm(r) for r in never_in_pool}
     warnings = []
     groups = list(rules.get("pools", []))
     if rules.get("remainder"):
         groups.append(rules["remainder"])
     for group in groups:
-        bad = NEVER_IN_POOL & {_norm(r) for r in group.get("roles", [])}
+        bad = never & {_norm(r) for r in group.get("roles", [])}
         if bad:
             warnings.append(
                 f"'{group.get('name')}' includes {', '.join(sorted(bad))}. Under US federal law (FLSA), "
@@ -112,12 +116,20 @@ def _weights(members, method):
     return [Decimal(str(m.hours)) for m in members]
 
 
-def calculate_split(total, shifts, rules):
-    """Split `total` (Decimal dollars) between `shifts` (list of ShiftInput) using `rules`."""
+def calculate_split(total, shifts, rules, never_in_pool=frozenset(), role_names=None):
+    """Split `total` (Decimal dollars) between `shifts` (list of ShiftInput) using `rules`.
+
+    `never_in_pool`: extra role keys that never get tips (the business's manager/owner roles).
+    `role_names`: {key: display name}, only used to write readable notes.
+    """
     validate_rules(rules)
     total = Decimal(str(total)).quantize(CENT)
     notes = []
-    excluded = {_norm(r) for r in rules.get("excluded_roles", [])} | NEVER_IN_POOL
+    excluded = {_norm(r) for r in rules.get("excluded_roles", [])} | NEVER_IN_POOL | {_norm(r) for r in never_in_pool}
+    role_names = role_names or {}
+
+    def label(role):
+        return role_names.get(role, role).lower()
 
     people = {s.key: PersonShare(s.key, s.name, _norm(s.role), Decimal(str(s.hours))) for s in shifts}
     exact = {key: Decimal("0") for key in people}  # un-rounded amounts
@@ -144,7 +156,7 @@ def calculate_split(total, shifts, rules):
         pool_amount = total * Decimal(str(pool["percent"])) / 100
         members = members_of(pool["roles"])
         if not members:
-            notes.append(f"Nobody worked as {', '.join(pool['roles'])} tonight, so the "
+            notes.append(f"Nobody worked as {', '.join(label(_norm(r)) for r in pool['roles'])} this shift, so the "
                          f"{pool['percent']}% for {pool['name']} goes to the rest of the team.")
             continue
         distribute(pool["name"], pool_amount, members, pool.get("split", "hours"))
@@ -160,17 +172,17 @@ def calculate_split(total, shifts, rules):
             # nobody in the remainder group: share the rest with everyone eligible, by hours
             members = [p for p in people.values() if p.role not in excluded and p.hours > 0]
             method = "hours"
-            notes.append(f"Nobody in '{name}' worked tonight, so the remaining money was shared by hours "
+            notes.append(f"Nobody in '{name}' worked this shift, so the remaining money was shared by hours "
                          "between everyone who worked.")
         if not members:
-            raise RulesError("Nobody who worked tonight can receive tips under these rules.")
+            raise RulesError("Nobody who worked this shift can receive tips under these rules.")
         distribute(name, rest, members, method)
 
     for person in people.values():
         if person.role in excluded and person.hours > 0:
-            notes.append(f"{person.name} worked as {person.role}, which is excluded from the tip pool.")
+            notes.append(f"{person.name} worked as {label(person.role)}, which is excluded from the tip pool.")
         elif exact[person.key] == 0 and person.hours > 0:
-            notes.append(f"{person.name} worked as {person.role}, but no rule gives tips to that role.")
+            notes.append(f"{person.name} worked as {label(person.role)}, but no rule gives tips to that role.")
 
     _round_to_cents(total, people, exact)
     shares = sorted(people.values(), key=lambda p: (-p.amount, p.name))

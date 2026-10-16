@@ -10,16 +10,17 @@
     <div class="panel-body stack">
       <div>
         <label for="text">How do you share tips?</label>
-        <textarea id="text" name="text" placeholder="{{ example }}">{{ text }}</textarea>
+        <textarea id="text" name="text" placeholder="{{ examples.0.1 }}">{{ text }}</textarea>
       </div>
       <div>
         <p class="small muted" style="margin:0 0 6px">Start from an example:</p>
         <div class="actions">
-          <button type="button" class="btn btn-secondary small" data-example="Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours worked.">Bar + bussers</button>
-          <button type="button" class="btn btn-secondary small" data-example="Everyone shares the tips by hours worked: servers, bartenders and bussers.">Everyone by hours</button>
-          <button type="button" class="btn btn-secondary small" data-example="Kitchen gets 15%, hosts get 5% split equally, the rest goes to servers by hours.">Kitchen included</button>
+          {% for label, sentence in examples %}<button type="button" class="btn btn-secondary small" data-example="{{ sentence }}">{{ label }}</button>
+          {% endfor %}
         </div>
       </div>
+      <p class="hint" style="margin:0">Your roles: {% for r in roles %}{{ r.name }}{% if not forloop.last %}, {% endif %}{% empty %}none yet{% endfor %}.
+        <a href="{% url 'staff_list' %}#roles">Change roles</a></p>
       <div class="actions">
         <button class="btn btn-primary" name="parse">Read my rules</button>
         <span class="small muted">{% if ai_mode == "claude" %}Read by Claude{% else %}Read by the offline parser (Claude mode is off){% endif %}</span>

@@ -5,16 +5,21 @@
   <div><h1>Team</h1><p>Tips are paid to each person's PayPal email. Everyone also has a private page with their own tips.</p></div>
 </header>
 <div class="split-2">
+  <div class="stack">
   <section class="panel">
     {% if staff %}
-    <ul class="rows">
+    <ul class="rows team-rows">
       {% for m in staff %}
       <li{% if not m.active %} style="opacity:.55"{% endif %}>
         <span class="avatar" aria-hidden="true">{{ m.name|slice:":1" }}</span>
         <div style="flex:1;min-width:0">
-          <strong>{{ m.name }}</strong> <span class="small muted">{{ m.get_default_role_display }}</span>
+          <strong>{{ m.name }}</strong>{% if not m.active %} <span class="small muted">{{ m.role_name }}</span>{% endif %}
           <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.paypal_email }}</div>
         </div>
+        {% if m.active %}<form method="post" action="{% url 'staff_role' m.pk %}" class="role-pick">{% csrf_token %}
+          <select name="default_role" aria-label="{{ m.name }}'s usual role" onchange="this.form.submit()">
+            {% for r in roles %}<option value="{{ r.key }}" {% if r.key == m.default_role %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+          </select><noscript><button class="btn btn-quiet small">Save</button></noscript></form>{% endif %}
         <a class="small" href="{% url 'my_tips' m.access_token %}">Their tips page</a>
         <form method="post" action="{% url 'staff_toggle' m.pk %}">{% csrf_token %}
           <button class="btn btn-quiet small">{% if m.active %}Remove{% else %}Bring back{% endif %}</button></form>
@@ -25,6 +30,36 @@
     <div class="panel-body"><p class="muted" style="margin:0">No one here yet. Add the people who share tips.</p></div>
     {% endif %}
   </section>
+
+  <section class="panel" id="roles">
+    <div class="panel-head"><h2>Roles</h2>
+      <form method="post" action="{% url 'role_preset' %}" class="actions role-preset">{% csrf_token %}
+        <select name="business_type" aria-label="Type of business">
+          {% for value, label in presets %}<option value="{{ value }}" {% if value == business_type %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-secondary small" title="Swaps in the usual roles for that kind of business. Roles someone on your team has are kept.">Use these roles</button>
+      </form>
+    </div>
+    <ul class="role-grid">
+      {% for row in role_rows %}
+      <li>
+        <div class="role-text">
+          <strong>{{ row.role.name }}</strong>
+          {% if row.role.no_tips %}<span class="pill bad" title="Managers and owners can't take from an employee tip pool (US FLSA)">No tips</span>{% endif %}
+          <span class="small muted">{% if row.count %}{{ row.count }} on the team{% else %}nobody yet{% endif %}{% if row.role.aliases %} · also {{ row.role.aliases }}{% endif %}</span>
+        </div>
+        {% if not row.count %}<form method="post" action="{% url 'role_remove' row.role.pk %}">{% csrf_token %}
+          <button class="role-x" aria-label="Remove {{ row.role.name }}" title="Remove">&times;</button></form>{% endif %}
+      </li>
+      {% empty %}
+      <li class="muted">No roles yet. Pick your type of business, or add your own.</li>
+      {% endfor %}
+    </ul>
+    <p class="hint panel-body" style="margin:0;border-top:1px solid var(--hair-soft)">Picking a type of business swaps in its usual roles. Roles someone on your team has are always kept.</p>
+  </section>
+  </div>
+
+  <div class="stack">
   <form method="post" class="panel">{% csrf_token %}
     <div class="panel-head"><h2>Add someone</h2></div>
     <div class="panel-body stack">
@@ -32,9 +67,25 @@
       <div><label for="paypal_email">PayPal email</label><input type="email" id="paypal_email" name="paypal_email" required>
         <p class="hint">Where their tips are sent.</p></div>
       <div><label for="default_role">Usual role</label>
-        <select id="default_role" name="default_role">{% for value, label in roles %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+        <select id="default_role" name="default_role" required>{% for r in roles %}<option value="{{ r.key }}">{{ r.name }}</option>{% empty %}<option value="">Add a role first</option>{% endfor %}</select>
+        <p class="hint">Can change per shift when you close out.</p></div>
       <button class="btn btn-primary">Add to team</button>
     </div>
   </form>
+
+  <form method="post" action="{% url 'role_add' %}" class="panel">{% csrf_token %}
+    <div class="panel-head"><h2>Add a role</h2></div>
+    <div class="panel-body stack">
+      <div><label for="role_name">Role name</label>
+        <input type="text" id="role_name" name="name" maxlength="40" required placeholder="e.g. Stylist, Housekeeper, Barista"></div>
+      <div><label for="role_aliases">Other words for it <span class="muted">(optional)</span></label>
+        <input type="text" id="role_aliases" name="aliases" maxlength="200" placeholder="e.g. hairdresser, barber">
+        <p class="hint">Helps read your tip rules when you write it differently.</p></div>
+      <label class="choice"><input type="checkbox" name="no_tips">
+        <span><strong>Manager or owner</strong><span class="small muted">Never gets tips. US law (FLSA) doesn't let managers or owners take from the staff's tips.</span></span></label>
+      <button class="btn btn-secondary">Add role</button>
+    </div>
+  </form>
+  </div>
 </div>
 {% endblock %}

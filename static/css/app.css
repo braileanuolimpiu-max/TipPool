@@ -88,7 +88,7 @@ a:hover { text-decoration-color: var(--marker); text-decoration-thickness: 4px; 
 .split-2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 28px; align-items: start; }
 .split-2.reverse { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
 .split-2.wide-left { grid-template-columns: minmax(0, 1.9fr) minmax(250px, 1fr); }
-@media (max-width: 960px) { .split-2, .split-2.reverse, .split-2.wide-left { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .split-2, .split-2.reverse, .split-2.wide-left { grid-template-columns: minmax(0, 1fr); } }
 .stack > * + * { margin-top: 18px; }
 
 /* the steel tray receipts sit on */
@@ -342,3 +342,37 @@ fieldset.chips legend { font-weight: 700; font-size: .9rem; margin-bottom: 8px; 
 .login .receipt-wrap { justify-content: flex-start; }
 .login .receipt { max-width: 300px; transform: rotate(-2deg); }
 @media (max-width: 820px) { .login { grid-template-columns: 1fr; } .login .left { padding: 26px 18px; } .login .receipt-wrap { display: none; } }
+
+/* Team: change someone's usual role in place */
+.role-pick select { width: auto; min-width: 130px; padding: 6px 30px 6px 10px; font-size: .88rem; }
+.role-preset { flex-wrap: nowrap; gap: 8px; }
+.role-preset select { width: auto; padding: 6px 30px 6px 10px; font-size: .88rem; }
+.role-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.role-grid > li { display: flex; align-items: flex-start; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--hair-soft); }
+.role-grid > li:nth-child(-n+2) { border-top: 0; }
+.role-grid > li:nth-child(odd) { border-right: 1px solid var(--hair-soft); }
+.role-grid .role-text { flex: 1; min-width: 0; }
+.role-grid .role-text .small { display: block; }
+.role-grid .pill { margin-left: 4px; }
+.role-x { border: 0; background: none; font-size: 1.25rem; line-height: 1; padding: 0 4px; color: var(--graphite); cursor: pointer; border-radius: 3px; }
+.role-x:hover { color: var(--void); }
+.role-x:focus-visible { box-shadow: var(--focus); outline: 0; }
+@media (max-width: 640px) {
+  .role-grid { grid-template-columns: 1fr; }
+  .role-grid > li:nth-child(2) { border-top: 1px solid var(--hair-soft); }
+  .role-grid > li:nth-child(odd) { border-right: 0; }
+  .panel-head:has(.role-preset) { flex-wrap: wrap; gap: 8px; }
+}
+@media (max-width: 640px) {
+  .team-rows > li { flex-wrap: wrap; padding: 13px 16px; }
+  .team-rows > li > div { flex-basis: calc(100% - 52px) !important; }
+  .team-rows .role-pick { margin-left: 46px; }
+  .team-rows .role-pick select { min-width: 0; max-width: 140px; }
+  .team-rows > li { column-gap: 10px; row-gap: 8px; }
+}
+@media (max-width: 640px) {
+  .panel-head:has(.role-preset) { height: auto; min-height: 0; padding-top: 14px; padding-bottom: 14px; }
+  .role-preset { flex: 1 1 100%; min-width: 0; }
+  .role-preset .btn { flex: none; }
+  .role-preset select { flex: 1; min-width: 0; }
+}

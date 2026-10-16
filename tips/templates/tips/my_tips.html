@@ -14,7 +14,7 @@
     <div class="receipt">
       <div class="head"><h2>Tips receipt</h2><p>{{ s.night.date|date:"l, M j, Y" }}</p></div>
       <hr>
-      <div class="line"><span class="what">{{ s.get_role_display }}<small>{{ s.hours|floatformat:"-2" }} hours worked</small></span>
+      <div class="line"><span class="what">{{ s.role_name }}<small>{{ s.hours|floatformat:"-2" }} hours worked</small></span>
         <span class="amt">${{ s.amount }}
           {% with item=s.payout_item %}{% if item and item.status == "SUCCESS" %}<span class="stamp ok">PAID</span>{% elif item %}<span class="stamp wait">SENDING</span>{% else %}<span class="stamp wait">PENDING</span>{% endif %}{% endwith %}
         </span></div>
