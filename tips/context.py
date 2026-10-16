@@ -1,8 +1,9 @@
 def app_context(request):
     from .models import Location
     location = getattr(request, "location", None)
+    business = getattr(request, "business", None)
     try:
-        locations = list(Location.objects.all()) if getattr(request, "user", None) and request.user.is_authenticated else []
+        locations = list(Location.objects.filter(business=business)) if business else []
     except Exception:  # e.g. before the first migration
         locations = []
     open_messages = 0
@@ -10,6 +11,7 @@ def app_context(request):
         from .models import Message
         open_messages = Message.objects.filter(location=location, resolved_at__isnull=True).count()
     return {
+        "business": business,
         "open_messages": open_messages,
         "location": location,
         "locations": locations,

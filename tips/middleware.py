@@ -5,19 +5,33 @@ from . import autoclose
 from .models import Location
 
 
+def manager_business(request):
+    """The business of the signed-in manager, or None (guests, staff pages, logins without a business)."""
+    user = getattr(request, "user", None)
+    if not (user and user.is_authenticated):
+        return None
+    profile = getattr(user, "manager", None)
+    return profile.business if profile else None
+
+
 def pick_location(request):
-    """Public pages name the location in the link (?at=<slug>); managers pick one (kept in the session)."""
+    """Managers work in one of their own business's locations (picked one kept in the session).
+    Public pages name the location in the link (?at=<slug>)."""
+    business = request.business
+    if business is not None:
+        own = Location.objects.filter(business=business)
+        slug = request.GET.get("at")
+        location_id = request.session.get("location_id")
+        return ((own.filter(slug=slug).first() if slug else None)
+                or (own.filter(pk=location_id).first() if location_id else None) or own.first())
+    return public_location(request)
+
+
+def public_location(request):
+    """For guest pages: the location named in the link, whoever is looking."""
     slug = request.GET.get("at")
-    if slug:
-        location = Location.objects.filter(slug=slug).first()
-        if location:
-            return location
-    location_id = request.session.get("location_id") if hasattr(request, "session") else None
-    if location_id:
-        location = Location.objects.filter(pk=location_id).first()
-        if location:
-            return location
-    return Location.default()
+    location = Location.objects.filter(slug=slug).first() if slug else None
+    return location or Location.default()
 
 
 class LocationMiddleware:
@@ -29,10 +43,11 @@ class LocationMiddleware:
 
     def __call__(self, request):
         try:
+            request.business = manager_business(request)
             request.location = pick_location(request)
             timezone.activate(autoclose.location_tz(request.location))
         except Exception:  # e.g. before the first migration
-            request.location = None
+            request.business, request.location = None, None
         if getattr(request, "user", None) and request.user.is_authenticated and cache.add("autoclose-check", 1, 60):
             try:
                 autoclose.run()

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block site %}TipPool{% endblock %}
+{% block body %}
+<div class="login">
+{% include "registration/_auth_side.html" %}
+  <div class="right"><div class="stack" style="width:100%;max-width:360px">{% block panel %}{% endblock %}</div></div>
+</div>
+{% endblock %}

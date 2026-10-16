@@ -6,13 +6,61 @@ from django.utils import timezone
 from django.utils.timezone import now
 
 
+class Business(models.Model):
+    """A business account: everything (locations, team, tips, reports) belongs to one.
+    Managers only ever see their own business."""
+
+    name = models.CharField(max_length=80)
+    created_at = models.DateTimeField(default=now)
+
+    def __str__(self):
+        return self.name
+
+
+class Manager(models.Model):
+    """A login that manages a business. Staff don't need one (they use their private link)."""
+
+    user = models.OneToOneField("auth.User", related_name="manager", on_delete=models.CASCADE)
+    business = models.ForeignKey(Business, related_name="managers", on_delete=models.CASCADE)
+    is_owner = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user} at {self.business}"
+
+
+def new_invite_token():
+    return secrets.token_urlsafe(24)
+
+
+class Invite(models.Model):
+    """An email invitation for another manager to join a business."""
+
+    business = models.ForeignKey(Business, related_name="invites", on_delete=models.CASCADE)
+    email = models.EmailField()
+    token = models.CharField(max_length=60, unique=True, default=new_invite_token)
+    invited_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(default=now)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    VALID_DAYS = 7
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def usable(self):
+        from datetime import timedelta
+        return self.accepted_at is None and self.created_at > timezone.now() - timedelta(days=self.VALID_DAYS)
+
+
 class Location(models.Model):
-    """One shop / venue. An owner can run several, each with its own roles, rules, codes and closing times."""
+    """One shop / venue. A business can run several, each with its own roles, rules, codes and closing times."""
 
     class AfterClose(models.TextChoices):
         REVIEW = "review", "Prepare the split for me to approve"
         PAY = "pay", "Pay the team automatically"
 
+    business = models.ForeignKey(Business, related_name="locations", on_delete=models.CASCADE)
     name = models.CharField(max_length=80, blank=True)
     # used in public links (tip page, QR codes): /tip/?at=<slug>
     slug = models.SlugField(max_length=40, unique=True)
@@ -69,10 +117,11 @@ class Location(models.Model):
 
     @classmethod
     def default(cls):
-        """The first location (created if there is none). Used where no location was chosen."""
+        """The first location (created if there is none). Old printed QR codes without ?at= land here."""
         obj = cls.objects.first()
         if obj is None:
-            obj = cls.objects.create(slug="main")
+            business = Business.objects.first() or Business.objects.create(name="My business")
+            obj = cls.objects.create(slug="main", business=business)
         return obj
 
     @classmethod
@@ -124,8 +173,9 @@ def new_access_token():
 
 
 class StaffMember(models.Model):
-    """A person. They can work at several locations (see Membership)."""
+    """A person on one business's team. They can work at several of its locations (see Membership)."""
 
+    business = models.ForeignKey(Business, related_name="staff", on_delete=models.CASCADE)
     name = models.CharField(max_length=80)
     paypal_email = models.EmailField(help_text="Where their tips are paid (PayPal account email)")
     # secret link so a staff member can see their own tips without a login

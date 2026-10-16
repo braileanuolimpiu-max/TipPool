@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from tips import ai, services
 from tips.models import Location, Night, Shift, Tip, TipRuleSet
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 from tips.tests.test_flow import FakePayPal
 
 
@@ -19,7 +19,7 @@ class TipSourceTests(TestCase):
         patcher = mock.patch("tips.services.get_client", return_value=self.paypal)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.client.force_login(get_user_model().objects.create_user("m", password="pw"))
+        self.client.force_login(make_manager("m"))
         self.location = Location.default()
         self.maria = hire("Maria", "server")
         self.john = hire("John", "server")

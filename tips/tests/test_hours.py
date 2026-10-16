@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from tips import ai, autoclose, hours
 from tips.models import ClockEntry, CloseTime, Location, Membership, Night, Tip, TipRuleSet
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 from tips.tests.test_autoclose import FakePayPal
 
 NY = ZoneInfo("America/New_York")
@@ -60,7 +60,7 @@ class HoursTests(TestCase):
         self.assertEqual((roster[self.alex.pk]["hours"], roster[self.alex.pk]["source"]), (Decimal("7.00"), "clock"))
 
     def test_close_out_page_is_filled_in(self):
-        self.client.force_login(get_user_model().objects.create_user("m", password="pw"))
+        self.client.force_login(make_manager("m"))
         night = Night.current(self.location)
         self.set_week(self.maria, {str(night.date.weekday()): 6})
         page = self.client.get(reverse("close_night"))
@@ -76,12 +76,12 @@ class HoursTests(TestCase):
         self.assertFalse(ClockEntry.objects.filter(staff=self.maria, ended_at__isnull=True).exists())
 
     def test_cannot_clock_in_somewhere_you_dont_work(self):
-        other = Location.objects.create(name="Other", slug="other")
+        other = Location.objects.create(business=self.location.business, name="Other", slug="other")
         with self.assertRaises(hours.ClockError):
             hours.clock_in(self.maria, other)
 
     def test_save_usual_week_on_team_page(self):
-        self.client.force_login(get_user_model().objects.create_user("m", password="pw"))
+        self.client.force_login(make_manager("m"))
         m = self.maria.memberships.get()
         self.client.post(reverse("staff_schedule", args=[m.pk]), {"h_0": "6", "h_4": "7.5", "h_6": "abc"})
         m.refresh_from_db()

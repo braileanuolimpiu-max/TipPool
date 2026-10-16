@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from tips import ai
 from tips.models import Location, Night, PayoutItem, Tip, TipRuleSet
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 
 
 class FakePayPal:
@@ -49,7 +49,7 @@ class FullFlowTests(TestCase):
         patcher = mock.patch("tips.services.get_client", return_value=self.paypal)
         patcher.start()
         self.addCleanup(patcher.stop)
-        user = get_user_model().objects.create_user("manager", password="pw")
+        user = make_manager("manager")
         self.client.force_login(user)
         self.location = Location.default()
         self.staff = {n: hire(n, r, self.location)

@@ -8,7 +8,6 @@ import qrcode
 import qrcode.image.svg
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,6 +19,8 @@ from django.views.decorators.http import require_POST
 from . import ai, autoclose, hours as hours_from, roles as role_presets, services
 from .models import (Change, CloseTime, Location, Membership, Night, PayoutBatch, Role, Shift, StaffMember, Tip,
                      TipRuleSet, WebhookEvent)
+from .accounts import manager_required
+from .middleware import public_location
 from .paypal import PayPalError, get_client
 
 log = logging.getLogger("tips.views")
@@ -33,7 +34,7 @@ def _sync_tips(night):
         log.exception("Tip sync failed")
 
 
-@login_required
+@manager_required
 def dashboard(request):
     location = request.location
     night = Night.current(location)
@@ -67,7 +68,7 @@ def dashboard(request):
     })
 
 
-@login_required
+@manager_required
 @require_POST
 def clock_out_for(request, pk):
     """A manager clocks out someone who forgot."""
@@ -79,7 +80,7 @@ def clock_out_for(request, pk):
     return redirect("dashboard")
 
 
-@login_required
+@manager_required
 def history(request):
     nights = (Night.objects.filter(location=request.location).exclude(status=Night.Status.OPEN)
               .prefetch_related("shares", "tips").select_related("payout_batch")[:60])
@@ -92,7 +93,7 @@ def history(request):
 
 # --- Customer tip page (public) -----------------------------------------------
 def tip_page(request):
-    location = request.location
+    location = public_location(request)
     people = []
     if location.tip_mode != Location.TipMode.POOL:
         # who's working right now first, then the rest of the team
@@ -104,6 +105,7 @@ def tip_page(request):
     to = request.GET.get("to", "")
     style, values = location.tip_buttons
     return render(request, "tips/tip_page.html", {
+        "location": location, "restaurant_name": location.display_name, "restaurant_named": bool(location.name),
         "at": location.slug,
         "tip_style": style,
         "presets": values,
@@ -180,7 +182,7 @@ def api_capture_order(request, order_id):
 
 
 # --- QR code for tables -------------------------------------------------------
-@login_required
+@manager_required
 def qr_page(request):
     restaurant = request.location
     if request.method == "POST":
@@ -234,7 +236,7 @@ def qr_svg(request):
 
 
 # --- Staff ---------------------------------------------------------------------
-@login_required
+@manager_required
 def staff_list(request):
     location = request.location
     if request.method == "POST":
@@ -245,9 +247,9 @@ def staff_list(request):
             messages.error(request, "Name, PayPal email and role are required.")
             return redirect("staff_list")
         # the same person at another location (same PayPal email) gets one tips page for everything
-        person = StaffMember.objects.filter(paypal_email__iexact=email).first()
+        person = StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).first()
         if person is None:
-            person = StaffMember.objects.create(name=name, paypal_email=email)
+            person = StaffMember.objects.create(business=request.business, name=name, paypal_email=email)
         membership, made = Membership.objects.get_or_create(staff=person, location=location,
                                                             defaults={"default_role": role})
         if not made:
@@ -270,7 +272,7 @@ def staff_list(request):
     })
 
 
-@login_required
+@manager_required
 @require_POST
 def staff_role(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
@@ -283,7 +285,7 @@ def staff_role(request, pk):
     return redirect("staff_list")
 
 
-@login_required
+@manager_required
 @require_POST
 def staff_schedule(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
@@ -302,7 +304,7 @@ def staff_schedule(request, pk):
     return redirect("staff_list")
 
 
-@login_required
+@manager_required
 @require_POST
 def staff_toggle(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
@@ -313,7 +315,7 @@ def staff_toggle(request, pk):
 
 
 # --- Roles: each location has its own ----------------------------------------------
-@login_required
+@manager_required
 @require_POST
 def role_add(request):
     name = request.POST.get("name", "").strip()
@@ -330,7 +332,7 @@ def role_add(request):
     return redirect("staff_list")
 
 
-@login_required
+@manager_required
 @require_POST
 def role_remove(request, pk):
     role = get_object_or_404(Role, pk=pk, location=request.location)
@@ -343,7 +345,7 @@ def role_remove(request, pk):
     return redirect("staff_list")
 
 
-@login_required
+@manager_required
 @require_POST
 def role_preset(request):
     business_type = request.POST.get("business_type", "")
@@ -360,7 +362,7 @@ def role_preset(request):
 
 
 # --- Rules -------------------------------------------------------------------
-@login_required
+@manager_required
 def rules_page(request):
     preview = None
     text = ""
@@ -393,7 +395,7 @@ def rules_page(request):
 
 
 # --- Close the night: who worked -> split -> review -> pay ---------------------
-@login_required
+@manager_required
 def close_night(request, pk=None):
     night = get_object_or_404(Night, pk=pk, location=request.location) if pk else Night.current(request.location)
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
@@ -486,7 +488,7 @@ def close_night(request, pk=None):
     })
 
 
-@login_required
+@manager_required
 @require_POST
 def night_tip_add(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
@@ -506,7 +508,7 @@ def night_tip_add(request, pk):
     return redirect("close_night_pk", pk=night.pk)
 
 
-@login_required
+@manager_required
 @require_POST
 def night_tip_remove(request, pk):
     tip = get_object_or_404(Tip, pk=pk, night__location=request.location)
@@ -520,7 +522,7 @@ def night_tip_remove(request, pk):
     return redirect("close_night_pk", pk=night_pk)
 
 
-@login_required
+@manager_required
 def review(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
     if night.status in (Night.Status.OPEN, Night.Status.CLOSED):
@@ -535,7 +537,7 @@ def review(request, pk):
     })
 
 
-@login_required
+@manager_required
 @require_POST
 def pay(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
@@ -552,7 +554,7 @@ def pay(request, pk):
     return redirect("payout_status", pk=pk)
 
 
-@login_required
+@manager_required
 def payout_status(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
     batch = getattr(night, "payout_batch", None)
@@ -568,7 +570,7 @@ def payout_status(request, pk):
     return render(request, "tips/payout_status.html", {"night": night, "batch": batch, "items": items})
 
 
-@login_required
+@manager_required
 def payout_status_json(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
     batch = getattr(night, "payout_batch", None)
@@ -597,14 +599,14 @@ REVIEW_CHOICES = [(0, "Don't wait: pay right away"), (30, "30 minutes"), (60, "1
                   (720, "12 hours"), (1440, "24 hours")]
 
 
-def _locations_overview():
-    rows = list(Location.objects.annotate(team_count=Count("memberships", filter=Q(memberships__active=True))))
+def _locations_overview(business):
+    rows = list(Location.objects.filter(business=business).annotate(team_count=Count("memberships", filter=Q(memberships__active=True))))
     for loc in rows:
         loc.type_label = role_presets.PRESETS.get(loc.business_type, {}).get("label", "Business")
     return rows
 
 
-@login_required
+@manager_required
 def settings_page(request):
     from datetime import time as dtime
     restaurant = request.location
@@ -667,13 +669,17 @@ def settings_page(request):
         "changes": Change.objects.filter(location=restaurant)[:200 if request.GET.get("all") else 12],
         "show_all_changes": bool(request.GET.get("all")),
         "after_choices": Location.AfterClose.choices, "next_close": autoclose.next_close(restaurant),
-        "all_locations": _locations_overview(),
+        "all_locations": _locations_overview(request.business),
+        "managers": request.business.managers.select_related("user").order_by("-is_owner", "user__first_name"),
+        "invites": [(i, request.build_absolute_uri(reverse("accept_invite", args=[i.token])))
+                    for i in request.business.invites.filter(accepted_at__isnull=True) if i.usable],
+        "is_owner": request.user.manager.is_owner,
         "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
     })
 
 
 # --- Reports -------------------------------------------------------------------
-@login_required
+@manager_required
 def reports_page(request):
     from datetime import date
     from . import reports
@@ -687,7 +693,7 @@ def reports_page(request):
             return None
     today = timezone.localdate()
     first, last = reports.period_range(period, today, parse(request.GET.get("from")), parse(request.GET.get("to")))
-    report = reports.build(reports.scope_locations(request.location, scope), first, last)
+    report = reports.build(reports.scope_locations(request, scope), first, last)
     export = request.GET.get("export")
     if export in ("people", "shifts"):
         body = reports.people_csv(report) if export == "people" else reports.shifts_csv(report)
@@ -697,7 +703,7 @@ def reports_page(request):
         return response
     from . import ask
     question = request.GET.get("q", "").strip()
-    asked = ask.answer(question, reports.scope_locations(request.location, scope), today) if question else None
+    asked = ask.answer(question, reports.scope_locations(request, scope), today) if question else None
     params = request.GET.copy()
     params.pop("q", None)
     return render(request, "tips/reports.html", {
@@ -708,7 +714,7 @@ def reports_page(request):
 
 
 # --- Messages from staff ------------------------------------------------------
-@login_required
+@manager_required
 def messages_page(request):
     from .models import Message
     if request.method == "POST":
@@ -727,16 +733,16 @@ def messages_page(request):
 
 
 # --- Locations ----------------------------------------------------------------
-@login_required
+@manager_required
 @require_POST
 def location_switch(request):
-    location = get_object_or_404(Location, pk=request.POST.get("location"))
+    location = get_object_or_404(Location, pk=request.POST.get("location"), business=request.business)
     request.session["location_id"] = location.pk
     nxt = request.POST.get("next", "")
     return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "dashboard")
 
 
-@login_required
+@manager_required
 @require_POST
 def location_add(request):
     name = request.POST.get("name", "").strip()[:80]
@@ -746,7 +752,8 @@ def location_add(request):
     business_type = request.POST.get("business_type", "restaurant")
     if business_type not in role_presets.PRESETS:
         business_type = "restaurant"
-    location = Location.objects.create(name=name, slug=Location.new_slug(name), business_type=business_type,
+    location = Location.objects.create(business=request.business, name=name, slug=Location.new_slug(name),
+                                       business_type=business_type,
                                        timezone=request.location.timezone)
     role_presets.apply_preset(location, business_type)
     Change.log(request, f"Added the location {name}", location=location)

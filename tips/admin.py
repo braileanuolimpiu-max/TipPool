@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import (Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share, Shift, StaffMember, Tip,
+from .models import (Business, Invite, Location, Manager, Membership, Night, PayoutBatch, PayoutItem, Role, Share, Shift, StaffMember, Tip,
                      TipRuleSet, WebhookEvent)
 
 
@@ -62,3 +62,17 @@ class PayoutBatchAdmin(admin.ModelAdmin):
 admin.site.register(TipRuleSet)
 admin.site.register(Tip)
 admin.site.register(WebhookEvent)
+
+
+class ManagerInline(admin.TabularInline):
+    model = Manager
+    extra = 0
+
+
+@admin.register(Business)
+class BusinessAdmin(admin.ModelAdmin):
+    list_display = ("name", "created_at")
+    inlines = [ManagerInline]
+
+
+admin.site.register(Invite)

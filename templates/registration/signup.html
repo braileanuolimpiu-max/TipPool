@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block site %}TipPool{% endblock %}
+{% block title %}Create your account{% endblock %}
+{% block body %}
+<div class="login">
+{% include "registration/_auth_side.html" %}
+  <div class="right">
+    <form method="post" class="stack signup">{% csrf_token %}
+      <h2>{% if finishing %}Set up your business{% else %}Create your business account{% endif %}</h2>
+      <p class="muted" style="margin:0">{% if finishing %}You're signed in as {{ user.get_username }}. Add your business to continue.{% else %}Free while in sandbox. Takes a minute.{% endif %}</p>
+      {% if errors %}<div class="flash error"><ul style="margin:0;padding-left:18px">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+      <div><label for="business">Business name</label>
+        <input type="text" id="business" name="business" maxlength="80" required value="{{ data.business }}" placeholder="e.g. Luna Group, Studio 9" autofocus></div>
+      <div><label for="business_type">Type of business</label>
+        <select id="business_type" name="business_type">{% for value, label in presets %}<option value="{{ value }}" {% if data.business_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        <p class="hint">Sets up the usual roles and tip buttons. You can change everything later.</p></div>
+      <div><label for="location">First location <span class="muted">(optional)</span></label>
+        <input type="text" id="location" name="location" maxlength="80" value="{{ data.location }}" placeholder="Same as the business name">
+        <p class="hint">Run more than one shop? Add the others later in Settings.</p></div>
+      <div><label for="timezone">Time zone</label>
+        <select id="timezone" name="timezone">{% for value, label in timezones %}<option value="{{ value }}" {% if data.timezone == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      {% if not finishing %}
+      <hr class="soft">
+      <div><label for="name">Your name</label><input type="text" id="name" name="name" maxlength="150" required value="{{ data.name }}" autocomplete="name"></div>
+      <div><label for="email">Email</label><input type="email" id="email" name="email" required value="{{ data.email }}" autocomplete="email"></div>
+      <div><label for="password">Password</label><input type="password" id="password" name="password" required minlength="8" autocomplete="new-password">
+        <p class="hint">At least 8 characters, not only numbers, not too common.</p></div>
+      {% endif %}
+      <button class="btn btn-primary btn-block">{% if finishing %}Continue{% else %}Create account{% endif %}</button>
+      {% if not finishing %}<p class="auth-switch">Already have an account? <a href="{% url 'login' %}">Sign in</a></p>{% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

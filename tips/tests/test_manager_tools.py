@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from tips import ai, autoclose, reports, services
 from tips.models import Change, CloseTime, Location, Message, Night, Shift, Tip, TipRuleSet
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 from tips.tests.test_autoclose import FakePayPal
 
 NY = ZoneInfo("America/New_York")
@@ -22,7 +22,7 @@ class ManagerToolTests(TestCase):
         patcher = mock.patch("tips.services.get_client", return_value=self.paypal)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.client.force_login(get_user_model().objects.create_user("boss", password="pw"))
+        self.client.force_login(make_manager("boss"))
         self.location = Location.default()
         self.maria = hire("Maria", "server")
         self.alex = hire("Alex", "bartender")

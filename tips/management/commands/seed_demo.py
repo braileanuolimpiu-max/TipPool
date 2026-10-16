@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
 from tips import ai
-from tips.models import Location, Membership, Role, StaffMember, TipRuleSet
+from tips.models import Location, Manager, Membership, Role, StaffMember, TipRuleSet
 
 DEFAULT_STAFF = "Maria:server:,John:server:,Lea:server:,Alex:bartender:,Sam:busser:"
 DEFAULT_RULES = "Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours worked."
@@ -31,8 +31,9 @@ class Command(BaseCommand):
             self.stdout.write(f"Manager login created: {username} / {password}")
         else:
             self.stdout.write(f"Manager login '{username}' already exists (password unchanged)")
-
         location = Location.default()
+        Manager.objects.get_or_create(user=user, defaults={"business": location.business, "is_owner": True})
+
         for entry in os.environ.get("DEMO_STAFF", DEFAULT_STAFF).split(","):
             parts = [p.strip() for p in entry.split(":")]
             if len(parts) != 3 or not parts[0]:
@@ -43,7 +44,8 @@ class Command(BaseCommand):
                 continue
             # also accept one line per person in .env, e.g. MARIA_EMAIL=...
             email = email or os.environ.get(f"{name.upper()}_EMAIL", "") or f"{name.lower()}@example.com"
-            member, made = StaffMember.objects.update_or_create(name=name, defaults={"paypal_email": email})
+            member, made = StaffMember.objects.update_or_create(business=location.business, name=name,
+                                                                defaults={"paypal_email": email})
             Membership.objects.update_or_create(staff=member, location=location,
                                                 defaults={"default_role": role, "active": True})
             self.stdout.write(f"{'Added' if made else 'Updated'} {name} ({role}) -> {email}")

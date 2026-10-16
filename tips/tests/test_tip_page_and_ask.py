@@ -8,13 +8,13 @@ from django.urls import reverse
 
 from tips import ai, ask, roles, services
 from tips.models import Location, Night, Shift, Tip, TipRuleSet
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 
 
 class TipButtonTests(TestCase):
     def setUp(self):
         self.location = Location.default()
-        self.client.force_login(get_user_model().objects.create_user("m", password="pw"))
+        self.client.force_login(make_manager("m"))
 
     def test_defaults_follow_the_kind_of_business(self):
         self.assertEqual(self.location.tip_buttons, ("percent", [15, 18, 20, 25]))
@@ -48,7 +48,7 @@ class TipButtonTests(TestCase):
 class AskTests(TestCase):
     def setUp(self):
         self.location = Location.default()
-        self.client.force_login(get_user_model().objects.create_user("m", password="pw"))
+        self.client.force_login(make_manager("m"))
         self.maria = hire("Maria", "server")
         self.sam = hire("Sam", "busser")
         parsed = ai.parse_rules("Bussers get 20%, the rest goes to servers by hours", self.location)

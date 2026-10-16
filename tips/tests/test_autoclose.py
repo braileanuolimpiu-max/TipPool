@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 
 from tips import ai, autoclose
 from tips.models import CloseTime, Location, Night, Shift, Tip, TipRuleSet
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 
 NY = ZoneInfo("America/New_York")
 
@@ -109,7 +109,7 @@ class SettingsPageTests(TestCase):
     def test_save_schedule(self):
         from django.contrib.auth import get_user_model
         from django.urls import reverse
-        user = get_user_model().objects.create_user("m", password="pw")
+        user = make_manager("m")
         self.client.force_login(user)
         data = {"auto_close_enabled": "on", "after_close": "pay", "timezone": "Europe/Bucharest",
                 "on_4": "on", "time_4": "01:30", "on_0": "", "time_0": "22:00"}

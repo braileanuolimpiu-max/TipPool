@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from tips import roles
 from tips.models import Location, Membership, Night, Role, StaffMember, Tip
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 from tips.tests.test_flow import FakePayPal
 
 
@@ -19,7 +19,7 @@ class LocationTests(TestCase):
         patcher = mock.patch("tips.services.get_client", return_value=self.paypal)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.client.force_login(get_user_model().objects.create_user("owner", password="pw"))
+        self.client.force_login(make_manager("owner"))
         self.diner = Location.default()
         self.client.post(reverse("location_add"), {"name": "Luna Salon", "business_type": "salon"})
         self.salon = Location.objects.get(name="Luna Salon")

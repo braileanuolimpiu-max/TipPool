@@ -1,9 +1,15 @@
 from django.urls import path
 
-from . import views
+from . import accounts, views
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    # business accounts
+    path("signup/", accounts.signup, name="signup"),
+    path("invite/<str:token>/", accounts.accept_invite, name="accept_invite"),
+    path("managers/invite/", accounts.invite_manager, name="invite_manager"),
+    path("managers/<int:pk>/remove/", accounts.remove_manager, name="remove_manager"),
+    path("managers/invites/<int:pk>/cancel/", accounts.cancel_invite, name="cancel_invite"),
     # customer (public)
     path("tip/", views.tip_page, name="tip_page"),
     path("tip/thanks/", views.tip_thanks, name="tip_thanks"),

@@ -74,7 +74,13 @@ python manage.py seed_demo      # manager login + staff + starter rules
 python manage.py runserver 8765
 ```
 
-Open http://127.0.0.1:8765 and log in with `manager` / `tippool-demo`.
+Open http://127.0.0.1:8765 and sign in with `manager` / `tippool-demo` (the demo business), or click
+**Create a business account** to sign up a new one. Each business only sees its own locations, team and tips.
+The owner can invite other managers from Settings → Managers. Staff never need an account: each person
+has a private tips link.
+
+Invite and password-reset emails print in the terminal until you set `EMAIL_HOST` (plus `EMAIL_HOST_USER`,
+`EMAIL_HOST_PASSWORD`) in `.env`.
 
 **Try the full flow:** open `/tip/?table=4` → pay with a sandbox *personal* account → "Close out"
 → tick who worked → review the split → "Approve & pay" → watch the payouts turn SUCCESS.

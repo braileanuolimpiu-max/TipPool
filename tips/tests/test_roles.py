@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from tips import ai, roles
 from tips.models import Location, Role
-from tips.tests.helpers import hire
+from tips.tests.helpers import hire, make_manager
 from tips.split import ShiftInput, calculate_split
 
 
@@ -67,7 +67,7 @@ class RolePresetTests(TestCase):
 
 class RoleViewTests(TestCase):
     def setUp(self):
-        self.client.force_login(get_user_model().objects.create_user("manager", password="pw"))
+        self.client.force_login(make_manager("manager"))
 
     def test_add_and_remove_role(self):
         self.client.post(reverse("role_add"), {"name": "Stylist", "aliases": "barber"})

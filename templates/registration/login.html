@@ -1,37 +1,21 @@
 {% extends "base.html" %}
+{% block site %}TipPool{% endblock %}
 {% block title %}Sign in{% endblock %}
 {% block body %}
 <div class="login">
-  <div class="left">
-    <a class="brand" href="#"><b>TipPool</b><span>{{ restaurant_name }}</span></a>
-    <div>
-      <h1>Tip-outs, done before the end of the shift.</h1>
-      <p>Guests tip with PayPal or Venmo. AI applies your house rules and explains every share. One click pays the whole team.</p>
-    </div>
-    <div class="receipt-wrap">
-      <div class="receipt">
-        <div class="head"><h2>Tip-out sheet</h2><p>Friday</p></div>
-        <hr>
-        <div class="lines">
-          <div class="line"><span>Maria, server</span><span class="amt">$168.00</span></div>
-          <div class="line"><span>Lea, server</span><span class="amt">$140.00</span></div>
-          <div class="line"><span>Alex, bar</span><span class="amt">$120.00</span></div>
-          <div class="line"><span>John, server</span><span class="amt">$112.00</span></div>
-          <div class="line"><span>Sam, busser</span><span class="amt">$60.00</span></div>
-        </div>
-        <hr>
-        <div class="line total"><span>Paid</span><span class="amt-hl">$600.00</span></div>
-      </div>
-    </div>
-  </div>
+{% include "registration/_auth_side.html" %}
   <div class="right">
     <form method="post" class="stack">{% csrf_token %}
       <h2>Manager sign in</h2>
-      {% if form.errors %}<div class="flash error">That username and password don't match.</div>{% endif %}
-      <div><label for="id_username">Username</label><input type="text" name="username" id="id_username" autocomplete="username" autofocus required></div>
-      <div><label for="id_password">Password</label><input type="password" name="password" id="id_password" autocomplete="current-password" required></div>
+      {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
+      {% if form.errors %}<div class="flash error">That email and password don't match.</div>{% endif %}
+      <div><label for="id_username">Email</label><input type="text" name="username" id="id_username" autocomplete="username" inputmode="email" value="{{ form.username.value|default:'' }}" autofocus required></div>
+      <div><label for="id_password">Password</label><input type="password" name="password" id="id_password" autocomplete="current-password" required>
+        <p class="hint"><a href="{% url 'password_reset' %}">Forgot your password?</a></p></div>
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn btn-primary btn-block">Sign in</button>
+      <p class="auth-switch">New to TipPool? <a href="{% url 'signup' %}">Create a business account</a></p>
+      <p class="hint" style="margin:0">Staff don't need to sign in: your manager gives you a private link to your tips.</p>
     </form>
   </div>
 </div>
