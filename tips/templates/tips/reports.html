@@ -38,11 +38,11 @@
 </form>
 
 <section class="kpis" aria-label="Totals">
-  <div><b>${{ report.collected }}</b><span>tips collected</span></div>
-  <div><b>${{ report.paid_out }}</b><span>paid out</span></div>
+  <div><b>{{ cur }}{{ report.collected }}</b><span>tips collected</span></div>
+  <div><b>{{ cur }}{{ report.paid_out }}</b><span>paid out</span></div>
   <div><b>{{ report.shift_count }}</b><span>shift{{ report.shift_count|pluralize }}</span></div>
-  <div><b>{% if report.per_shift %}${{ report.per_shift }}{% else %}–{% endif %}</b><span>average per shift</span></div>
-  {% for label, amount in report.by_source %}<div class="minor"><b>${{ amount }}</b><span>{{ label }}</span></div>{% endfor %}
+  <div><b>{% if report.per_shift %}{{ cur }}{{ report.per_shift }}{% else %}–{% endif %}</b><span>average per shift</span></div>
+  {% for label, amount in report.by_source %}<div class="minor"><b>{{ cur }}{{ amount }}</b><span>{{ label }}</span></div>{% endfor %}
 </section>
 
 <section class="panel">
@@ -54,8 +54,8 @@
     <tbody>
     {% for p in report.people %}
       <tr><td><strong>{{ p.name }}</strong></td><td class="muted">{{ p.roles }}</td><td class="r">{{ p.shifts }}</td><td class="r">{{ p.hours|floatformat:"-2" }}</td>
-        <td class="r">${{ p.pool }}</td><td class="r">{% if p.personal %}${{ p.personal }}{% else %}–{% endif %}</td><td class="r"><strong>${{ p.total }}</strong></td>
-        <td class="r">{% if p.per_hour %}${{ p.per_hour }}{% else %}–{% endif %}</td></tr>
+        <td class="r">{{ cur }}{{ p.pool }}</td><td class="r">{% if p.personal %}{{ cur }}{{ p.personal }}{% else %}–{% endif %}</td><td class="r"><strong>{{ cur }}{{ p.total }}</strong></td>
+        <td class="r">{% if p.per_hour %}{{ cur }}{{ p.per_hour }}{% else %}–{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
@@ -72,7 +72,7 @@
     <thead><tr><th>Shift</th>{% if report.several_locations %}<th>Location</th>{% endif %}<th class="r">Tips</th><th class="r">People paid</th><th>Status</th></tr></thead>
     <tbody>
     {% for s in report.shifts %}
-      <tr><td>{{ s.date|date:"D, M j" }}</td>{% if report.several_locations %}<td>{{ s.location }}</td>{% endif %}<td class="r">${{ s.total }}</td><td class="r">{{ s.people }}</td><td class="muted">{{ s.status }}</td></tr>
+      <tr><td>{{ s.date|date:"D, M j" }}</td>{% if report.several_locations %}<td>{{ s.location }}</td>{% endif %}<td class="r">{{ cur }}{{ s.total }}</td><td class="r">{{ s.people }}</td><td class="muted">{{ s.status }}</td></tr>
     {% endfor %}
     </tbody>
   </table></div>

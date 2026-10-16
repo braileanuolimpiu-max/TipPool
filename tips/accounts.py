@@ -231,3 +231,57 @@ def accept_invite(request, token):
     return render(request, "registration/invite.html", {
         "invite": invite, "existing": existing, "errors": errors,
     })
+
+
+# --- Payments: currency, fees, the business's own PayPal ---------------------------------
+@require_POST
+@owner_required
+def payment_settings(request):
+    from decimal import Decimal, InvalidOperation
+
+    from .models import Tip
+    from .paypal import LIVE_API, SANDBOX_API, PayPalClient, PayPalError
+    business = request.business
+    if request.POST.get("action") == "disconnect":
+        business.paypal_client_id = business.paypal_secret_encrypted = business.paypal_webhook_id = ""
+        business.paypal_live = False
+        business.save()
+        Change.log(request, "Disconnected the business's PayPal account")
+        messages.success(request, "PayPal disconnected.")
+        return redirect(f"{reverse('settings')}#payments")
+
+    currency = request.POST.get("currency", business.currency)
+    if currency != business.currency and currency in Business.CURRENCIES:
+        if Tip.objects.filter(night__location__business=business).exists():
+            messages.error(request, "The currency can't change once you have tips: past amounts would be wrong.")
+        else:
+            business.currency = currency
+    if request.POST.get("fee_mode") in Business.FeeMode.values:
+        business.fee_mode = request.POST["fee_mode"]
+    try:
+        percent = Decimal(request.POST.get("card_fee_percent", "0") or "0")
+        if 0 <= percent <= 10:
+            business.card_fee_percent = percent
+    except InvalidOperation:
+        pass
+
+    client_id = request.POST.get("paypal_client_id", "").strip()
+    secret = request.POST.get("paypal_secret", "").strip()
+    live = bool(request.POST.get("paypal_live"))
+    if client_id and (secret or client_id != business.paypal_client_id or live != business.paypal_live):
+        secret = secret or business.paypal_secret
+        try:
+            PayPalClient(client_id, secret, LIVE_API if live else SANDBOX_API).access_token()
+        except PayPalError:
+            business.save()
+            messages.error(request, "PayPal didn't accept that client ID and secret. Check them in your PayPal "
+                                    "developer dashboard (Apps & Credentials) and that you picked the right mode.")
+            return redirect(f"{reverse('settings')}#payments")
+        business.paypal_client_id, business.paypal_live = client_id, live
+        business.set_paypal_secret(secret)
+        Change.log(request, f"Connected a {'live' if live else 'sandbox'} PayPal account")
+    business.paypal_webhook_id = request.POST.get("paypal_webhook_id", business.paypal_webhook_id).strip()[:60]
+    business.save()
+    Change.log(request, f"Changed payment settings: {business.currency}, {business.get_fee_mode_display().lower()}")
+    messages.success(request, "Payment settings saved.")
+    return redirect(f"{reverse('settings')}#payments")

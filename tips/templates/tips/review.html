@@ -5,7 +5,7 @@
 <header class="page-head">
   <div>
     <h1>Check the split</h1>
-    <p>Here is everyone's share of the ${{ total }} from {{ night.date|date:"l" }}'s shift. Nothing is paid until you approve.</p>
+    <p>Here is everyone's share of the {{ cur }}{{ total }} from {{ night.date|date:"l" }}'s shift. Nothing is paid until you approve.</p>
   </div>
 </header>
 {% include "tips/_stepper.html" with step=2 %}
@@ -14,7 +14,7 @@
   {% for f in flags %}{{ f.staff.name }} wrote: "{{ f.text }}"{% if not forloop.last %} · {% endif %}{% endfor %}
   <a href="{% url 'messages_page' %}">Answer in Messages</a></div>
 {% elif night.hold %}<div class="flash warning">{{ night.hold }} Automatic payout is on hold until you pay.</div>{% endif %}
-{% if paid_total != total %}<div class="flash error">The shares add up to ${{ paid_total }}, but ${{ total }} was collected. Go back to who worked and calculate again.</div>{% endif %}
+{% if paid_total != to_share %}<div class="flash error">The shares add up to {{ cur }}{{ paid_total }}, but {{ cur }}{{ to_share }} should be shared. Go back to who worked and calculate again.</div>{% endif %}
 
 <div class="split-2 reverse">
   <div class="tray"><div class="receipt-wrap">
@@ -24,18 +24,22 @@
         <p>Tip-out sheet, {{ night.date|date:"D M j, Y" }}</p>
       </div>
       <hr>
-      <div class="line"><span>Tips collected</span><span class="amt">${{ total }}</span></div>
+      <div class="line"><span>Tips collected</span><span class="amt">{{ cur }}{{ total }}</span></div>
+      {% if fees %}
+      <div class="line"><span class="what">Card and PayPal fees<small>{% if fees_passed_on %}taken out before sharing{% else %}paid by the business{% endif %}</small></span>
+        <span class="amt">{% if fees_passed_on %}−{{ cur }}{{ fees_passed_on }}{% else %}{{ cur }}{{ fees }}{% endif %}</span></div>
+      {% endif %}
       <hr>
       <div class="lines roomy">
         {% for s in shares %}
         <div class="line">
           <span class="what">{{ s.staff.name }}<small>{{ s.role_name }}, {{ s.hours|floatformat:"-2" }} h</small></span>
-          <span class="amt">${{ s.amount }}</span>
+          <span class="amt">{{ cur }}{{ s.amount }}</span>
         </div>
         {% endfor %}
       </div>
       <hr>
-      <div class="line total"><span>To pay out</span><span class="amt-hl">${{ paid_total }}</span></div>
+      <div class="line total"><span>To pay out</span><span class="amt-hl">{{ cur }}{{ paid_total }}</span></div>
       {% if rule_set %}<p class="foot">{{ rule_set.summary }}</p>{% endif %}
     </div>
   </div></div>
@@ -45,7 +49,7 @@
       <div class="panel-head"><h2>Why each person gets this</h2></div>
       {% for s in shares %}
       <details class="why" {% if forloop.first %}open{% endif %}>
-        <summary><span class="avatar" aria-hidden="true">{{ s.staff.name|slice:":1" }}</span>{{ s.staff.name }}<span class="amt">${{ s.amount }}</span></summary>
+        <summary><span class="avatar" aria-hidden="true">{{ s.staff.name|slice:":1" }}</span>{{ s.staff.name }}<span class="amt">{{ cur }}{{ s.amount }}</span></summary>
         <p>{{ s.explanation|default:"No explanation available." }}</p>
       </details>
       {% endfor %}
@@ -53,8 +57,17 @@
 
     {% if night.status == "review" %}
     <form method="post" action="{% url 'pay' night.pk %}" class="panel panel-body stack" id="pay-form">{% csrf_token %}
-      <p style="margin:0">Each person gets their share straight to their PayPal account, in one PayPal payout.</p>
-      <button class="btn btn-primary btn-block">Pay {{ paying_count }} {% if paying_count == 1 %}person{% else %}people{% endif %} ${{ paid_total }}</button>
+      <p style="margin:0">Each person gets their share straight to their PayPal or Venmo, in one PayPal payout.</p>
+      {% if balance is not None %}<p class="small {% if balance_short %}flash error{% else %}muted{% endif %}" style="margin:0">Your PayPal balance: {{ cur }}{{ balance }}{% if balance_short %}. That's less than this payout: add money to PayPal first.{% endif %}</p>{% endif %}
+      {% if unconfirmed %}
+      <div class="note-warn"><strong>Not confirmed yet</strong>
+        <ul>{% for p in unconfirmed %}<li>{{ p.name }}: {{ p.payout_to }}</li>{% endfor %}</ul>
+        <p class="small" style="margin:6px 0 0">They haven't confirmed this address on their tips page. A typo would send their money to a stranger.</p>
+        <label class="choice" style="margin-top:8px"><input type="checkbox" name="allow_unconfirmed" required>
+          <span><strong>I checked these addresses with them</strong></span></label>
+      </div>
+      {% endif %}
+      <button class="btn btn-primary btn-block">Pay {{ paying_count }} {% if paying_count == 1 %}person{% else %}people{% endif %} {{ cur }}{{ paid_total }}</button>
       <a class="btn btn-quiet" href="{% url 'close_night_pk' night.pk %}">Change who worked</a>
     </form>
     {% else %}

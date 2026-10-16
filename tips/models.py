@@ -10,11 +10,43 @@ class Business(models.Model):
     """A business account: everything (locations, team, tips, reports) belongs to one.
     Managers only ever see their own business."""
 
+    CURRENCIES = {"USD": "$", "EUR": "€", "GBP": "£", "CAD": "CA$", "AUD": "A$"}
+
+    class FeeMode(models.TextChoices):
+        BUSINESS = "business", "The business pays the PayPal fees"
+        POOL = "pool", "Take the fees out of the tips before sharing"
+
     name = models.CharField(max_length=80)
     created_at = models.DateTimeField(default=now)
+    currency = models.CharField(max_length=3, default="USD", choices=[(c, c) for c in CURRENCIES])
+    fee_mode = models.CharField(max_length=10, choices=FeeMode.choices, default=FeeMode.BUSINESS)
+    # card-machine fee, % of card tips (only used when fees come out of the tips)
+    card_fee_percent = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+    # the business's own PayPal app (REST credentials). Empty = sandbox demo on the TipPool account.
+    paypal_client_id = models.CharField(max_length=200, blank=True)
+    paypal_secret_encrypted = models.TextField(blank=True)
+    paypal_webhook_id = models.CharField(max_length=60, blank=True)
+    paypal_live = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
+
+    @property
+    def symbol(self):
+        return self.CURRENCIES.get(self.currency, self.currency + " ")
+
+    @property
+    def paypal_connected(self):
+        return bool(self.paypal_client_id and self.paypal_secret_encrypted)
+
+    @property
+    def paypal_secret(self):
+        from .vault import decrypt
+        return decrypt(self.paypal_secret_encrypted)
+
+    def set_paypal_secret(self, secret):
+        from .vault import encrypt
+        self.paypal_secret_encrypted = encrypt(secret)
 
 
 class Manager(models.Model):
@@ -166,9 +198,17 @@ def new_access_token():
 class StaffMember(models.Model):
     """A person on one business's team. They can work at several of its locations (see Membership)."""
 
+    class PayoutMethod(models.TextChoices):
+        PAYPAL = "paypal", "PayPal"
+        VENMO = "venmo", "Venmo"
+
     business = models.ForeignKey(Business, related_name="staff", on_delete=models.CASCADE)
     name = models.CharField(max_length=80)
     paypal_email = models.EmailField(help_text="Where their tips are paid (PayPal account email)")
+    payout_method = models.CharField(max_length=10, choices=PayoutMethod.choices, default=PayoutMethod.PAYPAL)
+    venmo_phone = models.CharField(max_length=20, blank=True)
+    # the worker said "yes, pay me here" on their own page (the manager only typed it)
+    payout_confirmed_at = models.DateTimeField(null=True, blank=True)
     # secret link so a staff member can see their own tips without a login
     access_token = models.CharField(max_length=40, default=new_access_token, unique=True, editable=False)
 
@@ -177,6 +217,13 @@ class StaffMember(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def payout_to(self):
+        """Human-readable destination: 'PayPal maria@x.com' or 'Venmo +1 555...'."""
+        if self.payout_method == self.PayoutMethod.VENMO and self.venmo_phone:
+            return f"Venmo {self.venmo_phone}"
+        return f"PayPal {self.paypal_email}"
 
 
 class Membership(models.Model):
@@ -289,6 +336,16 @@ class Night(models.Model):
         """The tips the team shares under the rules (personal tips go straight to their person)."""
         return self._sum(self.tips.filter(status=Tip.Status.COMPLETED, staff__isnull=True))
 
+    @property
+    def payout_batch(self):
+        """The first (main) payout batch; retries are separate small batches."""
+        return self.payout_batches.filter(is_retry=False).first()
+
+    @property
+    def fee_total(self):
+        fees = self.tips.filter(status=Tip.Status.COMPLETED).aggregate(s=models.Sum("fee"))["s"]
+        return (fees or Decimal("0")).quantize(Decimal("0.01"))
+
     @staticmethod
     def _sum(qs):
         return (qs.aggregate(s=models.Sum("amount"))["s"] or Decimal("0")).quantize(Decimal("0.01"))
@@ -324,6 +381,10 @@ class Tip(models.Model):
     staff = models.ForeignKey(StaffMember, null=True, blank=True, related_name="personal_tips", on_delete=models.PROTECT)
     note = models.CharField(max_length=120, blank=True)
     paypal_order_id = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    # what PayPal (or the card machine) kept from this tip
+    fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # e.g. "Refunded to the guest" / "Guest opened a dispute"
+    problem = models.CharField(max_length=200, blank=True)
     paypal_capture_id = models.CharField(max_length=64, blank=True)
     payer_name = models.CharField(max_length=120, blank=True)
     table = models.CharField(max_length=20, blank=True)
@@ -397,11 +458,18 @@ class Share(RoleLabelMixin, models.Model):
         ordering = ["-amount"]
         unique_together = [("night", "staff")]
 
+    @property
+    def payout_item(self):
+        """The latest payout for this share (an earlier one may have failed and been sent again)."""
+        return self.payout_items.order_by("-pk").first()
+
 
 class PayoutBatch(models.Model):
     """One PayPal Payouts batch = everyone paid for one night in one API call."""
 
-    night = models.OneToOneField(Night, related_name="payout_batch", on_delete=models.CASCADE)
+    night = models.ForeignKey(Night, related_name="payout_batches", on_delete=models.CASCADE)
+    # a retry sends one person's payout again (e.g. to a corrected email)
+    is_retry = models.BooleanField(default=False)
     sender_batch_id = models.CharField(max_length=64, unique=True)
     paypal_batch_id = models.CharField(max_length=64, blank=True)
     status = models.CharField(max_length=20, default="NEW")
@@ -413,13 +481,23 @@ class PayoutBatch(models.Model):
 
 
 class PayoutItem(models.Model):
+    FAILED = {"FAILED", "RETURNED", "BLOCKED", "DENIED", "REFUNDED", "REVERSED"}
+
     batch = models.ForeignKey(PayoutBatch, related_name="items", on_delete=models.CASCADE)
-    share = models.OneToOneField(Share, related_name="payout_item", on_delete=models.CASCADE)
+    share = models.ForeignKey(Share, related_name="payout_items", on_delete=models.CASCADE)
+    receiver = models.CharField(max_length=200, blank=True)  # where it was sent, e.g. "PayPal maria@x.com"
+    fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sender_item_id = models.CharField(max_length=64, unique=True)
     paypal_item_id = models.CharField(max_length=64, blank=True)
     transaction_id = models.CharField(max_length=64, blank=True)
     status = models.CharField(max_length=20, default="PENDING")
     error = models.TextField(blank=True)
+    # replaced by a newer payout (sent again after it failed or was cancelled)
+    superseded = models.BooleanField(default=False)
+
+    @property
+    def failed(self):
+        return self.status in self.FAILED
 
 
 class WebhookEvent(models.Model):
@@ -457,9 +535,17 @@ class CloseTime(models.Model):
 
 
 class Message(models.Model):
-    """A staff member flags a problem ("my hours are wrong") or writes to the manager."""
+    """A staff member flags a problem ("my hours are wrong"), writes to the manager,
+    or asks to be paid somewhere else (the manager approves that change)."""
+
+    class Kind(models.TextChoices):
+        MESSAGE = "message", "Message"
+        PAYOUT_CHANGE = "payout", "Change where I'm paid"
 
     staff = models.ForeignKey(StaffMember, related_name="messages", on_delete=models.CASCADE)
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.MESSAGE)
+    # for payout changes: {"method": "paypal"|"venmo", "email": "...", "phone": "..."}
+    payload = models.JSONField(default=dict, blank=True)
     location = models.ForeignKey(Location, related_name="messages", on_delete=models.CASCADE)
     night = models.ForeignKey(Night, null=True, blank=True, related_name="messages", on_delete=models.SET_NULL)
     text = models.TextField(max_length=1000)
@@ -496,3 +582,25 @@ class Change(models.Model):
         else:
             who = request_or_who
         return cls.objects.create(location=location, who=who[:150], what=what[:300])
+
+
+class Alert(models.Model):
+    """Something that needs the manager: a failed or unclaimed payout, a refunded tip, a dispute,
+    a shift on hold. Shown on Messages and the overview, and emailed to the managers."""
+
+    business = models.ForeignKey(Business, related_name="alerts", on_delete=models.CASCADE)
+    location = models.ForeignKey(Location, null=True, blank=True, related_name="alerts", on_delete=models.CASCADE)
+    night = models.ForeignKey(Night, null=True, blank=True, related_name="alerts", on_delete=models.SET_NULL)
+    text = models.CharField(max_length=300)
+    # a key so the same problem isn't raised twice (e.g. "payout-failed:123")
+    key = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(default=now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def is_open(self):
+        return self.resolved_at is None

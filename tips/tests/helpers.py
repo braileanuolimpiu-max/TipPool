@@ -1,13 +1,16 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from tips.models import Location, Manager, Membership, StaffMember
 
 
-def hire(name, role, location=None, email=None):
-    """A person on a location's team (the first location unless given)."""
+def hire(name, role, location=None, email=None, confirmed=True):
+    """A person on a location's team (the first location unless given). `confirmed`: they already said
+    "yes, pay me here" on their tips page."""
     location = location or Location.default()
     person = StaffMember.objects.create(business=location.business, name=name,
-                                        paypal_email=email or f"{name.lower()}@example.com")
+                                        paypal_email=email or f"{name.lower()}@example.com",
+                                        payout_confirmed_at=timezone.now() if confirmed else None)
     Membership.objects.create(staff=person, location=location, default_role=role)
     return person
 

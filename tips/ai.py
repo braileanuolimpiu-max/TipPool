@@ -269,18 +269,19 @@ this shift's tip pool was calculated. Use ONLY the numbers given; never recalcul
 2-3 sentences each, plain language, mention the group(s), the basis (hours or equal) and the amount."""
 
 
-def explain_shares(total, rules_summary, shares, notes, role_names=None):
+def explain_shares(total, rules_summary, shares, notes, role_names=None, symbol="$"):
     """shares: list of PersonShare. role_names: {role key: name}. Returns {name: explanation}."""
     role_names = role_names or {}
+    cur = symbol
 
     def role_of(share):
         return role_names.get(share.role, share.role).lower()
 
     if mode() == "claude":
-        lines = [f"Total tips this shift: ${total}", f"Rules: {rules_summary}"]
+        lines = [f"Total tips this shift: {cur}{total}", f"Rules: {rules_summary}"]
         for s in shares:
-            parts = "; ".join(f"{b['group']}: {b['basis']} of ${b['pool']} = ${b['amount']}" for b in s.breakdown)
-            lines.append(f"- {s.name} ({role_of(s)}, {s.hours}h): ${s.amount}. {parts or 'no share'}")
+            parts = "; ".join(f"{b['group']}: {b['basis']} of {cur}{b['pool']} = {cur}{b['amount']}" for b in s.breakdown)
+            lines.append(f"- {s.name} ({role_of(s)}, {s.hours}h): {cur}{s.amount}. {parts or 'no share'}")
         if notes:
             lines.append("Notes: " + " ".join(notes))
         try:
@@ -289,20 +290,20 @@ def explain_shares(total, rules_summary, shares, notes, role_names=None):
             return {e.name: e.explanation for e in out.explanations}
         except AIError as exc:
             log.warning("Falling back to template explanations: %s", exc)
-    return {s.name: _template_explanation(s, role_of(s)) for s in shares}
+    return {s.name: _template_explanation(s, role_of(s), cur) for s in shares}
 
 
-def _template_explanation(share, role):
+def _template_explanation(share, role, cur="$"):
     if not share.breakdown:
         return f"{share.name} worked as {role}, which doesn't receive tips under the house rules."
     parts = []
     for b in share.breakdown:
         if b.get("personal"):
-            parts.append(f"guests left ${b['amount']} for you by name, all yours")
+            parts.append(f"guests left {cur}{b['amount']} for you by name, all yours")
         else:
-            parts.append(f"from the {b['group']} pool of ${b['pool']} you get {b['basis']} = ${b['amount']}")
+            parts.append(f"from the {b['group']} pool of {cur}{b['pool']} you get {b['basis']} = {cur}{b['amount']}")
     start = f"You worked {share.hours.normalize()}h as {role}: " if share.hours else "You got personal tips: "
-    return start + "; ".join(parts) + f". Total: ${share.amount}."
+    return start + "; ".join(parts) + f". Total: {cur}{share.amount}."
 
 
 # ---------------------------------------------------------------------------

@@ -51,7 +51,7 @@
       <div class="panel-body stack">
         <label class="choice"><input type="radio" name="tip_style" value="" {% if not restaurant.tip_style %}checked{% endif %}>
           <span><strong>The usual for a {{ type_label }}</strong>
-            <span class="small muted">{% if usual_tips.0 == "percent" %}{% for v in usual_tips.1 %}{{ v }}%{% if not forloop.last %}, {% endif %}{% endfor %} of the bill{% else %}{% for v in usual_tips.1 %}${{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></span></label>
+            <span class="small muted">{% if usual_tips.0 == "percent" %}{% for v in usual_tips.1 %}{{ v }}%{% if not forloop.last %}, {% endif %}{% endfor %} of the bill{% else %}{% for v in usual_tips.1 %}{{ cur }}{{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></span></label>
         {% for value, label in tip_styles %}
         <label class="choice"><input type="radio" name="tip_style" value="{{ value }}" {% if restaurant.tip_style == value %}checked{% endif %}>
           <span><strong>{{ label }}</strong></span></label>
@@ -140,6 +140,46 @@
     </form>
   </div>
 </section>
+
+<form method="post" action="{% url 'payment_settings' %}" class="panel" id="payments" style="margin-top:28px">{% csrf_token %}
+  <div class="panel-head"><h2>Payments</h2>
+    {% if business.paypal_connected %}<span class="pill ok">{% if business.paypal_live %}Live PayPal connected{% else %}Sandbox PayPal connected{% endif %}</span>
+    {% else %}<span class="pill wait">Demo: TipPool's sandbox account</span>{% endif %}</div>
+  <fieldset class="split-2" style="gap:0;border:0;margin:0;padding:0"{% if not is_owner %} disabled{% endif %}>
+    <div class="panel-body stack">
+      <div><label for="currency">Currency</label>
+        <select id="currency" name="currency" {% if has_tips %}disabled{% endif %}>{% for code, sym in currencies %}<option value="{{ code }}" {% if business.currency == code %}selected{% endif %}>{{ code }} ({{ sym }})</option>{% endfor %}</select>
+        {% if has_tips %}<input type="hidden" name="currency" value="{{ business.currency }}"><p class="hint">Fixed once you have tips, so past amounts stay right.</p>{% else %}<p class="hint">For tips, payouts and reports at every location. Venmo payouts are US dollars only.</p>{% endif %}</div>
+      <div><label>Card and PayPal fees</label>
+        {% for value, label in fee_modes %}<label class="choice" style="margin-top:6px"><input type="radio" name="fee_mode" value="{{ value }}" {% if business.fee_mode == value %}checked{% endif %}>
+          <span><strong>{{ label }}</strong><span class="small muted">{% if value == "business" %}The team gets every cent guests tipped. Simple, and staff like it.{% else %}Allowed in the US: only the actual processing fee comes off, before the split.{% endif %}</span></span></label>{% endfor %}</div>
+      <div><label for="card_fee_percent">Card machine fee on card tips</label>
+        <input type="number" id="card_fee_percent" name="card_fee_percent" min="0" max="10" step="0.01" value="{{ business.card_fee_percent }}" style="max-width:120px"> %
+        <p class="hint">Only taken off when fees come out of the tips. PayPal's own fee is read from each payment.</p></div>
+    </div>
+    <div class="panel-body stack" style="border-left:1px solid var(--hair-soft)">
+      <p style="margin:0">{% if business.paypal_connected %}Tips go straight into <strong>your</strong> PayPal account and payouts come from it.{% else %}Connect your own PayPal so tips go into your account and payouts come from it. Until then, this account runs as a demo on TipPool's PayPal sandbox: no real money.{% endif %}</p>
+      <div><label for="paypal_client_id">PayPal client ID</label>
+        <input type="text" id="paypal_client_id" name="paypal_client_id" value="{{ business.paypal_client_id }}" autocomplete="off" spellcheck="false"></div>
+      <div><label for="paypal_secret">Secret</label>
+        <input type="password" id="paypal_secret" name="paypal_secret" autocomplete="new-password" placeholder="{% if business.paypal_connected %}Saved (hidden). Type a new one to replace it{% endif %}">
+        <p class="hint">From developer.paypal.com, Apps &amp; Credentials. Stored encrypted and never shown again. Turn on Payouts for the app.</p></div>
+      <div><label for="paypal_webhook_id">Webhook ID <span class="muted">(optional)</span></label>
+        <input type="text" id="paypal_webhook_id" name="paypal_webhook_id" value="{{ business.paypal_webhook_id }}" autocomplete="off" spellcheck="false">
+        <p class="hint">Point a webhook at {{ webhook_url }} for instant updates, refunds and disputes.</p></div>
+      <label class="choice"><input type="checkbox" name="paypal_live" {% if business.paypal_live %}checked{% endif %}><span><strong>Live (real money)</strong><span class="small muted">Leave off for sandbox testing.</span></span></label>
+    </div>
+  </fieldset>
+  {% if is_owner %}
+  <div class="panel-body actions" style="border-top:1px solid var(--hair-soft)">
+    <button class="btn btn-primary">Save payment settings</button>
+    {% if business.paypal_connected %}<button class="btn btn-quiet" name="action" value="disconnect" formnovalidate>Disconnect PayPal</button>{% endif %}
+    <span class="small muted">We check the keys with PayPal before saving.</span>
+  </div>
+  {% else %}
+  <div class="panel-body" style="border-top:1px solid var(--hair-soft)"><p class="muted" style="margin:0">Only the owner can change payment settings.</p></div>
+  {% endif %}
+</form>
 
 <section class="panel" id="managers" style="margin-top:28px">
   <div class="panel-head"><h2>Managers</h2><span class="small muted">who can sign in to {{ business.name }}</span></div>

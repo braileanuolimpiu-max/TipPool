@@ -9,6 +9,7 @@ urlpatterns = [
     path("invite/<str:token>/", accounts.accept_invite, name="accept_invite"),
     path("my-link/", accounts.email_my_link, name="email_my_link"),
     path("managers/invite/", accounts.invite_manager, name="invite_manager"),
+    path("settings/payments/", accounts.payment_settings, name="payment_settings"),
     path("managers/<int:pk>/remove/", accounts.remove_manager, name="remove_manager"),
     path("managers/invites/<int:pk>/cancel/", accounts.cancel_invite, name="cancel_invite"),
     # customer (public)
@@ -43,6 +44,7 @@ urlpatterns = [
     path("tips/<int:pk>/remove/", views.night_tip_remove, name="night_tip_remove"),
     path("nights/<int:pk>/pay/", views.pay, name="pay"),
     path("nights/<int:pk>/payout/", views.payout_status, name="payout_status"),
+    path("payouts/<int:pk>/action/", views.payout_action, name="payout_action"),
     path("nights/<int:pk>/payout.json", views.payout_status_json, name="payout_status_json"),
     # staff (secret link)
     path("me/<str:token>/", views.my_tips, name="my_tips"),

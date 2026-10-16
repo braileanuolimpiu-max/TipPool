@@ -113,7 +113,7 @@ a:hover { text-decoration-color: var(--marker); text-decoration-thickness: 4px; 
 /* ---------- forms ---------- */
 label { display: block; font-weight: 700; font-size: .9rem; margin-bottom: 6px; }
 .hint { color: var(--graphite); font-size: .85rem; margin-top: 6px; }
-input[type=text], input[type=search], input[type=date], input[type=email], input[type=number], input[type=password], input[type=time], select, textarea {
+input[type=text], input[type=tel], input[type=search], input[type=date], input[type=email], input[type=number], input[type=password], input[type=time], select, textarea {
   width: 100%; padding: 10px 12px; border: 1.5px solid var(--hair); border-radius: 4px; font: inherit; background: var(--paper); color: var(--ink); }
 input:hover, select:hover, textarea:hover { border-color: #b5b5ae; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px var(--marker); }
@@ -503,3 +503,8 @@ hr.soft { border: 0; border-top: 1px solid var(--hair); margin: 4px 0; }
 @media (max-width: 640px) {
   .link-tools .label { display: none; }
 }
+.clock-card.attention { border-color: var(--wait); background: var(--wait-soft); }
+.alert-panel { border-color: var(--wait); }
+.alert-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--void); flex: none; margin-top: 6px; }
+.conf { font: 600 .7rem var(--mono); margin-left: 6px; white-space: nowrap; }
+.conf.ok { color: var(--go); } .conf.wait { color: var(--wait); }

@@ -27,17 +27,17 @@
       {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">No tip was taken. Choose an amount to try again.</p>{% endif %}
       {% if tip_style == "percent" %}
       <label for="bill">Your bill</label>
-      <input type="number" id="bill" min="1" max="10000" step="0.01" inputmode="decimal" placeholder="$ 0.00">
+      <input type="number" id="bill" min="1" max="10000" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00">
       <div class="amounts" role="group" aria-label="Tip percent">
         {% for p in presets %}<button type="button" class="amount pct" data-percent="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">{{ p }}%<small>–</small></button>{% endfor %}
       </div>
       {% else %}
       <div class="amounts" role="group" aria-label="Tip amount">
-        {% for p in presets %}<button type="button" class="amount" data-amount="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">${{ p }}</button>{% endfor %}
+        {% for p in presets %}<button type="button" class="amount" data-amount="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">{{ cur }}{{ p }}</button>{% endfor %}
       </div>
       {% endif %}
       <label for="custom">Other amount</label>
-      <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="$ 0.00">
+      <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00">
       <div class="pay-buttons">
         <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
         <venmo-button type="pay" class="venmo-blue" hidden></venmo-button>
@@ -55,12 +55,16 @@
 {{ tip_mode|json_script:"mode-data" }}
 {{ default_pick|json_script:"pick-data" }}
 {{ tip_style|json_script:"style-data" }}
+{{ cur|json_script:"cur-data" }}
+{{ currency|json_script:"currency-data" }}
 <script>
   const CSRF = "{{ csrf_token }}";
   const TABLE = JSON.parse(document.getElementById("table-data").textContent);
   const AT = JSON.parse(document.getElementById("at-data").textContent);
   const statusEl = document.getElementById("status");
   const STYLE = JSON.parse(document.getElementById("style-data").textContent);
+  const CUR = JSON.parse(document.getElementById("cur-data").textContent);
+  const CURRENCY = JSON.parse(document.getElementById("currency-data").textContent);
   const PICK = JSON.parse(document.getElementById("pick-data").textContent);
   let amount = STYLE === "percent" ? "" : Number(PICK).toFixed(2);
   let percent = STYLE === "percent" ? Number(PICK) : null;
@@ -76,7 +80,7 @@
 
   const amountButtons = document.querySelectorAll(".amount");
   const bill = document.getElementById("bill");
-  // percent of the bill: each button shows its dollar amount (at least $1)
+  // percent of the bill: each button shows its amount (at least 1)
   function fromPercent(p) {
     const b = bill ? Number(bill.value) : 0;
     return b > 0 ? Math.max(1, Math.round(b * p) / 100).toFixed(2) : "";
@@ -84,7 +88,7 @@
   function refreshPercents() {
     document.querySelectorAll(".amount.pct").forEach((btn) => {
       const v = fromPercent(Number(btn.dataset.percent));
-      btn.querySelector("small").textContent = v ? "$" + v : "–";
+      btn.querySelector("small").textContent = v ? CUR + v : "–";
     });
     if (percent !== null) amount = fromPercent(percent);
   }
@@ -170,7 +174,7 @@
         components: ["paypal-payments", "venmo-payments"],
         pageType: "checkout",
       });
-      const methods = await sdk.findEligibleMethods({currencyCode: "USD"});
+      const methods = await sdk.findEligibleMethods({currencyCode: CURRENCY});
 
       const paypalSession = sdk.createPayPalOneTimePaymentSession(callbacks);
       const paypalButton = document.querySelector("paypal-button");

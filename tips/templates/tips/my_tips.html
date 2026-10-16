@@ -30,20 +30,45 @@
     {% endif %}
   </section>
   {% endif %}
+  <section class="clock-card payout-card{% if not member.payout_confirmed_at %} attention{% endif %}">
+    <div style="flex:1;min-width:0">
+      <p class="clock-state">{% if member.payout_confirmed_at %}Your tips are paid to{% else %}Is this where you want your tips?{% endif %}</p>
+      <p class="clock-time" style="font-weight:700;color:var(--ink)">{{ member.payout_to }}</p>
+      {% if payout_request %}<p class="clock-time">Waiting for your manager to approve: {{ payout_request.text }}</p>{% endif %}
+    </div>
+    {% if not member.payout_confirmed_at %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="payout" value="confirm">
+      <button class="btn btn-primary">Yes, pay me here</button></form>
+    {% endif %}
+    <details class="flag" style="flex-basis:100%;margin-top:0">
+      <summary>{% if member.payout_confirmed_at %}Change where I'm paid{% else %}No, change it{% endif %}</summary>
+      <form method="post">{% csrf_token %}<input type="hidden" name="payout" value="change">
+        <label class="choice"><input type="radio" name="method" value="paypal" checked> <span><strong>PayPal</strong><span class="small muted">The email of your PayPal account</span></span></label>
+        <input type="email" name="email" placeholder="you@example.com" aria-label="PayPal email">
+        {% if cur == "$" %}
+        <label class="choice"><input type="radio" name="method" value="venmo"> <span><strong>Venmo</strong><span class="small muted">The phone number on your Venmo account (US only)</span></span></label>
+        <input type="tel" name="phone" placeholder="+1 555 123 4567" aria-label="Venmo phone number">
+        {% endif %}
+        <button class="btn btn-secondary small">Send to my manager</button>
+        <p class="small" style="margin:0">For your safety, your manager approves the change before any money goes there.</p>
+      </form>
+    </details>
+  </section>
+
   {% for s in shares %}
   <div class="receipt-wrap" style="width:100%;margin-bottom:22px">
     <div class="receipt">
       <div class="head"><h2>Tips receipt</h2><p>{% if several %}{{ s.night.location.display_name }} · {% endif %}{{ s.night.date|date:"l, M j, Y" }}</p></div>
       <hr>
       <div class="line"><span class="what">{{ s.role_name }}<small>{% if s.hours %}{{ s.hours|floatformat:"-2" }} hours worked{% else %}personal tips{% endif %}</small></span>
-        <span class="amt">${{ s.amount }}
+        <span class="amt">{{ cur }}{{ s.amount }}
           {% with item=s.payout_item %}{% if item and item.status == "SUCCESS" %}<span class="stamp ok">PAID</span>{% elif item %}<span class="stamp wait">SENDING</span>{% else %}<span class="stamp wait">PENDING</span>{% endif %}{% endwith %}
         </span></div>
       {% if s.breakdown %}
       <hr>
       <div class="lines">
         {% for b in s.breakdown %}
-        <div class="line"><span class="what">{% if b.personal %}Tips left for you<small>by name, all yours</small>{% else %}{{ b.group }} pool ${{ b.pool }}<small>your part: {{ b.basis }}</small>{% endif %}</span><span class="amt">${{ b.amount }}</span></div>
+        <div class="line"><span class="what">{% if b.personal %}Tips left for you<small>by name, all yours</small>{% else %}{{ b.group }} pool {{ cur }}{{ b.pool }}<small>your part: {{ b.basis }}</small>{% endif %}</span><span class="amt">{{ cur }}{{ b.amount }}</span></div>
         {% endfor %}
       </div>
       {% endif %}

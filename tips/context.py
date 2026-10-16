@@ -8,9 +8,16 @@ def app_context(request):
         locations = []
     open_messages = 0
     if locations and location:
-        from .models import Message
-        open_messages = Message.objects.filter(location=location, resolved_at__isnull=True).count()
+        from django.db.models import Q
+
+        from .models import Alert, Message
+        open_messages = (Message.objects.filter(Q(location=location) | Q(kind="payout", staff__business=business),
+                                                resolved_at__isnull=True).distinct().count()
+                         + Alert.objects.filter(Q(location=location) | Q(location__isnull=True), business=business,
+                                                resolved_at__isnull=True).count())
+    owner = business or (location.business if location is not None else None)
     return {
+        "cur": owner.symbol if owner else "$",
         "business": business,
         "open_messages": open_messages,
         "location": location,

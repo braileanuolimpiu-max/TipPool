@@ -1,4 +1,5 @@
 import io
+import re
 from collections import Counter
 import json
 import logging
@@ -8,6 +9,9 @@ import qrcode
 import qrcode.image.svg
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.core.mail import send_mail
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,11 +21,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import ai, autoclose, hours as hours_from, roles as role_presets, services
-from .models import (Change, CloseTime, Location, Membership, Night, PayoutBatch, Role, Shift, StaffMember, Tip,
-                     TipRuleSet, WebhookEvent)
+from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Shift,
+                     StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required
 from .middleware import public_location
-from .paypal import PayPalError, get_client
+from .paypal import PayPalError, checkout_config, get_client, webhook_id_for
 
 log = logging.getLogger("tips.views")
 
@@ -83,7 +87,7 @@ def clock_out_for(request, pk):
 @manager_required
 def history(request):
     nights = (Night.objects.filter(location=request.location).exclude(status=Night.Status.OPEN)
-              .prefetch_related("shares", "tips").select_related("payout_batch")[:60])
+              .prefetch_related("shares", "tips", "payout_batches")[:60])
     rows = []
     for n in nights:
         rows.append({"night": n, "total": n.tip_total, "people": sum(1 for s in n.shares.all() if s.amount > 0),
@@ -116,8 +120,10 @@ def tip_page(request):
         "to": int(to) if to.isdigit() and any(m.pk == int(to) for m in people) else None,
         "cancelled": "cancelled" in request.GET,
         "table": request.GET.get("table", "")[:20],
-        "paypal_client_id": settings.PAYPAL_CLIENT_ID,
-        "paypal_sdk_url": settings.PAYPAL_SDK_URL,
+        "paypal_client_id": checkout_config(location.business)[0],
+        "paypal_sdk_url": checkout_config(location.business)[1],
+        "currency": location.business.currency,
+        "cur": location.business.symbol,
     })
 
 
@@ -134,6 +140,7 @@ def tip_thanks(request):
         request.location = tip.night.location
     return render(request, "tips/tip_thanks.html", {
         "tip": tip, "table": tip.table if tip else "", "location": request.location,
+        "cur": request.location.business.symbol,
         "restaurant_name": request.location.display_name, "restaurant_named": bool(request.location.name),
     })
 
@@ -496,9 +503,9 @@ def night_tip_add(request, pk):
     try:
         tip = services.add_manual_tip(night, request.POST.get("amount") or "0", request.POST.get("source", ""),
                                       staff=staff, note=request.POST.get("note", "").strip())
-        Change.log(request, f"Added ${tip.amount} {tip.get_source_display().lower()} tips to the {night}"
+        Change.log(request, f"Added {request.business.symbol}{tip.amount} {tip.get_source_display().lower()} tips to the {night}"
                             + (f" for {staff.name}" if staff else ""))
-        messages.success(request, f"Added ${tip.amount} {tip.get_source_display().lower()} tips"
+        messages.success(request, f"Added {request.business.symbol}{tip.amount} {tip.get_source_display().lower()} tips"
                                   f"{f' for {staff.name}' if staff else ' to the shared pool'}.")
     except (services.TipPoolError, InvalidOperation) as exc:
         messages.error(request, str(exc) if isinstance(exc, services.TipPoolError) else "Enter a valid amount.")
@@ -512,7 +519,7 @@ def night_tip_remove(request, pk):
     night_pk = tip.night_id
     try:
         services.remove_manual_tip(tip)
-        Change.log(request, f"Removed ${tip.amount} {tip.get_source_display().lower()} tips from the {tip.night}")
+        Change.log(request, f"Removed {request.business.symbol}{tip.amount} {tip.get_source_display().lower()} tips from the {tip.night}")
         messages.success(request, "Removed.")
     except services.TipPoolError as exc:
         messages.error(request, str(exc))
@@ -525,9 +532,23 @@ def review(request, pk):
     if night.status in (Night.Status.OPEN, Night.Status.CLOSED):
         return redirect("close_night_pk", pk=night.pk)
     shares = list(night.shares.select_related("staff"))
+    business = request.business
+    shared_fees, personal_fees = services.fees_to_share(night)
+    passed_on = (shared_fees + sum(personal_fees.values(), Decimal("0"))).quantize(Decimal("0.01"))
+    balance = None
+    if night.status == Night.Status.REVIEW:
+        try:
+            balance = services.get_client(business).available_balance(business.currency)
+        except PayPalError:
+            balance = None
+    paid_total = sum((s.amount for s in shares), Decimal("0"))
     return render(request, "tips/review.html", {
         "night": night, "shares": shares, "total": night.tip_total,
-        "paid_total": sum((s.amount for s in shares), Decimal("0")),
+        "fees": night.fee_total, "fees_passed_on": passed_on, "to_share": night.tip_total - passed_on,
+        "fee_mode": business.fee_mode, "balance": balance,
+        "balance_short": balance is not None and balance < paid_total,
+        "unconfirmed": services.unconfirmed(shares),
+        "paid_total": paid_total,
         "paying_count": sum(1 for s in shares if s.amount > 0),
         "flags": night.messages.filter(resolved_at__isnull=True).select_related("staff"),
         "rule_set": night.rule_set,
@@ -538,9 +559,13 @@ def review(request, pk):
 @require_POST
 def pay(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
+    allow = bool(request.POST.get("allow_unconfirmed"))
     try:
-        services.pay_night(night)
-        Change.log(request, f"Paid the {night}: ${night.tip_total} to {night.shares.filter(amount__gt=0).count()} people")
+        services.pay_night(night, allow_unconfirmed=allow)
+        paid = sum((s.amount for s in night.shares.all()), Decimal("0"))
+        Change.log(request, f"Paid the {night}: {request.business.symbol}{paid} to "
+                            f"{night.shares.filter(amount__gt=0).count()} people"
+                            + (" (some hadn't confirmed where they're paid)" if allow else ""))
         messages.success(request, "Payout sent to PayPal.")
     except services.TipPoolError as exc:
         messages.error(request, str(exc))
@@ -559,12 +584,50 @@ def payout_status(request, pk):
         return redirect("review", pk=pk)
     if request.method == "POST":
         try:
-            services.refresh_batch(batch)
+            for each in night.payout_batches.all():
+                services.refresh_batch(each)
         except PayPalError as exc:
             messages.error(request, f"Could not refresh from PayPal: {exc}")
         return redirect("payout_status", pk=pk)
-    items = batch.items.select_related("share__staff").order_by("-share__amount")
-    return render(request, "tips/payout_status.html", {"night": night, "batch": batch, "items": items})
+    items = (PayoutItem.objects.filter(batch__night=night).select_related("share__staff", "batch")
+             .order_by("superseded", "-share__amount", "-pk"))
+    paid = sum((i.share.amount for i in items if i.status == "SUCCESS" and not i.superseded), Decimal("0"))
+    return render(request, "tips/payout_status.html", {
+        "night": night, "batch": batch, "items": items, "paid": paid,
+        "payout_fees": sum((i.fee for i in items), Decimal("0")),
+    })
+
+
+@manager_required
+@require_POST
+def payout_action(request, pk):
+    """Send a failed payout again, cancel an unclaimed one, or remind the person to accept it."""
+    item = get_object_or_404(PayoutItem.objects.select_related("share__staff", "share__night"), pk=pk,
+                             share__night__location=request.location)
+    night, staff, action = item.share.night, item.share.staff, request.POST.get("action")
+    try:
+        if action == "resend":
+            new = services.resend_payout(item)
+            Change.log(request, f"Sent {staff.name}'s payout for the {night} again, to {new.receiver}")
+            messages.success(request, f"Sent again to {new.receiver}.")
+        elif action == "cancel":
+            services.cancel_unclaimed(item)
+            Change.log(request, f"Took back {staff.name}'s unclaimed payout for the {night}")
+            messages.success(request, "Cancelled. The money is back in your PayPal account. Fix where they're paid, "
+                                      "then send it again.")
+        elif action == "remind":
+            link = request.build_absolute_uri(reverse("my_tips", args=[staff.access_token]))
+            send_mail(f"{request.business.symbol}{item.share.amount} in tips is waiting for you",
+                      f"Hi {staff.name},\n\nYour tips for the {night} were sent to {item.receiver}, but nobody has "
+                      "accepted them yet. Open PayPal (or sign up with that email) to accept them.\n\nWrong address? "
+                      f"Change it on your tips page:\n{link}\n",
+                      settings.DEFAULT_FROM_EMAIL, [staff.paypal_email], fail_silently=True)
+            messages.success(request, f"Reminder emailed to {staff.paypal_email}.")
+    except services.TipPoolError as exc:
+        messages.error(request, str(exc))
+    except PayPalError as exc:
+        messages.error(request, f"PayPal said no: {exc} (debug id {exc.debug_id})")
+    return redirect("payout_status", pk=night.pk)
 
 
 @manager_required
@@ -573,10 +636,11 @@ def payout_status_json(request, pk):
     batch = getattr(night, "payout_batch", None)
     if batch is None:
         raise Http404
-    try:
-        services.refresh_batch(batch)
-    except PayPalError:
-        pass
+    for each in night.payout_batches.all():
+        try:
+            services.refresh_batch(each)
+        except PayPalError:
+            pass
     night.refresh_from_db()
     return JsonResponse({
         "batch_status": batch.status, "night_status": night.status,
@@ -671,6 +735,10 @@ def settings_page(request):
         "invites": [(i, request.build_absolute_uri(reverse("accept_invite", args=[i.token])))
                     for i in request.business.invites.filter(accepted_at__isnull=True) if i.usable],
         "is_owner": request.user.manager.is_owner,
+        "currencies": list(request.business.CURRENCIES.items()),
+        "fee_modes": request.business.FeeMode.choices,
+        "has_tips": Tip.objects.filter(night__location__business=request.business).exists(),
+        "webhook_url": request.build_absolute_uri(reverse("paypal_webhook")),
         "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
     })
 
@@ -714,18 +782,43 @@ def reports_page(request):
 @manager_required
 def messages_page(request):
     from .models import Message
+    business = request.business
     if request.method == "POST":
-        msg = get_object_or_404(Message, pk=request.POST.get("message"), location=request.location)
-        msg.reply = request.POST.get("reply", "").strip()[:1000]
+        if request.POST.get("alert"):
+            alert = get_object_or_404(Alert, pk=request.POST["alert"], business=business)
+            alert.resolved_at, alert.resolved_by = timezone.now(), request.user.get_username()
+            alert.save(update_fields=["resolved_at", "resolved_by"])
+            Change.log(request, f"Marked as handled: {alert.text[:120]}")
+            return redirect("messages_page")
+        msg = get_object_or_404(Message, pk=request.POST.get("message"), staff__business=business)
+        if msg.kind == Message.Kind.PAYOUT_CHANGE:
+            if not msg.is_open:
+                return redirect("messages_page")
+            approved = request.POST.get("decision") == "approve"
+            if approved:
+                before = msg.staff.payout_to
+                services.apply_payout_change(msg.staff, msg.payload)
+                Change.log(request, f"Approved: {msg.staff.name} is now paid with {msg.staff.payout_to} (was {before})")
+            else:
+                Change.log(request, f"Declined {msg.staff.name}'s request to change where they're paid")
+            msg.reply = "Approved." if approved else (request.POST.get("reply", "").strip()[:1000] or "Declined.")
+        else:
+            msg.reply = request.POST.get("reply", "").strip()[:1000]
+            Change.log(request, f"Resolved {msg.staff.name}'s message" + (f" about the {msg.night}" if msg.night else ""))
         msg.resolved_at = timezone.now()
         msg.resolved_by = request.user.get_username()
         msg.save()
-        Change.log(request, f"Resolved {msg.staff.name}'s message" + (f" about the {msg.night}" if msg.night else ""))
-        messages.success(request, f"Resolved. {msg.staff.name} sees your reply on their tips page.")
+        messages.success(request, f"Done. {msg.staff.name} sees your answer on their tips page.")
         return redirect("messages_page")
-    qs = Message.objects.filter(location=request.location).select_related("staff", "night")
+    qs = list(Message.objects.filter(Q(location=request.location) | Q(kind=Message.Kind.PAYOUT_CHANGE,
+                                                                      staff__business=business))
+              .select_related("staff", "night").distinct())
+    alerts = Alert.objects.filter(business=business).filter(Q(location=request.location) | Q(location__isnull=True))
     return render(request, "tips/messages.html", {
-        "open": [m for m in qs if m.is_open], "resolved": [m for m in qs if not m.is_open][:40],
+        "payout_requests": [m for m in qs if m.is_open and m.kind == Message.Kind.PAYOUT_CHANGE],
+        "open": [m for m in qs if m.is_open and m.kind == Message.Kind.MESSAGE],
+        "resolved": [m for m in qs if not m.is_open][:40],
+        "alerts": alerts.filter(resolved_at__isnull=True).select_related("night")[:50],
     })
 
 
@@ -764,6 +857,8 @@ def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
     if request.method == "POST" and request.POST.get("text"):
         return _staff_message(request, member, token)
+    if request.method == "POST" and request.POST.get("payout"):
+        return _staff_payout(request, member, token)
     if request.method == "POST":
         try:
             if request.POST.get("clock") == "in":
@@ -787,9 +882,55 @@ def my_tips(request, token):
         share.night_messages = by_night.get(share.night_id, [])
         share.paid = share.night.status == Night.Status.PAID
     return render(request, "tips/my_tips.html", {
+        "cur": member.business.symbol, "business_name": member.business.name,
         "member": member, "shares": shares, "member_locations": locations, "several": len(locations) > 1,
-        "running": running, "general_messages": member.messages.filter(night__isnull=True)[:10],
+        "running": running,
+        "general_messages": member.messages.filter(night__isnull=True, kind="message")[:10],
+        "payout_request": member.messages.filter(kind="payout", resolved_at__isnull=True).first(),
     })
+
+
+PHONE_RE = re.compile(r"^\+?[0-9][0-9 ()-]{8,18}[0-9]$")
+
+
+def _staff_payout(request, member, token):
+    """The worker confirms where they're paid, or asks to change it (a manager approves changes,
+    so someone who got hold of the link can't send the money elsewhere)."""
+    from .alerts import email_managers
+    from .models import Message
+    if request.POST["payout"] == "confirm":
+        services.confirm_payout(member)
+        messages.success(request, f"Thanks! Your tips go to {member.payout_to}.")
+        return redirect("my_tips", token=token)
+    method = request.POST.get("method", "paypal")
+    payload = {"method": "venmo" if method == "venmo" else "paypal"}
+    if payload["method"] == "venmo":
+        phone = request.POST.get("phone", "").strip()
+        if not PHONE_RE.match(phone):
+            messages.error(request, "Enter the phone number on your Venmo account, e.g. +1 555 123 4567.")
+            return redirect("my_tips", token=token)
+        payload["phone"] = phone
+        wanted = f"Venmo {phone}"
+    else:
+        email = request.POST.get("email", "").strip().lower()
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, "Enter the email of your PayPal account.")
+            return redirect("my_tips", token=token)
+        payload["email"] = email
+        wanted = f"PayPal {email}"
+    location = member.memberships.filter(active=True).select_related("location").first()
+    if location is None:
+        return redirect("my_tips", token=token)
+    member.messages.filter(kind="payout", resolved_at__isnull=True).delete()  # only the latest request counts
+    Message.objects.create(staff=member, location=location.location, kind=Message.Kind.PAYOUT_CHANGE,
+                           payload=payload, text=f"Please pay me with {wanted} (now: {member.payout_to}).")
+    email_managers(member.business, f"{member.name} wants to be paid somewhere else",
+                   f"{member.name} asked to be paid with {wanted} instead of {member.payout_to}. "
+                   "Approve or decline it in Messages.")
+    messages.success(request, f"Sent to your manager. Until they approve it, you're still paid with {member.payout_to}.")
+    return redirect("my_tips", token=token)
 
 
 def _staff_message(request, member, token):
@@ -824,20 +965,22 @@ def paypal_webhook(request):
     if not event_id or WebhookEvent.objects.filter(event_id=event_id).exists():
         return HttpResponse("ok")  # duplicate or junk: acknowledge so PayPal stops retrying
 
+    business = _webhook_business(event)
+    webhook_id = webhook_id_for(business)
     verified = False
-    if settings.PAYPAL_WEBHOOK_ID:
+    if webhook_id:
         try:
-            verified = get_client().verify_webhook(request.headers, event, settings.PAYPAL_WEBHOOK_ID)
+            verified = get_client(business).verify_webhook(request.headers, event, webhook_id)
         except PayPalError:
             verified = False
         if not verified:
             log.warning("Rejected unverified webhook %s", event_id)
             return HttpResponse(status=400)
     elif not settings.DEBUG:
-        log.error("PAYPAL_WEBHOOK_ID is not set: refusing webhooks in production")
+        log.error("No webhook id for this PayPal account: refusing webhooks in production")
         return HttpResponse(status=400)
     else:
-        log.warning("PAYPAL_WEBHOOK_ID not set: webhook %s accepted WITHOUT verification (dev only)", event_id)
+        log.warning("No webhook id: webhook %s accepted WITHOUT verification (dev only)", event_id)
 
     WebhookEvent.objects.create(event_id=event_id, event_type=event.get("event_type", ""),
                                 verified=verified, payload=event)
@@ -847,6 +990,14 @@ def paypal_webhook(request):
         order_id = resource.get("supplementary_data", {}).get("related_ids", {}).get("order_id")
         if order_id:
             services.mark_capture_completed(order_id, resource.get("id", ""))
+    elif event_type in ("PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED"):
+        capture_id = _capture_id_of(resource)
+        if capture_id:
+            services.tip_given_back(capture_id, "refund" if event_type.endswith("REFUNDED") else "reversal")
+    elif event_type == "CUSTOMER.DISPUTE.CREATED":
+        for row in resource.get("disputed_transactions", []):
+            if row.get("seller_transaction_id"):
+                services.tip_given_back(row["seller_transaction_id"], "dispute")
     elif event_type.startswith("PAYMENT.PAYOUTS-ITEM."):
         services.apply_payout_item_event(resource)
     elif event_type.startswith("PAYMENT.PAYOUTSBATCH."):
@@ -858,3 +1009,31 @@ def paypal_webhook(request):
             except PayPalError:
                 log.exception("Could not refresh batch %s", batch_id)
     return HttpResponse("ok")
+
+
+def _capture_id_of(resource):
+    """REFUNDED events describe the refund; the tip's capture is its "up" link."""
+    for link in resource.get("links", []):
+        if link.get("rel") == "up" and "/captures/" in link.get("href", ""):
+            return link["href"].rstrip("/").rsplit("/", 1)[-1]
+    return resource.get("id") if resource.get("status") in ("REVERSED", "COMPLETED") else None
+
+
+def _webhook_business(event):
+    """Which business an event is about, so it's checked against that business's own PayPal account."""
+    resource = event.get("resource", {})
+    tip = None
+    order_id = resource.get("supplementary_data", {}).get("related_ids", {}).get("order_id")
+    if order_id:
+        tip = Tip.objects.filter(paypal_order_id=order_id).first()
+    if tip is None:
+        capture_ids = [_capture_id_of(resource)] + [row.get("seller_transaction_id")
+                                                   for row in resource.get("disputed_transactions", [])]
+        tip = Tip.objects.filter(paypal_capture_id__in=[c for c in capture_ids if c]).first()
+    if tip is not None:
+        return tip.night.location.business
+    sender_item_id = resource.get("payout_item", {}).get("sender_item_id")
+    batch_id = resource.get("batch_header", {}).get("payout_batch_id") or resource.get("payout_batch_id")
+    item = PayoutItem.objects.filter(sender_item_id=sender_item_id).first() if sender_item_id else None
+    batch = item.batch if item else (PayoutBatch.objects.filter(paypal_batch_id=batch_id).first() if batch_id else None)
+    return batch.night.location.business if batch else None

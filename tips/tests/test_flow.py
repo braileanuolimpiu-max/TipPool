@@ -31,6 +31,12 @@ class FakePayPal:
         return {"purchase_units": [{"payments": {"captures": [{"id": f"CAP-{order_id}", "status": "COMPLETED"}]}}],
                 "payer": {"name": {"given_name": "Pat", "surname": "Guest"}}}
 
+    def available_balance(self, currency="USD"):
+        return None
+
+    def cancel_payout_item(self, payout_item_id):
+        return {"payout_item_id": payout_item_id, "transaction_status": "RETURNED"}
+
     def create_payout_batch(self, sender_batch_id, items, subject="", currency="USD"):
         self.payout_bodies.append(items)
         return {"batch_header": {"payout_batch_id": "BATCH1", "batch_status": "PENDING"}}

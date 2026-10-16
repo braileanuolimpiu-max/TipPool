@@ -157,6 +157,11 @@ PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET", "")
 PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID", "")
 PAYPAL_BASE_URL = os.environ.get("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
 PAYPAL_SDK_URL = os.environ.get("PAYPAL_SDK_URL", "https://www.sandbox.paypal.com/web-sdk/v6/core")
+# businesses that haven't connected their own PayPal use the platform account above (sandbox demo).
+# In production this must be off: every business's money goes through its own PayPal account.
+PAYPAL_PLATFORM_FALLBACK = os.environ.get("PAYPAL_PLATFORM_FALLBACK", "1" if "sandbox" in PAYPAL_BASE_URL else "0") == "1"
+# encrypts each business's stored PayPal secret (Fernet key); falls back to a key derived from SECRET_KEY
+TIPPOOL_ENCRYPTION_KEY = os.environ.get("TIPPOOL_ENCRYPTION_KEY", "")
 TIP_CURRENCY = "USD"
 RESTAURANT_NAME = os.environ.get("RESTAURANT_NAME", "")
 

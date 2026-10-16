@@ -16,6 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import hours, services
+from .alerts import raise_alert
 from .models import Change, CloseTime, Location, Night, TipRuleSet
 from .paypal import PayPalError
 
@@ -85,8 +86,7 @@ def pay_after_review(location, now):
                                    closed_at__lte=now - timedelta(minutes=location.review_minutes))
     for night in waiting:
         if night.messages.filter(resolved_at__isnull=True).exists():
-            night.hold = "Someone flagged a problem with this shift."
-            night.save(update_fields=["hold"])
+            hold(night, "Someone flagged a problem with this shift.")
             results.append(f"{night}: held, a problem was flagged")
             continue
         try:
@@ -94,8 +94,17 @@ def pay_after_review(location, now):
             results.append(f"{night}: paid after the review window")
         except (services.TipPoolError, PayPalError) as exc:
             log.warning("Auto payout failed for %s: %s", night, exc)
+            hold(night, f"The automatic payout didn't go out: {exc}")
             results.append(f"{night}: payout needs attention ({exc})")
     return results
+
+
+def hold(night, reason):
+    """Stop the automatic payout of a shift and tell the managers why."""
+    night.hold = reason[:200]
+    night.save(update_fields=["hold"])
+    raise_alert(night.location.business, f"The {night} at {night.location.display_name} is waiting for you: {reason}",
+                location=night.location, night=night, key=f"hold:{night.pk}")
 
 
 def close_night(night, location):
@@ -126,11 +135,11 @@ def close_night(night, location):
         services.build_split(night, rule_set)
     except services.TipPoolError as exc:
         log.warning("Auto split failed for %s: %s", night, exc)
+        hold(night, f"The split couldn't be calculated: {exc}")
         return f"{night}: closed, split needs attention ({exc})"
 
     if needs_check:
-        night.hold = "Someone forgot to clock out. Check their hours."
-        night.save(update_fields=["hold"])
+        hold(night, "Someone forgot to clock out. Check their hours.")
         return f"{night}: closed and split; someone forgot to clock out, so check the hours before paying"
     if location.after_close == Location.AfterClose.PAY and location.review_minutes:
         return f"{night}: closed and split; pays in {location.review_minutes} minutes unless someone flags a problem"
@@ -140,5 +149,6 @@ def close_night(night, location):
             return f"{night}: closed, split and paid automatically"
         except (services.TipPoolError, PayPalError) as exc:
             log.warning("Auto payout failed for %s: %s", night, exc)
+            hold(night, f"The automatic payout didn't go out: {exc}")
             return f"{night}: closed and split, payout needs attention ({exc})"
     return f"{night}: closed, split ready to approve"

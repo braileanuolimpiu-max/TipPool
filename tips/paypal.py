@@ -8,6 +8,7 @@ Covers what TipPool needs:
 import logging
 import time
 import uuid
+from decimal import Decimal
 
 import requests
 from django.conf import settings
@@ -103,25 +104,48 @@ class PayPalClient:
 
     # --- Payouts API (paying the team) ---------------------------------------
     def create_payout_batch(self, sender_batch_id, items, subject="You received tips!", currency="USD"):
-        """items: list of dicts with receiver (email), amount (Decimal), note, sender_item_id."""
+        """items: dicts with receiver, amount (Decimal), note, sender_item_id, and optionally
+        recipient_type ("EMAIL" default, "PHONE") and wallet ("VENMO")."""
         body = {
             "sender_batch_header": {
                 "sender_batch_id": sender_batch_id,
                 "email_subject": subject,
-                "email_message": "Your share of tonight's tips, paid with TipPool.",
+                "email_message": "Your share of the tips, paid with TipPool.",
             },
-            "items": [{
-                "recipient_type": "EMAIL",
+            "items": [],
+        }
+        for item in items:
+            row = {
+                "recipient_type": item.get("recipient_type", "EMAIL"),
                 "receiver": item["receiver"],
                 "amount": {"value": f"{item['amount']:.2f}", "currency": currency},
                 "note": item.get("note", "")[:4000],
                 "sender_item_id": item["sender_item_id"],
-            } for item in items],
-        }
+            }
+            if item.get("wallet"):
+                row["recipient_wallet"] = item["wallet"]
+            body["items"].append(row)
         return self._request("POST", "/v1/payments/payouts", json=body, request_id=sender_batch_id)
 
     def get_payout_batch(self, paypal_batch_id):
         return self._request("GET", f"/v1/payments/payouts/{paypal_batch_id}")
+
+    def cancel_payout_item(self, payout_item_id):
+        """Take back an UNCLAIMED payout (the money returns to the business)."""
+        return self._request("POST", f"/v1/payments/payouts-item/{payout_item_id}/cancel", json={},
+                             request_id=f"cancel-{payout_item_id}")
+
+    def available_balance(self, currency="USD"):
+        """The PayPal balance available for payouts, or None if PayPal won't tell us."""
+        try:
+            data = self._request("GET", f"/v1/reporting/balances?currency_code={currency}")
+        except PayPalError:
+            return None
+        for row in data.get("balances", []):
+            if row.get("currency") == currency:
+                value = (row.get("available_balance") or row.get("total_balance") or {}).get("value")
+                return Decimal(value) if value is not None else None
+        return None
 
     # --- Webhooks ------------------------------------------------------------
     def verify_webhook(self, headers, event, webhook_id):
@@ -139,12 +163,39 @@ class PayPalClient:
         return result.get("verification_status") == "SUCCESS"
 
 
-_client = None
+SANDBOX_API = "https://api-m.sandbox.paypal.com"
+LIVE_API = "https://api-m.paypal.com"
+SANDBOX_SDK = "https://www.sandbox.paypal.com/web-sdk/v6/core"
+LIVE_SDK = "https://www.paypal.com/web-sdk/v6/core"
+
+_clients = {}
 
 
-def get_client():
-    """One shared client per process, so the OAuth token is reused."""
-    global _client
-    if _client is None:
-        _client = PayPalClient()
-    return _client
+def get_client(business=None):
+    """The PayPal account money goes through: the business's own, once connected in Settings.
+    Until then (sandbox demo only), the TipPool platform's sandbox account.
+    One client per account per process, so OAuth tokens are reused."""
+    if business is not None and business.paypal_connected:
+        key = (business.pk, business.paypal_client_id, business.paypal_live, business.paypal_secret_encrypted)
+        if key not in _clients:
+            _clients[key] = PayPalClient(business.paypal_client_id, business.paypal_secret,
+                                         LIVE_API if business.paypal_live else SANDBOX_API)
+        return _clients[key]
+    if business is not None and not settings.PAYPAL_PLATFORM_FALLBACK:
+        raise PayPalError("Connect your business's PayPal account in Settings first.")
+    if "platform" not in _clients:
+        _clients["platform"] = PayPalClient()
+    return _clients["platform"]
+
+
+def checkout_config(business):
+    """Client id + SDK URL for the guest tip page (the browser talks to the same PayPal account)."""
+    if business is not None and business.paypal_connected:
+        return business.paypal_client_id, (LIVE_SDK if business.paypal_live else SANDBOX_SDK)
+    return settings.PAYPAL_CLIENT_ID, settings.PAYPAL_SDK_URL
+
+
+def webhook_id_for(business):
+    if business is not None and business.paypal_connected:
+        return business.paypal_webhook_id
+    return settings.PAYPAL_WEBHOOK_ID

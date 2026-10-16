@@ -4,6 +4,38 @@
 <header class="page-head">
   <div><h1>Messages</h1><p>Problems your team flagged on their tips page, and anything they wrote to you. A flagged shift isn't paid automatically.</p></div>
 </header>
+{% if alerts %}
+<section class="panel alert-panel" style="margin-bottom:22px">
+  <div class="panel-head"><h2>Needs your attention</h2><span class="small muted">{{ alerts|length }}</span></div>
+  <ul class="rows">
+    {% for a in alerts %}
+    <li><span class="alert-dot" aria-hidden="true"></span>
+      <div style="flex:1;min-width:0"><p class="msg-text" style="margin:0">{{ a.text }}</p>
+        <span class="small muted">{{ a.created_at|date:"D M j, g:i A" }}{% if a.night %} · <a href="{% if a.night.status == 'paid' or a.night.status == 'paying' %}{% url 'payout_status' a.night.pk %}{% else %}{% url 'review' a.night.pk %}{% endif %}">Open the shift</a>{% endif %}</span></div>
+      <form method="post">{% csrf_token %}<input type="hidden" name="alert" value="{{ a.pk }}"><button class="btn btn-quiet small">Mark as handled</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if payout_requests %}
+<section class="panel" style="margin-bottom:22px">
+  <div class="panel-head"><h2>Payout changes to approve</h2><span class="small muted">Check with the person before approving</span></div>
+  <ul class="rows">
+    {% for m in payout_requests %}
+    <li><span class="avatar" aria-hidden="true">{{ m.staff.name|slice:":1" }}</span>
+      <div style="flex:1;min-width:0"><strong>{{ m.staff.name }}</strong> <span class="small muted">{{ m.created_at|date:"D M j, g:i A" }}</span>
+        <p class="msg-text" style="margin:2px 0 0">{{ m.text }}</p></div>
+      <form method="post" class="actions">{% csrf_token %}<input type="hidden" name="message" value="{{ m.pk }}">
+        <button class="btn btn-primary small" name="decision" value="approve">Approve</button>
+        <button class="btn btn-secondary small" name="decision" value="decline">Decline</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <div class="split-2">
   <section class="panel">
     <div class="panel-head"><h2>Open</h2><span class="small muted">{{ open|length }}</span></div>

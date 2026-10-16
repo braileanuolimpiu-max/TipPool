@@ -14,7 +14,8 @@
         <span class="avatar" aria-hidden="true">{{ m.staff.name|slice:":1" }}</span>
         <div style="flex:1;min-width:0">
           <strong>{{ m.staff.name }}</strong>{% if not m.active %} <span class="small muted">{{ m.role_name }}</span>{% endif %}
-          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.staff.paypal_email }}</div>
+          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.staff.payout_to }}
+            {% if m.staff.payout_confirmed_at %}<span class="conf ok" title="They confirmed this on their tips page">✓ confirmed</span>{% else %}<span class="conf wait" title="They haven't confirmed this address on their tips page yet">not confirmed yet</span>{% endif %}</div>
         </div>
         {% if m.active %}<form method="post" action="{% url 'staff_role' m.pk %}" class="role-pick">{% csrf_token %}
           <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" onchange="this.form.submit()">

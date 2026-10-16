@@ -14,11 +14,11 @@
       <hr>
       {% if tip and tip.status == "completed" %}
         <span class="big-stamp">PAID</span>
-        <div class="line total" style="justify-content:space-between"><span>Tip</span><span>${{ tip.amount }}</span></div>
+        <div class="line total" style="justify-content:space-between"><span>Tip</span><span>{{ cur }}{{ tip.amount }}</span></div>
         <hr>
         <p style="margin:0">Thank you. At the end of the shift it's split between everyone who worked and paid straight to their PayPal.</p>
       {% elif tip %}
-        <p style="margin:8px 0">Your ${{ tip.amount }} tip is being confirmed by PayPal. You can close this page.</p>
+        <p style="margin:8px 0">Your {{ cur }}{{ tip.amount }} tip is being confirmed by PayPal. You can close this page.</p>
       {% else %}
         <p style="margin:8px 0">We couldn't find this tip. If you were charged, your receipt from PayPal is on its way.</p>
       {% endif %}

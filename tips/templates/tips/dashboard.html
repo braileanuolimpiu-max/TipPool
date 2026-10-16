@@ -25,10 +25,10 @@
   <div class="stack">
     <section aria-label="Tips so far">
       <div class="counter">
-        <div><div class="big"><span class="hl">${{ total }}</span></div><div class="cap">in tips this shift</div></div>
+        <div><div class="big"><span class="hl">{{ cur }}{{ total }}</span></div><div class="cap">in tips this shift</div></div>
         <div class="side">
           <div><b>{{ tip_count }}</b><span class="small muted">guests tipped</span></div>
-          <div><b>{% if average %}${{ average }}{% else %}–{% endif %}</b><span class="small muted">average tip</span></div>
+          <div><b>{% if average %}{{ cur }}{{ average }}{% else %}–{% endif %}</b><span class="small muted">average tip</span></div>
         </div>
       </div>
     </section>
@@ -86,12 +86,12 @@
           <div class="line">
             <span class="what">{{ tip.created_at|time:"g:i A" }}  {% if tip.source != "paypal" %}{{ tip.get_source_display }}{% elif tip.table %}Table {{ tip.table }}{% else %}Walk-up{% endif %}
               {% if tip.staff %}<small>for {{ tip.staff.name }}</small>{% elif tip.payer_name %}<small>{{ tip.payer_name }}</small>{% endif %}</span>
-            <span class="amt">${{ tip.amount }}</span>
+            <span class="amt">{{ cur }}{{ tip.amount }}</span>
           </div>
           {% endfor %}
         </div>
         <hr>
-        <div class="line total"><span>Total</span><span class="amt-hl">${{ total }}</span></div>
+        <div class="line total"><span>Total</span><span class="amt-hl">{{ cur }}{{ total }}</span></div>
         {% else %}
         <p style="text-align:center;margin:18px 0">No tips yet this shift.</p>
         <p class="foot">Each tip prints here the moment a guest pays with PayPal or Venmo.</p>

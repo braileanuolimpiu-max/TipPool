@@ -12,7 +12,7 @@
     {% for row in rows %}
       <tr>
         <td>{{ row.night.date|date:"D, M j" }}</td>
-        <td class="r">${{ row.total }}</td>
+        <td class="r">{{ cur }}{{ row.total }}</td>
         <td class="r">{{ row.people }}</td>
         <td>{% if row.night.status == "paid" %}<span class="pill ok">Paid</span>
             {% elif row.night.status == "paying" %}<span class="pill wait">Paying</span>

@@ -16,6 +16,12 @@ class FakePayPal:
     def __init__(self):
         self.payouts = 0
 
+    def available_balance(self, currency="USD"):
+        return None
+
+    def cancel_payout_item(self, payout_item_id):
+        return {"payout_item_id": payout_item_id, "transaction_status": "RETURNED"}
+
     def create_payout_batch(self, sender_batch_id, items, subject="", currency="USD"):
         self.payouts += 1
         return {"batch_header": {"payout_batch_id": "B1", "batch_status": "PENDING"}}
