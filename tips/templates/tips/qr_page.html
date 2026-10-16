@@ -27,7 +27,7 @@
       </div>
       <div class="setup-action actions">
         <button type="button" class="btn btn-primary" data-print="house">Print this code</button>
-        <a class="btn btn-secondary" href="{% url 'qr_show' %}" target="_blank" rel="noopener">Show on screen</a>
+        <a class="btn btn-secondary" href="{% url 'qr_show' %}?at={{ restaurant.slug }}" target="_blank" rel="noopener">Show on screen</a>
       </div>
     </div>
   </section>
@@ -86,7 +86,7 @@
       <img src="{% url 'qr_svg' %}?url={{ url|urlencode }}" alt="QR code to tip at {{ label }}" loading="lazy">
       <p class="tent-how">Scan to leave a tip</p>
       <p class="tent-note">PayPal, Venmo or card</p>
-      <a class="tent-show no-print" href="{% url 'qr_show' %}?table={{ raw|urlencode }}" target="_blank" rel="noopener">Show on screen</a>
+      <a class="tent-show no-print" href="{% url 'qr_show' %}?at={{ restaurant.slug }}&table={{ raw|urlencode }}" target="_blank" rel="noopener">Show on screen</a>
     </div>
     {% endfor %}
   </div>

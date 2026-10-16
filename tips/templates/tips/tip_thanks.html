@@ -23,7 +23,7 @@
         <p style="margin:8px 0">We couldn't find this tip. If you were charged, your receipt from PayPal is on its way.</p>
       {% endif %}
       <hr>
-      <a class="btn btn-secondary btn-block" href="{% url 'tip_page' %}{% if table %}?table={{ table|urlencode }}{% endif %}">Leave another tip</a>
+      <a class="btn btn-secondary btn-block" href="{% url 'tip_page' %}?at={{ location.slug }}{% if table %}&table={{ table|urlencode }}{% endif %}">Leave another tip</a>
       <p class="foot">You can close this page.</p>
     </div>
   </div>

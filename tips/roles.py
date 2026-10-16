@@ -130,35 +130,35 @@ def word_pattern(role):
     return "|".join(sorted(variants, key=len, reverse=True)).replace(r"\ ", r"\s+")
 
 
-def roles_in_use():
-    """Role keys still on someone's team (a role can't be removed while an active person has it)."""
-    from .models import StaffMember
-    return set(StaffMember.objects.filter(active=True).values_list("default_role", flat=True))
+def roles_in_use(location):
+    """Role keys someone on this location's team still has (those roles can't be removed)."""
+    from .models import Membership
+    return set(Membership.objects.filter(location=location, active=True).values_list("default_role", flat=True))
 
 
-def add_role(name, aliases="", no_tips=False):
+def add_role(location, name, aliases="", no_tips=False):
     from .models import Role
     name = " ".join(name.split())[:40]
-    existing = Role.objects.filter(name__iexact=name).first()
+    existing = Role.objects.filter(location=location, name__iexact=name).first()
     if existing:
         return existing, False
-    last = Role.objects.order_by("-position").first()
-    role = Role.objects.create(key=Role.new_key(name), name=name, aliases=aliases[:200], no_tips=no_tips,
-                               position=(last.position + 1) if last else 0)
+    last = Role.objects.filter(location=location).order_by("-position").first()
+    role = Role.objects.create(location=location, key=Role.new_key(location, name), name=name, aliases=aliases[:200],
+                               no_tips=no_tips, position=(last.position + 1) if last else 0)
     return role, True
 
 
-def apply_preset(business_type):
-    """Switch to a preset's roles. Roles someone on the team still has are kept.
+def apply_preset(location, business_type):
+    """Switch a location to a preset's roles. Roles someone on the team still has are kept.
 
     Returns the names of roles that were kept although they're not in the preset.
     """
     from .models import Role
     preset = PRESETS[business_type]
     wanted = {name.lower() for name, _, _ in preset["roles"]}
-    in_use = roles_in_use()
+    in_use = roles_in_use(location)
     kept = []
-    for role in Role.objects.all():
+    for role in Role.objects.filter(location=location):
         if role.name.lower() in wanted:
             continue
         if role.key in in_use:
@@ -166,10 +166,10 @@ def apply_preset(business_type):
         else:
             role.delete()
     for position, (name, aliases, no_tips) in enumerate(preset["roles"]):
-        role, _ = add_role(name, aliases, no_tips)
+        role, _ = add_role(location, name, aliases, no_tips)
         role.position = position
         role.save(update_fields=["position"])
-    for role in Role.objects.filter(name__in=kept):
-        role.position = len(preset["roles"]) + 1
-        role.save(update_fields=["position"])
+    Role.objects.filter(location=location, name__in=kept).update(position=len(preset["roles"]) + 1)
+    location.business_type = business_type
+    location.save(update_fields=["business_type"])
     return kept

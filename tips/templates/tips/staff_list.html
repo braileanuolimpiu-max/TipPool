@@ -11,16 +11,16 @@
     <ul class="rows team-rows">
       {% for m in staff %}
       <li{% if not m.active %} style="opacity:.55"{% endif %}>
-        <span class="avatar" aria-hidden="true">{{ m.name|slice:":1" }}</span>
+        <span class="avatar" aria-hidden="true">{{ m.staff.name|slice:":1" }}</span>
         <div style="flex:1;min-width:0">
-          <strong>{{ m.name }}</strong>{% if not m.active %} <span class="small muted">{{ m.role_name }}</span>{% endif %}
-          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.paypal_email }}</div>
+          <strong>{{ m.staff.name }}</strong>{% if not m.active %} <span class="small muted">{{ m.role_name }}</span>{% endif %}
+          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.staff.paypal_email }}</div>
         </div>
         {% if m.active %}<form method="post" action="{% url 'staff_role' m.pk %}" class="role-pick">{% csrf_token %}
-          <select name="default_role" aria-label="{{ m.name }}'s usual role" onchange="this.form.submit()">
+          <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" onchange="this.form.submit()">
             {% for r in roles %}<option value="{{ r.key }}" {% if r.key == m.default_role %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
           </select><noscript><button class="btn btn-quiet small">Save</button></noscript></form>{% endif %}
-        <a class="small" href="{% url 'my_tips' m.access_token %}">Their tips page</a>
+        <a class="small" href="{% url 'my_tips' m.staff.access_token %}">Their tips page</a>
         <form method="post" action="{% url 'staff_toggle' m.pk %}">{% csrf_token %}
           <button class="btn btn-quiet small">{% if m.active %}Remove{% else %}Bring back{% endif %}</button></form>
       </li>
@@ -65,7 +65,7 @@
     <div class="panel-body stack">
       <div><label for="name">Name</label><input type="text" id="name" name="name" required></div>
       <div><label for="paypal_email">PayPal email</label><input type="email" id="paypal_email" name="paypal_email" required>
-        <p class="hint">Where their tips are sent.</p></div>
+        <p class="hint">Where their tips are sent. Already on another location's team? Use the same email and they keep one tips page.</p></div>
       <div><label for="default_role">Usual role</label>
         <select id="default_role" name="default_role" required>{% for r in roles %}<option value="{{ r.key }}">{{ r.name }}</option>{% empty %}<option value="">Add a role first</option>{% endfor %}</select>
         <p class="hint">Can change per shift when you close out.</p></div>

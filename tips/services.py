@@ -23,12 +23,12 @@ class TipPoolError(Exception):
 
 
 # --- Tips (money in) ---------------------------------------------------------
-def create_tip_order(amount, table="", return_url=None, cancel_url=None):
-    """Create a PayPal order for a tip on tonight's night."""
+def create_tip_order(location, amount, table="", return_url=None, cancel_url=None):
+    """Create a PayPal order for a tip on this location's current shift."""
     amount = Decimal(str(amount)).quantize(Decimal("0.01"))
     if amount < Decimal("1.00") or amount > Decimal("500.00"):
         raise TipPoolError("Tips must be between $1 and $500.")
-    night = Night.current()
+    night = Night.current(location)
     order = get_client().create_order(amount, settings.TIP_CURRENCY,
                                       description=f"Tip{f' - table {table}' if table else ''}",
                                       reference_id=f"night-{night.pk}",
@@ -100,7 +100,7 @@ def build_split(night, rule_set):
         raise TipPoolError("There are no completed tips for this shift yet.")
 
     inputs = [ShiftInput(str(s.staff_id), s.staff.name, s.role, s.hours) for s in shifts]
-    roles = list(Role.objects.all())
+    roles = list(Role.objects.filter(location_id=night.location_id))
     role_names = {r.key: r.name for r in roles}
     # roles marked "no tips" today count even if the saved rules are older than that setting
     no_tips = {r.key for r in roles if r.no_tips}

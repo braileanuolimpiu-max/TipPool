@@ -1,8 +1,8 @@
 """Automatic close-out at a set time each day.
 
-At closing time the open night stops taking tips (new tips start a fresh night), and:
+At closing time a location's open shift stops taking tips (new tips start a fresh night), and:
 - if the manager saved who worked: the split is calculated, and paid right away
-  when the restaurant chose "pay the team automatically"
+  when the location chose "pay the team automatically"
 - if not: the night waits as "closed, needs who worked" so nobody is paid by guesswork
 
 Runs from `python manage.py autoclose` (a cron job every few minutes when hosted)
@@ -16,38 +16,36 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import services
-from .models import CloseTime, Night, RestaurantSettings
+from .models import CloseTime, Location, Night, TipRuleSet
 from .paypal import PayPalError
 
 log = logging.getLogger("tips.autoclose")
 
 
-def restaurant_tz(settings_obj=None):
-    settings_obj = settings_obj or RestaurantSettings.load()
+def location_tz(location):
     try:
-        return ZoneInfo(settings_obj.timezone)
+        return ZoneInfo(location.timezone)
     except Exception:
         return ZoneInfo("UTC")
 
 
 def close_due_at(night, tz=None):
     """When this night should close automatically, or None if there's no close time that day."""
-    tz = tz or restaurant_tz()
-    close = CloseTime.objects.filter(weekday=night.date.weekday(), enabled=True).first()
+    tz = tz or location_tz(night.location)
+    close = CloseTime.objects.filter(location_id=night.location_id, weekday=night.date.weekday(), enabled=True).first()
     if not close:
         return None
     day = night.date + timedelta(days=1) if close.after_midnight else night.date
     return datetime.combine(day, close.time, tzinfo=tz)
 
 
-def next_close(now=None):
-    """The next scheduled close-out (for the settings page)."""
-    settings_obj = RestaurantSettings.load()
-    if not settings_obj.auto_close_enabled:
+def next_close(location, now=None):
+    """The next scheduled close-out at this location (for the settings page)."""
+    if not location.auto_close_enabled:
         return None
-    tz = restaurant_tz(settings_obj)
+    tz = location_tz(location)
     now = (now or timezone.now()).astimezone(tz)
-    times = {c.weekday: c for c in CloseTime.objects.filter(enabled=True)}
+    times = {c.weekday: c for c in CloseTime.objects.filter(location=location, enabled=True)}
     for offset in range(-1, 8):
         service_day = now.date() + timedelta(days=offset)
         close = times.get(service_day.weekday())
@@ -61,21 +59,19 @@ def next_close(now=None):
 
 
 def run(now=None):
-    """Close every open night whose closing time has passed. Returns a list of what happened."""
-    settings_obj = RestaurantSettings.load()
-    if not settings_obj.auto_close_enabled:
-        return []
-    tz = restaurant_tz(settings_obj)
+    """Close every open shift whose closing time has passed, at every location. Returns what happened."""
     now = now or timezone.now()
     results = []
-    for night in Night.objects.filter(status=Night.Status.OPEN):
-        due = close_due_at(night, tz)
-        if due and now >= due:
-            results.append(close_night(night, settings_obj))
+    for location in Location.objects.filter(auto_close_enabled=True):
+        tz = location_tz(location)
+        for night in Night.objects.filter(location=location, status=Night.Status.OPEN):
+            due = close_due_at(night, tz)
+            if due and now >= due:
+                results.append(close_night(night, location))
     return results
 
 
-def close_night(night, settings_obj):
+def close_night(night, location):
     with transaction.atomic():
         night = Night.objects.select_for_update().get(pk=night.pk)
         if night.status != Night.Status.OPEN:
@@ -91,8 +87,7 @@ def close_night(night, settings_obj):
     if night.tip_total <= 0:
         return f"{night}: closed, no tips"
 
-    from .models import TipRuleSet
-    rule_set = TipRuleSet.active()
+    rule_set = TipRuleSet.active(location)
     if not rule_set:
         return f"{night}: closed, no tip rules yet"
     try:
@@ -101,7 +96,7 @@ def close_night(night, settings_obj):
         log.warning("Auto split failed for %s: %s", night, exc)
         return f"{night}: closed, split needs attention ({exc})"
 
-    if settings_obj.after_close == RestaurantSettings.AfterClose.PAY:
+    if location.after_close == Location.AfterClose.PAY:
         try:
             services.pay_night(night)
             return f"{night}: closed, split and paid automatically"

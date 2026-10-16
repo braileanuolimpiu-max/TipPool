@@ -2,7 +2,15 @@
 {% block body %}
 {% with u=request.resolver_match.url_name %}
 <header class="topbar">
-  <a class="brand" href="{% url 'dashboard' %}"><b>TipPool</b><span>{{ restaurant_name }}</span></a>
+  <a class="brand" href="{% url 'dashboard' %}"><b>TipPool</b>{% if locations|length <= 1 %}<span>{{ restaurant_name }}</span>{% endif %}</a>
+  {% if locations|length > 1 %}
+  <form method="post" action="{% url 'location_switch' %}" class="loc-switch">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.path }}">
+    <select name="location" aria-label="Location" onchange="this.form.submit()">
+      {% for loc in locations %}<option value="{{ loc.pk }}" {% if loc.pk == location.pk %}selected{% endif %}>{{ loc.display_name }}</option>{% endfor %}
+    </select><noscript><button>Go</button></noscript>
+  </form>
+  {% endif %}
   <div class="who-am-i">
     <span>Signed in as {{ user.username }}</span>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>

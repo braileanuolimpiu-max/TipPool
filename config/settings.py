@@ -54,7 +54,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'tips.middleware.RestaurantMiddleware',
+    'tips.middleware.LocationMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 

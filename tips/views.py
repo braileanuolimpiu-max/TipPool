@@ -9,6 +9,7 @@ import qrcode.image.svg
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -16,7 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import ai, autoclose, roles as role_presets, services
-from .models import (CloseTime, Night, PayoutBatch, RestaurantSettings, Role, Shift, StaffMember, Tip,
+from .models import (CloseTime, Location, Membership, Night, PayoutBatch, Role, Shift, StaffMember, Tip,
                      TipRuleSet, WebhookEvent)
 from .paypal import PayPalError, get_client
 
@@ -35,38 +36,40 @@ def _sync_tips(night):
 
 @login_required
 def dashboard(request):
-    night = Night.current()
+    location = request.location
+    night = Night.current(location)
     _sync_tips(night)
     tips = list(night.tips.filter(status=Tip.Status.COMPLETED))
     total = night.tip_total
-    staff_count = StaffMember.objects.filter(active=True).count()
-    rule_set = TipRuleSet.active()
-    any_tip_ever = Tip.objects.filter(status=Tip.Status.COMPLETED).exists()
+    staff_count = Membership.objects.filter(location=location, active=True).count()
+    rule_set = TipRuleSet.active(location)
+    any_tip_ever = Tip.objects.filter(night__location=location, status=Tip.Status.COMPLETED).exists()
     return render(request, "tips/dashboard.html", {
         "night": night,
         "tips": tips[:40],
         "tip_count": len(tips),
         "total": total,
         "average": (total / len(tips)).quantize(Decimal("0.01")) if tips else None,
-        "unfinished": Night.objects.filter(status__in=[Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).first(),
-        "next_close": autoclose.next_close(),
+        "unfinished": Night.objects.filter(location=location, status__in=[
+            Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).first(),
+        "next_close": autoclose.next_close(location),
         "roster_count": night.shifts.count(),
         "rule_set": rule_set,
         "staff_count": staff_count,
         "setup": [
-            {"done": bool(RestaurantSettings.load().name), "text": "Add your business name", "url": reverse("settings")},
+            {"done": bool(location.name), "text": "Add your business name", "url": reverse("settings")},
             {"done": staff_count > 0, "text": "Add your team and their PayPal emails", "url": reverse("staff_list")},
             {"done": bool(rule_set), "text": "Describe how your house shares tips", "url": reverse("rules")},
             {"done": any_tip_ever, "text": "Print table QR codes so guests can tip", "url": reverse("qr_page")},
         ],
         "ai_mode": ai.mode(),
-        "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever and bool(RestaurantSettings.load().name),
+        "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever and bool(location.name),
     })
 
 
 @login_required
 def history(request):
-    nights = (Night.objects.exclude(status=Night.Status.OPEN)
+    nights = (Night.objects.filter(location=request.location).exclude(status=Night.Status.OPEN)
               .prefetch_related("shares", "tips").select_related("payout_batch")[:60])
     rows = []
     for n in nights:
@@ -78,6 +81,7 @@ def history(request):
 # --- Customer tip page (public) -----------------------------------------------
 def tip_page(request):
     return render(request, "tips/tip_page.html", {
+        "at": request.location.slug,
         "cancelled": "cancelled" in request.GET,
         "presets": TIP_PRESETS,
         "table": request.GET.get("table", "")[:20],
@@ -95,7 +99,12 @@ def tip_thanks(request):
             tip = services.capture_tip(order_id)
         except PayPalError:
             log.warning("Capture on return page failed for %s", order_id)
-    return render(request, "tips/tip_thanks.html", {"tip": tip, "table": tip.table if tip else ""})
+    if tip:  # show the business the tip went to, even without ?at= in the return link
+        request.location = tip.night.location
+    return render(request, "tips/tip_thanks.html", {
+        "tip": tip, "table": tip.table if tip else "", "location": request.location,
+        "restaurant_name": request.location.display_name, "restaurant_named": bool(request.location.name),
+    })
 
 
 @require_POST
@@ -104,10 +113,11 @@ def api_create_order(request):
         data = json.loads(request.body or "{}")
         amount = Decimal(str(data.get("amount", "")))
         table = str(data.get("table", ""))
+        location = Location.objects.filter(slug=str(data.get("at", ""))).first() or Location.default()
         order_id = services.create_tip_order(
-            amount, table,
+            location, amount, table,
             return_url=request.build_absolute_uri(reverse("tip_thanks")),
-            cancel_url=request.build_absolute_uri(reverse("tip_page")) + "?cancelled=1",
+            cancel_url=request.build_absolute_uri(reverse("tip_page")) + f"?at={location.slug}&cancelled=1",
         )
     except (InvalidOperation, ValueError, json.JSONDecodeError):
         return JsonResponse({"error": "Please choose a valid tip amount."}, status=400)
@@ -137,7 +147,7 @@ def api_capture_order(request, order_id):
 # --- QR code for tables -------------------------------------------------------
 @login_required
 def qr_page(request):
-    restaurant = RestaurantSettings.load()
+    restaurant = request.location
     if request.method == "POST":
         try:
             restaurant.table_count = max(0, min(200, int(request.POST.get("table_count", 0))))
@@ -151,21 +161,21 @@ def qr_page(request):
         restaurant.save()
         messages.success(request, "Table codes updated.")
         return redirect("qr_page")
-    base = request.build_absolute_uri(reverse("tip_page"))
+    base = request.build_absolute_uri(reverse("tip_page")) + f"?at={restaurant.slug}"
     return render(request, "tips/qr_page.html", {
         "restaurant": restaurant,
         "house_url": base,
-        "tables": [(f"Table {label}" if label.isdigit() else label, f"{base}?table={label}", label)
+        "tables": [(f"Table {label}" if label.isdigit() else label, f"{base}&table={label}", label)
                    for label in restaurant.table_labels],
-        "suggestions": RestaurantSettings.SPOT_SUGGESTIONS,
-        "custom_spots": [sp for sp in restaurant.spots if sp not in RestaurantSettings.SPOT_SUGGESTIONS],
+        "suggestions": Location.SPOT_SUGGESTIONS,
+        "custom_spots": [sp for sp in restaurant.spots if sp not in Location.SPOT_SUGGESTIONS],
     })
 
 
 def qr_show(request):
     """Full-screen QR for a server's phone or a counter tablet. No login, it only links to the tip page."""
     table = request.GET.get("table", "")[:20]
-    url = request.build_absolute_uri(reverse("tip_page")) + (f"?table={table}" if table else "")
+    url = request.build_absolute_uri(reverse("tip_page")) + f"?at={request.location.slug}" + (f"&table={table}" if table else "")
     label = (f"Table {table}" if table.isdigit() else table) if table else "Leave a tip"
     return render(request, "tips/qr_show.html", {"url": url, "label": label, "table": table})
 
@@ -180,42 +190,64 @@ def qr_svg(request):
     return HttpResponse(buffer.getvalue(), content_type="image/svg+xml")
 
 
-# --- Staff -------------------------------------------------------------------
+# --- Staff ---------------------------------------------------------------------
 @login_required
 def staff_list(request):
+    location = request.location
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
         email = request.POST.get("paypal_email", "").strip()
         role = request.POST.get("default_role", "")
-        if name and email and Role.objects.filter(key=role).exists():
-            StaffMember.objects.create(name=name, paypal_email=email, default_role=role)
-            messages.success(request, f"{name} added.")
-        else:
+        if not (name and email and Role.objects.filter(location=location, key=role).exists()):
             messages.error(request, "Name, PayPal email and role are required.")
+            return redirect("staff_list")
+        # the same person at another location (same PayPal email) gets one tips page for everything
+        person = StaffMember.objects.filter(paypal_email__iexact=email).first()
+        if person is None:
+            person = StaffMember.objects.create(name=name, paypal_email=email)
+        membership, made = Membership.objects.get_or_create(staff=person, location=location,
+                                                            defaults={"default_role": role})
+        if not made:
+            membership.active, membership.default_role = True, role
+            membership.save()
+        others = person.memberships.exclude(location=location).count()
+        messages.success(request, f"{person.name} added." + (
+            f" They also work at {others} other location{'s' if others > 1 else ''}, so their tips page "
+            "shows everything." if others else ""))
         return redirect("staff_list")
-    roles = list(Role.objects.all())
-    counts = Counter(StaffMember.objects.filter(active=True).values_list("default_role", flat=True))
+    roles = list(Role.objects.filter(location=location))
+    memberships = list(Membership.objects.filter(location=location).select_related("staff"))
+    counts = Counter(m.default_role for m in memberships if m.active)
     return render(request, "tips/staff_list.html", {
-        "staff": StaffMember.objects.all(), "roles": roles,
+        "staff": memberships, "roles": roles,
         "role_rows": [{"role": r, "count": counts[r.key]} for r in roles],
         "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
-        "business_type": RestaurantSettings.load().business_type,
+        "business_type": location.business_type,
     })
 
 
 @login_required
 @require_POST
 def staff_role(request, pk):
-    member = get_object_or_404(StaffMember, pk=pk)
+    member = get_object_or_404(Membership, pk=pk, location=request.location)
     role = request.POST.get("default_role", "")
-    if Role.objects.filter(key=role).exists():
+    if Role.objects.filter(location=request.location, key=role).exists():
         member.default_role = role
         member.save(update_fields=["default_role"])
-        messages.success(request, f"{member.name} is now {Role.label(role).lower()}.")
+        messages.success(request, f"{member.staff.name} is now {member.role_name.lower()}.")
     return redirect("staff_list")
 
 
-# --- Roles: each business has its own ------------------------------------------
+@login_required
+@require_POST
+def staff_toggle(request, pk):
+    member = get_object_or_404(Membership, pk=pk, location=request.location)
+    member.active = not member.active
+    member.save()
+    return redirect("staff_list")
+
+
+# --- Roles: each location has its own ----------------------------------------------
 @login_required
 @require_POST
 def role_add(request):
@@ -223,7 +255,7 @@ def role_add(request):
     if not name:
         messages.error(request, "Type a role name, e.g. Stylist or Housekeeper.")
         return redirect("staff_list")
-    role, made = role_presets.add_role(name, request.POST.get("aliases", "").strip(),
+    role, made = role_presets.add_role(request.location, name, request.POST.get("aliases", "").strip(),
                                        no_tips=bool(request.POST.get("no_tips")))
     if made:
         messages.success(request, f"Role added: {role.name}. Mention it in your tip rules so it gets a share.")
@@ -235,8 +267,8 @@ def role_add(request):
 @login_required
 @require_POST
 def role_remove(request, pk):
-    role = get_object_or_404(Role, pk=pk)
-    if role.key in role_presets.roles_in_use():
+    role = get_object_or_404(Role, pk=pk, location=request.location)
+    if role.key in role_presets.roles_in_use(request.location):
         messages.error(request, f"Someone on your team is a {role.name.lower()}. Change their role first.")
     else:
         role.delete()
@@ -250,24 +282,12 @@ def role_preset(request):
     business_type = request.POST.get("business_type", "")
     if business_type not in role_presets.PRESETS:
         return redirect("staff_list")
-    kept = role_presets.apply_preset(business_type)
-    business = RestaurantSettings.load()
-    business.business_type = business_type
-    business.save(update_fields=["business_type"])
+    kept = role_presets.apply_preset(request.location, business_type)
     label = role_presets.PRESETS[business_type]["label"]
     msg = f"Roles set up for a {label.lower()}."
     if kept:
         msg += f" Kept {', '.join(kept)} because someone on your team still has it."
     messages.success(request, msg + " Check your tip rules: they should use these roles.")
-    return redirect("staff_list")
-
-
-@login_required
-@require_POST
-def staff_toggle(request, pk):
-    member = get_object_or_404(StaffMember, pk=pk)
-    member.active = not member.active
-    member.save()
     return redirect("staff_list")
 
 
@@ -281,37 +301,39 @@ def rules_page(request):
         if not preview:
             messages.error(request, "Nothing to save, please describe the rules again.")
             return redirect("rules")
-        TipRuleSet.objects.filter(is_active=True).update(is_active=False)
-        TipRuleSet.objects.create(text=preview["text"], rules=preview["rules"], summary=preview["summary"],
+        TipRuleSet.objects.filter(location=request.location, is_active=True).update(is_active=False)
+        TipRuleSet.objects.create(location=request.location, text=preview["text"], rules=preview["rules"], summary=preview["summary"],
                                   warnings=preview["warnings"])
         messages.success(request, "Tip rules saved.")
         return redirect("rules")
     if request.method == "POST":
         text = request.POST.get("text", "")
         try:
-            parsed = ai.parse_rules(text)
+            parsed = ai.parse_rules(text, request.location)
             preview = {"text": text, **parsed}
             request.session["rules_preview"] = preview
         except ai.AIError as exc:
             messages.error(request, str(exc))
-    active = TipRuleSet.active()
+    active = TipRuleSet.active(request.location)
     return render(request, "tips/rules.html", {
         "active": active, "preview": preview, "text": text or (active.text if active else ""),
         "ai_mode": ai.mode(),
-        "examples": role_presets.examples_for(RestaurantSettings.load().business_type),
-        "roles": Role.objects.all(),
+        "examples": role_presets.examples_for(request.location.business_type),
+        "roles": Role.objects.filter(location=request.location),
     })
 
 
 # --- Close the night: who worked -> split -> review -> pay ---------------------
 @login_required
 def close_night(request, pk=None):
-    night = get_object_or_404(Night, pk=pk) if pk else Night.current()
+    night = get_object_or_404(Night, pk=pk, location=request.location) if pk else Night.current(request.location)
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
         return redirect("payout_status", pk=night.pk)
     if night.status == Night.Status.OPEN:
         _sync_tips(night)
-    staff = list(StaffMember.objects.filter(active=True))
+    location = night.location
+    staff = [m.staff for m in Membership.objects.filter(location=location, active=True).select_related("staff")]
+    usual_role = {m.staff_id: m.default_role for m in Membership.objects.filter(location=location)}
     existing = {s.staff_id: s for s in night.shifts.all()}
     prefill = {}
     ai_notes = []
@@ -322,7 +344,7 @@ def close_night(request, pk=None):
             messages.error(request, "Please upload a JPG, PNG, WEBP or GIF photo under 8 MB.")
         else:
             try:
-                result = ai.read_schedule(photo.read(), photo.content_type, [m.name for m in staff])
+                result = ai.read_schedule(photo.read(), photo.content_type, [m.name for m in staff], location)
                 by_name = {m.name.lower(): m for m in staff}
                 for row in result["shifts"]:
                     member = by_name.get(row["name"].lower())
@@ -336,13 +358,13 @@ def close_night(request, pk=None):
                 messages.error(request, str(exc))
 
     elif request.method == "POST":
-        rule_set = TipRuleSet.active()
+        rule_set = TipRuleSet.active(location)
         saving_only = "save_roster" in request.POST
         if not rule_set and not saving_only:
             messages.error(request, "Set your tip rules first.")
             return redirect("rules")
         night.shifts.all().delete()
-        role_keys = set(Role.objects.values_list("key", flat=True))
+        role_keys = set(Role.objects.filter(location=location).values_list("key", flat=True))
         for member in staff:
             if not request.POST.get(f"worked_{member.pk}"):
                 continue
@@ -350,7 +372,7 @@ def close_night(request, pk=None):
                 hours = Decimal(request.POST.get(f"hours_{member.pk}", "0") or "0")
             except InvalidOperation:
                 hours = Decimal("0")
-            role = request.POST.get(f"role_{member.pk}", member.default_role)
+            role = request.POST.get(f"role_{member.pk}", usual_role.get(member.pk))
             if hours > 0 and role in role_keys:
                 Shift.objects.create(night=night, staff=member, role=role, hours=hours)
         if saving_only:
@@ -372,18 +394,18 @@ def close_night(request, pk=None):
             "member": member,
             # first visit: everyone on (managers switch off who was absent); afterwards keep their choices
             "worked": bool(shift or guess) or (not existing and not prefill),
-            "role": (guess or {}).get("role") or (shift.role if shift else member.default_role),
+            "role": (guess or {}).get("role") or (shift.role if shift else usual_role.get(member.pk)),
             "hours": (guess or {}).get("hours") or (shift.hours if shift else ""),
         })
     return render(request, "tips/close_night.html", {
-        "night": night, "rows": rows, "tip_count": night.tips.filter(status=Tip.Status.COMPLETED).count(), "roles": Role.objects.all(), "rule_set": TipRuleSet.active(),
+        "night": night, "rows": rows, "tip_count": night.tips.filter(status=Tip.Status.COMPLETED).count(), "roles": Role.objects.filter(location=location), "rule_set": TipRuleSet.active(location),
         "ai_notes": ai_notes, "ai_mode": ai.mode(),
     })
 
 
 @login_required
 def review(request, pk):
-    night = get_object_or_404(Night, pk=pk)
+    night = get_object_or_404(Night, pk=pk, location=request.location)
     if night.status in (Night.Status.OPEN, Night.Status.CLOSED):
         return redirect("close_night_pk", pk=night.pk)
     shares = list(night.shares.select_related("staff"))
@@ -398,7 +420,7 @@ def review(request, pk):
 @login_required
 @require_POST
 def pay(request, pk):
-    night = get_object_or_404(Night, pk=pk)
+    night = get_object_or_404(Night, pk=pk, location=request.location)
     try:
         services.pay_night(night)
         messages.success(request, "Payout sent to PayPal.")
@@ -413,7 +435,7 @@ def pay(request, pk):
 
 @login_required
 def payout_status(request, pk):
-    night = get_object_or_404(Night, pk=pk)
+    night = get_object_or_404(Night, pk=pk, location=request.location)
     batch = getattr(night, "payout_batch", None)
     if batch is None:
         return redirect("review", pk=pk)
@@ -429,7 +451,7 @@ def payout_status(request, pk):
 
 @login_required
 def payout_status_json(request, pk):
-    night = get_object_or_404(Night, pk=pk)
+    night = get_object_or_404(Night, pk=pk, location=request.location)
     batch = getattr(night, "payout_batch", None)
     if batch is None:
         raise Http404
@@ -452,14 +474,21 @@ TIMEZONES = [
 ]
 
 
+def _locations_overview():
+    rows = list(Location.objects.annotate(team_count=Count("memberships", filter=Q(memberships__active=True))))
+    for loc in rows:
+        loc.type_label = role_presets.PRESETS.get(loc.business_type, {}).get("label", "Business")
+    return rows
+
+
 @login_required
 def settings_page(request):
     from datetime import time as dtime
-    restaurant = RestaurantSettings.load()
+    restaurant = request.location
     if request.method == "POST":
         restaurant.name = request.POST.get("name", "").strip()[:80]
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
-        if request.POST.get("after_close") in RestaurantSettings.AfterClose.values:
+        if request.POST.get("after_close") in Location.AfterClose.values:
             restaurant.after_close = request.POST["after_close"]
         if request.POST.get("timezone") in dict(TIMEZONES):
             restaurant.timezone = request.POST["timezone"]
@@ -473,24 +502,57 @@ def settings_page(request):
             except ValueError:
                 value = None
             if value:
-                CloseTime.objects.update_or_create(weekday=day, defaults={"time": value, "enabled": enabled})
+                CloseTime.objects.update_or_create(location=restaurant, weekday=day,
+                                                   defaults={"time": value, "enabled": enabled})
             else:
-                CloseTime.objects.filter(weekday=day).update(enabled=False)
+                CloseTime.objects.filter(location=restaurant, weekday=day).update(enabled=False)
         messages.success(request, "Close-out settings saved.")
         return redirect("settings")
-    existing = {c.weekday: c for c in CloseTime.objects.all()}
+    existing = {c.weekday: c for c in CloseTime.objects.filter(location=restaurant)}
     days = [{"n": d, "name": CloseTime.WEEKDAYS[d], "close": existing.get(d)} for d in range(7)]
     return render(request, "tips/settings.html", {
         "restaurant": restaurant, "days": days, "timezones": TIMEZONES,
-        "after_choices": RestaurantSettings.AfterClose.choices, "next_close": autoclose.next_close(),
+        "after_choices": Location.AfterClose.choices, "next_close": autoclose.next_close(restaurant),
+        "all_locations": _locations_overview(),
+        "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
     })
+
+
+# --- Locations ----------------------------------------------------------------
+@login_required
+@require_POST
+def location_switch(request):
+    location = get_object_or_404(Location, pk=request.POST.get("location"))
+    request.session["location_id"] = location.pk
+    nxt = request.POST.get("next", "")
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "dashboard")
+
+
+@login_required
+@require_POST
+def location_add(request):
+    name = request.POST.get("name", "").strip()[:80]
+    if not name:
+        messages.error(request, "Give the new location a name.")
+        return redirect("settings")
+    business_type = request.POST.get("business_type", "restaurant")
+    if business_type not in role_presets.PRESETS:
+        business_type = "restaurant"
+    location = Location.objects.create(name=name, slug=Location.new_slug(name), business_type=business_type,
+                                       timezone=request.location.timezone)
+    role_presets.apply_preset(location, business_type)
+    request.session["location_id"] = location.pk
+    messages.success(request, f"{name} added and selected. Add its team, tip rules and QR codes next.")
+    return redirect("dashboard")
 
 
 # --- Staff's own page (secret link, no login) ----------------------------------
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
-    shares = member.share_set.select_related("night").order_by("-night__date")[:20]
-    return render(request, "tips/my_tips.html", {"member": member, "shares": shares})
+    shares = member.share_set.select_related("night__location").order_by("-night__date", "-night__created_at")[:30]
+    locations = [m.location for m in member.memberships.filter(active=True).select_related("location")]
+    return render(request, "tips/my_tips.html", {"member": member, "shares": shares, "member_locations": locations,
+                                                 "several": len(locations) > 1})
 
 
 # --- PayPal webhooks ----------------------------------------------------------

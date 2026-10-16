@@ -6,7 +6,8 @@ from zoneinfo import ZoneInfo
 from django.test import TestCase, override_settings
 
 from tips import ai, autoclose
-from tips.models import CloseTime, Night, RestaurantSettings, Shift, StaffMember, Tip, TipRuleSet
+from tips.models import CloseTime, Location, Night, Shift, Tip, TipRuleSet
+from tips.tests.helpers import hire
 
 NY = ZoneInfo("America/New_York")
 
@@ -23,23 +24,23 @@ class FakePayPal:
 @override_settings(AI_MODE="mock")
 class AutoCloseTests(TestCase):
     def setUp(self):
-        self.restaurant = RestaurantSettings.load()
+        self.restaurant = Location.default()
         self.restaurant.timezone = "America/New_York"
         self.restaurant.auto_close_enabled = True
         self.restaurant.save()
         # Thursday 23:00, Friday closes after midnight at 01:00
-        CloseTime.objects.create(weekday=3, time=time(23, 0))
-        CloseTime.objects.create(weekday=4, time=time(1, 0))
-        parsed = ai.parse_rules("Bartenders get 20%, the rest goes to servers by hours")
-        TipRuleSet.objects.create(text="x", rules=parsed["rules"], summary=parsed["summary"])
-        self.maria = StaffMember.objects.create(name="Maria", default_role="server", paypal_email="m@example.com")
+        CloseTime.objects.create(location=self.restaurant, weekday=3, time=time(23, 0))
+        CloseTime.objects.create(location=self.restaurant, weekday=4, time=time(1, 0))
+        parsed = ai.parse_rules("Bartenders get 20%, the rest goes to servers by hours", self.restaurant)
+        TipRuleSet.objects.create(location=self.restaurant, text="x", rules=parsed["rules"], summary=parsed["summary"])
+        self.maria = hire("Maria", "server", self.restaurant)
         self.paypal = FakePayPal()
         patcher = mock.patch("tips.services.get_client", return_value=self.paypal)
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def night(self, day, tips=Decimal("50"), roster=True):
-        n = Night.objects.create(date=day)
+        n = Night.objects.create(location=self.restaurant, date=day)
         Tip.objects.create(night=n, amount=tips, paypal_order_id=f"O-{day}", status="completed")
         if roster:
             Shift.objects.create(night=n, staff=self.maria, role="server", hours=Decimal("6"))
@@ -67,7 +68,7 @@ class AutoCloseTests(TestCase):
         self.assertEqual(self.paypal.payouts, 0)
 
     def test_auto_pay(self):
-        self.restaurant.after_close = RestaurantSettings.AfterClose.PAY
+        self.restaurant.after_close = Location.AfterClose.PAY
         self.restaurant.save()
         n = self.night(date(2026, 10, 15))
         autoclose.run(now=datetime(2026, 10, 15, 23, 5, tzinfo=NY))
@@ -76,7 +77,7 @@ class AutoCloseTests(TestCase):
         self.assertEqual(self.paypal.payouts, 1)
 
     def test_without_roster_it_waits(self):
-        self.restaurant.after_close = RestaurantSettings.AfterClose.PAY
+        self.restaurant.after_close = Location.AfterClose.PAY
         self.restaurant.save()
         n = self.night(date(2026, 10, 15), roster=False)
         autoclose.run(now=datetime(2026, 10, 15, 23, 5, tzinfo=NY))
@@ -101,7 +102,7 @@ class AutoCloseTests(TestCase):
     def test_new_tips_after_close_go_to_a_new_night(self):
         n = self.night(date(2026, 10, 15))
         autoclose.run(now=datetime(2026, 10, 15, 23, 1, tzinfo=NY))
-        self.assertNotEqual(Night.current().pk, n.pk)
+        self.assertNotEqual(Night.current(self.restaurant).pk, n.pk)
 
 
 class SettingsPageTests(TestCase):
@@ -114,7 +115,7 @@ class SettingsPageTests(TestCase):
                 "on_4": "on", "time_4": "01:30", "on_0": "", "time_0": "22:00"}
         res = self.client.post(reverse("settings"), data)
         self.assertRedirects(res, reverse("settings"))
-        restaurant = RestaurantSettings.load()
+        restaurant = Location.default()
         self.assertEqual((restaurant.auto_close_enabled, restaurant.after_close, restaurant.timezone),
                          (True, "pay", "Europe/Bucharest"))
         friday = CloseTime.objects.get(weekday=4)

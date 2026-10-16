@@ -1,12 +1,29 @@
 from django.contrib import admin
 
-from .models import Night, PayoutBatch, PayoutItem, Share, Shift, StaffMember, Tip, TipRuleSet, WebhookEvent
+from .models import (Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share, Shift, StaffMember, Tip,
+                     TipRuleSet, WebhookEvent)
+
+
+class MembershipInline(admin.TabularInline):
+    model = Membership
+    extra = 0
 
 
 @admin.register(StaffMember)
 class StaffMemberAdmin(admin.ModelAdmin):
-    list_display = ("name", "default_role", "paypal_email", "active")
-    list_filter = ("default_role", "active")
+    list_display = ("name", "paypal_email")
+    inlines = [MembershipInline]
+
+
+@admin.register(Location)
+class LocationAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "slug", "business_type", "timezone")
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ("name", "key", "location", "no_tips")
+    list_filter = ("location",)
 
 
 class TipInline(admin.TabularInline):
@@ -26,7 +43,8 @@ class ShareInline(admin.TabularInline):
 
 @admin.register(Night)
 class NightAdmin(admin.ModelAdmin):
-    list_display = ("date", "status", "tip_total")
+    list_display = ("date", "location", "status", "tip_total")
+    list_filter = ("location", "status")
     inlines = [TipInline, ShiftInline, ShareInline]
 
 

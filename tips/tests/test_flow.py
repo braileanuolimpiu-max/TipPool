@@ -8,7 +8,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from tips import ai
-from tips.models import Night, PayoutItem, StaffMember, Tip, TipRuleSet
+from tips.models import Location, Night, PayoutItem, Tip, TipRuleSet
+from tips.tests.helpers import hire
 
 
 class FakePayPal:
@@ -50,10 +51,12 @@ class FullFlowTests(TestCase):
         self.addCleanup(patcher.stop)
         user = get_user_model().objects.create_user("manager", password="pw")
         self.client.force_login(user)
-        self.staff = {n: StaffMember.objects.create(name=n, default_role=r, paypal_email=f"{n.lower()}@example.com")
+        self.location = Location.default()
+        self.staff = {n: hire(n, r, self.location)
                       for n, r in [("Maria", "server"), ("John", "server"), ("Alex", "bartender"), ("Sam", "busser")]}
-        parsed = ai.parse_rules("Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours")
-        TipRuleSet.objects.create(text="x", rules=parsed["rules"], summary=parsed["summary"])
+        parsed = ai.parse_rules("Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours",
+                                self.location)
+        TipRuleSet.objects.create(location=self.location, text="x", rules=parsed["rules"], summary=parsed["summary"])
 
     def tip(self, amount):
         res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": amount, "table": "4"}),
@@ -74,7 +77,7 @@ class FullFlowTests(TestCase):
         form = {}
         for name, hours in [("Maria", "6"), ("John", "4"), ("Alex", "5"), ("Sam", "5")]:
             member = self.staff[name]
-            form.update({f"worked_{member.pk}": "on", f"hours_{member.pk}": hours, f"role_{member.pk}": member.default_role})
+            form.update({f"worked_{member.pk}": "on", f"hours_{member.pk}": hours, f"role_{member.pk}": member.memberships.get().default_role})
         res = self.client.post(reverse("close_night"), form)
         self.assertRedirects(res, reverse("review", args=[night.pk]))
 
@@ -142,7 +145,7 @@ class FullFlowTests(TestCase):
         self.assertContains(self.client.get(reverse("qr_show") + "?table=4"), "Table 4")  # works without login
 
     def test_webhook_marks_tip_completed(self):
-        night = Night.current()
+        night = Night.current(self.location)
         Tip.objects.create(night=night, amount=Decimal("7.00"), paypal_order_id="ORD-W")
         event = {"id": "WH-1", "event_type": "PAYMENT.CAPTURE.COMPLETED",
                  "resource": {"id": "CAP-W", "supplementary_data": {"related_ids": {"order_id": "ORD-W"}}}}

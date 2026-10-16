@@ -32,9 +32,11 @@
 {% endblock %}
 {% block scripts %}
 {{ table|json_script:"table-data" }}
+{{ at|json_script:"at-data" }}
 <script>
   const CSRF = "{{ csrf_token }}";
   const TABLE = JSON.parse(document.getElementById("table-data").textContent);
+  const AT = JSON.parse(document.getElementById("at-data").textContent);
   const statusEl = document.getElementById("status");
   let amount = "10.00";
 
@@ -56,7 +58,7 @@
     const res = await fetch("{% url 'api_create_order' %}", {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-CSRFToken": CSRF},
-      body: JSON.stringify({amount: amount, table: TABLE}),
+      body: JSON.stringify({amount: amount, table: TABLE, at: AT}),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Could not start the payment.");

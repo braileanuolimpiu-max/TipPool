@@ -8,7 +8,7 @@
        {% if roster_count %}{{ roster_count }} on this shift's roster.{% endif %}</p>
   </div>
   <div class="actions">
-    <a class="btn btn-secondary" href="{% url 'tip_page' %}" target="_blank" rel="noopener">Guest tip page</a>
+    <a class="btn btn-secondary" href="{% url 'tip_page' %}?at={{ location.slug }}" target="_blank" rel="noopener">Guest tip page</a>
     <a class="btn btn-primary" href="{% url 'close_night' %}">{% if roster_count %}Close out now{% else %}Who's working{% endif %}</a>
   </div>
 </header>

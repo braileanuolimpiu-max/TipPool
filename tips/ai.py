@@ -104,9 +104,9 @@ In "warnings", flag (in short plain English):
 If the manager gives a manager or owner a share, still include it in the rules exactly as written, and warn."""
 
 
-def _business_roles():
+def _business_roles(location):
     from .models import Role
-    return list(Role.objects.all())
+    return list(Role.objects.filter(location=location))
 
 
 def _role_list_text(roles):
@@ -131,12 +131,12 @@ def _keep_known(keys, known, warnings):
     return out
 
 
-def parse_rules(text):
+def parse_rules(text, location):
     """Returns dict: rules, summary, warnings. Raises AIError if the rules can't be used."""
     text = (text or "").strip()
     if not text:
         raise AIError("Please describe your tip rules.")
-    roles = _business_roles()
+    roles = _business_roles(location)
     if not roles:
         raise AIError("Add your team's roles first (Team page).")
     known = {r.key for r in roles}
@@ -247,14 +247,14 @@ Match names to the staff list when they clearly refer to the same person (use th
 Never guess numbers you cannot read: leave the person out and explain it in "notes"."""
 
 
-def read_schedule(image_bytes, media_type, staff_names):
+def read_schedule(image_bytes, media_type, staff_names, location):
     """Returns dict: shifts [{name, role, hours}], notes []."""
     if mode() != "claude":
         raise AIError("Reading a photo needs the real AI (AI_MODE=claude). For now, enter the hours below.")
     content = [
         {"type": "image", "source": {"type": "base64", "media_type": media_type,
                                      "data": base64.standard_b64encode(image_bytes).decode("utf-8")}},
-        {"type": "text", "text": _role_list_text(_business_roles()) + "\n\nStaff list: " + ", ".join(staff_names)
+        {"type": "text", "text": _role_list_text(_business_roles(location)) + "\n\nStaff list: " + ", ".join(staff_names)
                                  + "\nList everyone who worked."},
     ]
     out = _claude_parse(SCHEDULE_SYSTEM, content, ScheduleOut, effort="medium")

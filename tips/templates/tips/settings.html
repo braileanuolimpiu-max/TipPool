@@ -75,6 +75,32 @@
     <button class="btn btn-primary btn-block">Save settings</button>
   </div>
 </form>
+
+<section class="panel" id="locations" style="margin-top:28px">
+  <div class="panel-head"><h2>Locations</h2><span class="small muted">{{ all_locations|length }} location{{ all_locations|length|pluralize }}</span></div>
+  <div class="split-2" style="gap:0">
+    <ul class="rows">
+      {% for loc in all_locations %}
+      <li>
+        <div style="flex:1;min-width:0"><strong>{{ loc.display_name }}</strong>
+          <div class="small muted">{{ loc.type_label }} · {{ loc.team_count }} on the team</div></div>
+        {% if loc.pk == restaurant.pk %}<span class="pill live">Selected</span>
+        {% else %}<form method="post" action="{% url 'location_switch' %}">{% csrf_token %}
+          <input type="hidden" name="location" value="{{ loc.pk }}"><input type="hidden" name="next" value="{% url 'settings' %}">
+          <button class="btn btn-quiet small">Switch to it</button></form>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="{% url 'location_add' %}" class="panel-body stack" style="border-left:1px solid var(--hair-soft)">{% csrf_token %}
+      <div><label for="loc_name">Add a location</label>
+        <input type="text" id="loc_name" name="name" maxlength="80" required placeholder="e.g. Luna Café, Downtown"></div>
+      <div><label for="loc_type">Type of business</label>
+        <select id="loc_type" name="business_type">{% for value, label in presets %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+        <p class="hint">Each location has its own team, roles, tip rules, QR codes and closing times. People can work at several.</p></div>
+      <button class="btn btn-secondary">Add location</button>
+    </form>
+  </div>
+</section>
 {% endblock %}
 {% block scripts %}
 <script>

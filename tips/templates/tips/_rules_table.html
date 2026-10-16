@@ -9,4 +9,4 @@
   {% endif %}
   </tbody>
 </table></div>
-{% if rules.excluded_roles %}<p class="small muted" style="margin:0">Never in the pool: {{ rules.excluded_roles|role_names }}</p>{% endif %}
+{% if rules.excluded_roles %}<p class="small muted" style="margin:0">Never in the pool: {{ rules.excluded_roles|role_names:location }}</p>{% endif %}

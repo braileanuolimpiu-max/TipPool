@@ -3,13 +3,68 @@ from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
+from django.utils.timezone import now
+
+
+class Location(models.Model):
+    """One shop / venue. An owner can run several, each with its own roles, rules, codes and closing times."""
+
+    class AfterClose(models.TextChoices):
+        REVIEW = "review", "Prepare the split for me to approve"
+        PAY = "pay", "Pay the team automatically"
+
+    name = models.CharField(max_length=80, blank=True)
+    # used in public links (tip page, QR codes): /tip/?at=<slug>
+    slug = models.SlugField(max_length=40, unique=True)
+    business_type = models.CharField(max_length=20, default="restaurant", blank=True)
+    timezone = models.CharField(max_length=64, default="America/New_York")
+    auto_close_enabled = models.BooleanField(default=False)
+    after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)
+    # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
+    table_count = models.PositiveSmallIntegerField(default=0)
+    spots = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(default=now)
+
+    SPOT_SUGGESTIONS = ["Bar", "Patio", "Counter", "Takeout"]
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self):
+        return self.name or "Your business"
+
+    @property
+    def display_name(self):
+        return self.name or "Your business"
+
+    @property
+    def table_labels(self):
+        return [str(n) for n in range(1, self.table_count + 1)] + list(self.spots)
+
+    @classmethod
+    def default(cls):
+        """The first location (created if there is none). Used where no location was chosen."""
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create(slug="main")
+        return obj
+
+    @classmethod
+    def new_slug(cls, name):
+        from django.utils.text import slugify
+        base = slugify(name)[:34] or "location"
+        slug, n = base, 2
+        while cls.objects.filter(slug=slug).exists():
+            slug, n = f"{base}-{n}", n + 1
+        return slug
 
 
 class Role(models.Model):
-    """A job at this business (server, stylist, housekeeper...). The business sets its own list."""
+    """A job at one location (server, stylist, housekeeper...). Each location sets its own list."""
 
+    location = models.ForeignKey(Location, related_name="roles", on_delete=models.CASCADE)
     # short id used in the tip rules and on past shifts; it never changes, even when the name does
-    key = models.SlugField(max_length=20, unique=True)
+    key = models.SlugField(max_length=20)
     name = models.CharField(max_length=40)
     aliases = models.CharField(max_length=200, blank=True,
                                help_text="Other words for this role, comma separated (helps read the rules)")
@@ -18,29 +73,24 @@ class Role(models.Model):
 
     class Meta:
         ordering = ["position", "name"]
+        unique_together = [("location", "key")]
 
     def __str__(self):
         return self.name
 
     @classmethod
-    def label(cls, key):
-        role = cls.objects.filter(key=key).first()
+    def label(cls, key, location_id):
+        role = cls.objects.filter(location_id=location_id, key=key).first()
         return role.name if role else (key or "").replace("-", " ").capitalize()
 
     @classmethod
-    def new_key(cls, name):
+    def new_key(cls, location, name):
         from django.utils.text import slugify
         base = slugify(name)[:16] or "role"
         key, n = base, 2
-        while cls.objects.filter(key=key).exists():
+        while cls.objects.filter(location=location, key=key).exists():
             key, n = f"{base}-{n}", n + 1
         return key
-
-
-class RoleLabelMixin:
-    @property
-    def role_name(self):
-        return Role.label(self.role)
 
 
 def new_access_token():
@@ -48,10 +98,10 @@ def new_access_token():
 
 
 class StaffMember(models.Model):
+    """A person. They can work at several locations (see Membership)."""
+
     name = models.CharField(max_length=80)
-    default_role = models.CharField(max_length=20)
     paypal_email = models.EmailField(help_text="Where their tips are paid (PayPal account email)")
-    active = models.BooleanField(default=True)
     # secret link so a staff member can see their own tips without a login
     access_token = models.CharField(max_length=40, default=new_access_token, unique=True, editable=False)
 
@@ -61,14 +111,31 @@ class StaffMember(models.Model):
     def __str__(self):
         return self.name
 
+
+class Membership(models.Model):
+    """Someone on the team of one location, with their usual role there."""
+
+    staff = models.ForeignKey(StaffMember, related_name="memberships", on_delete=models.CASCADE)
+    location = models.ForeignKey(Location, related_name="memberships", on_delete=models.CASCADE)
+    default_role = models.CharField(max_length=20)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["staff__name"]
+        unique_together = [("staff", "location")]
+
+    def __str__(self):
+        return f"{self.staff} at {self.location}"
+
     @property
     def role_name(self):
-        return Role.label(self.default_role)
+        return Role.label(self.default_role, self.location_id)
 
 
 class TipRuleSet(models.Model):
     """The manager's tip-pool rules: the original text + the structured version the split uses."""
 
+    location = models.ForeignKey(Location, related_name="rule_sets", on_delete=models.CASCADE)
     text = models.TextField()
     rules = models.JSONField()
     warnings = models.JSONField(default=list, blank=True)
@@ -83,12 +150,12 @@ class TipRuleSet(models.Model):
         return f"Rules #{self.pk}"
 
     @classmethod
-    def active(cls):
-        return cls.objects.filter(is_active=True).first()
+    def active(cls, location):
+        return cls.objects.filter(location=location, is_active=True).first()
 
 
 class Night(models.Model):
-    """One service (shift) whose tips are pooled and split."""
+    """One service (shift) at one location, whose tips are pooled and split."""
 
     class Status(models.TextChoices):
         OPEN = "open", "Open (collecting tips)"
@@ -97,6 +164,7 @@ class Night(models.Model):
         PAYING = "paying", "Paying out"
         PAID = "paid", "Paid"
 
+    location = models.ForeignKey(Location, related_name="nights", on_delete=models.CASCADE)
     date = models.DateField(default=timezone.localdate)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
     rule_set = models.ForeignKey(TipRuleSet, null=True, blank=True, on_delete=models.SET_NULL)
@@ -116,13 +184,13 @@ class Night(models.Model):
         return (total or Decimal("0")).quantize(Decimal("0.01"))
 
     @classmethod
-    def current(cls):
-        """The night that is collecting tips right now (created if needed)."""
-        night = cls.objects.filter(status=cls.Status.OPEN).first()
+    def current(cls, location):
+        """The shift at this location that is collecting tips right now (created if needed)."""
+        night = cls.objects.filter(location=location, status=cls.Status.OPEN).first()
         if night:
             return night
-        from .autoclose import restaurant_tz
-        return cls.objects.create(date=timezone.now().astimezone(restaurant_tz()).date())
+        from .autoclose import location_tz
+        return cls.objects.create(location=location, date=timezone.now().astimezone(location_tz(location)).date())
 
 
 class Tip(models.Model):
@@ -148,6 +216,12 @@ class Tip(models.Model):
 
     def __str__(self):
         return f"${self.amount} ({self.get_status_display()})"
+
+
+class RoleLabelMixin:
+    @property
+    def role_name(self):
+        return Role.label(self.role, self.night.location_id)
 
 
 class Shift(RoleLabelMixin, models.Model):
@@ -216,48 +290,19 @@ class WebhookEvent(models.Model):
     received_at = models.DateTimeField(auto_now_add=True)
 
 
-class RestaurantSettings(models.Model):
-    """One row: how this restaurant runs its close-out."""
-
-    class AfterClose(models.TextChoices):
-        REVIEW = "review", "Prepare the split for me to approve"
-        PAY = "pay", "Pay the team automatically"
-
-    name = models.CharField(max_length=80, blank=True)
-    business_type = models.CharField(max_length=20, default="restaurant", blank=True)
-    timezone = models.CharField(max_length=64, default="America/New_York")
-    auto_close_enabled = models.BooleanField(default=False)
-    after_close = models.CharField(max_length=10, choices=AfterClose.choices, default=AfterClose.REVIEW)
-    # table QR codes: how many numbered tables, plus named spots like "Bar" or "Patio"
-    table_count = models.PositiveSmallIntegerField(default=0)
-    spots = models.JSONField(default=list, blank=True)
-
-    SPOT_SUGGESTIONS = ["Bar", "Patio", "Counter", "Takeout"]
-
-    def __str__(self):
-        return "Restaurant settings"
-
-    @property
-    def table_labels(self):
-        return [str(n) for n in range(1, self.table_count + 1)] + list(self.spots)
-
-    @classmethod
-    def load(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
-
-
 class CloseTime(models.Model):
-    """When the night closes, per weekday of the service day (0 = Monday)."""
+    """When a location's shift closes, per weekday of the service day (0 = Monday)."""
 
     WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-    weekday = models.PositiveSmallIntegerField(unique=True)
+    location = models.ForeignKey(Location, related_name="close_times", on_delete=models.CASCADE)
+    weekday = models.PositiveSmallIntegerField()
     time = models.TimeField()
     enabled = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["weekday"]
+        unique_together = [("location", "weekday")]
 
     @property
     def day_name(self):
