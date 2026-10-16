@@ -23,9 +23,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import ai, autoclose, hours as hours_from, roles as role_presets, services
-from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Shift,
-                     StaffMember, Tip, TipRuleSet, WebhookEvent)
-from .accounts import manager_required
+from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
+                     Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
+from .accounts import manager_required, managers_only, two_step_setup_context
 from .check import blocking as check_blocking
 from .middleware import public_location
 from .ratelimit import hit, limited
@@ -175,7 +175,7 @@ def api_create_order(request):
             raise ValueError("bad body")
         amount = Decimal(str(data.get("amount", "")))
         table = str(data.get("table", ""))[:20]
-        location = Location.objects.filter(slug=str(data.get("at", ""))[:40]).first()
+        location = Location.objects.filter(slug=str(data.get("at", ""))[:40], archived=False).first()
         if location is None:
             return JsonResponse({"error": "This tip page doesn't belong to a business."}, status=404)
         if not hit(f"orders-loc:{location.pk}", 300, 3600):
@@ -325,6 +325,7 @@ def qr_print(request):
 
 # --- Staff ---------------------------------------------------------------------
 @manager_required
+@managers_only
 def staff_list(request):
     location = request.location
     if request.method == "POST":
@@ -363,6 +364,7 @@ def staff_list(request):
 
 @manager_required
 @require_POST
+@managers_only
 def staff_role(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
     role = request.POST.get("default_role", "")
@@ -376,6 +378,7 @@ def staff_role(request, pk):
 
 @manager_required
 @require_POST
+@managers_only
 def staff_new_link(request, pk):
     """The old private link stops working (e.g. it was sent to the wrong person)."""
     from .models import new_access_token
@@ -390,6 +393,67 @@ def staff_new_link(request, pk):
 
 @manager_required
 @require_POST
+@managers_only
+def staff_edit(request, pk):
+    """Fix someone's name or PayPal email. A new email has to be confirmed by them again."""
+    member = get_object_or_404(Membership.objects.select_related("staff"), pk=pk, location=request.location)
+    person = member.staff
+    name = " ".join(request.POST.get("name", "").split())[:80]
+    email = request.POST.get("paypal_email", "").strip().lower()
+    try:
+        validate_email(email)
+    except ValidationError:
+        messages.error(request, "Enter a valid PayPal email.")
+        return redirect("staff_list")
+    if StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).exclude(pk=person.pk).exists():
+        messages.error(request, "Someone else on your team already uses that email.")
+        return redirect("staff_list")
+    changes = []
+    if name and name != person.name:
+        changes.append(f"name {person.name} → {name}")
+        person.name = name
+    if email != person.paypal_email.lower():
+        changes.append(f"PayPal email {person.paypal_email} → {email}")
+        person.paypal_email = email
+        person.payout_method = StaffMember.PayoutMethod.PAYPAL
+        person.payout_confirmed_at = None  # they confirm the new address themselves
+    if changes:
+        person.save()
+        Change.log(request, f"Edited {person.name}: " + "; ".join(changes))
+        messages.success(request, f"Saved. {person.name} confirms the new email on their tips page before the "
+                                  "next payout." if any("email" in c for c in changes) else "Saved.")
+    return redirect("staff_list")
+
+
+@manager_required
+@require_POST
+@managers_only
+def staff_erase(request, pk):
+    """Erase a person's personal data on request. The amounts stay for the business's records."""
+    from .models import Message, new_access_token
+    member = get_object_or_404(Membership.objects.select_related("staff"), pk=pk, location=request.location)
+    person = member.staff
+    if Share.objects.filter(staff=person, night__status__in=[Night.Status.REVIEW, Night.Status.PAYING]).exists():
+        messages.error(request, f"{person.name} still has a payout waiting. Pay or recalculate it first.")
+        return redirect("staff_list")
+    old_name = person.name
+    person.name = f"Former team member {person.pk}"
+    person.paypal_email = f"erased-{person.pk}@invalid.example"
+    person.venmo_phone = ""
+    person.payout_confirmed_at = None
+    person.access_token = new_access_token()
+    person.erased_at = timezone.now()
+    person.save()
+    person.memberships.update(active=False, schedule={})
+    Message.objects.filter(staff=person).update(text="[erased]", payload={})
+    Change.log(request, f"Erased the personal data of {old_name} (kept the amounts for the records)")
+    messages.success(request, f"{old_name}'s name, email and link are erased. Their amounts stay in your reports.")
+    return redirect("staff_list")
+
+
+@manager_required
+@require_POST
+@managers_only
 def staff_schedule(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
     week = {}
@@ -409,6 +473,7 @@ def staff_schedule(request, pk):
 
 @manager_required
 @require_POST
+@managers_only
 def staff_toggle(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
     member.active = not member.active
@@ -420,6 +485,7 @@ def staff_toggle(request, pk):
 # --- Roles: each location has its own ----------------------------------------------
 @manager_required
 @require_POST
+@managers_only
 def role_add(request):
     name = request.POST.get("name", "").strip()
     if not name:
@@ -437,6 +503,7 @@ def role_add(request):
 
 @manager_required
 @require_POST
+@managers_only
 def role_remove(request, pk):
     role = get_object_or_404(Role, pk=pk, location=request.location)
     if role.key in role_presets.roles_in_use(request.location):
@@ -450,6 +517,7 @@ def role_remove(request, pk):
 
 @manager_required
 @require_POST
+@managers_only
 def role_preset(request):
     business_type = request.POST.get("business_type", "")
     if business_type not in role_presets.PRESETS:
@@ -466,6 +534,7 @@ def role_preset(request):
 
 # --- Rules -------------------------------------------------------------------
 @manager_required
+@managers_only
 def rules_page(request):
     preview = None
     text = ""
@@ -657,6 +726,7 @@ def review(request, pk):
 
 @manager_required
 @require_POST
+@managers_only
 def pay(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
     from . import check
@@ -709,6 +779,7 @@ def payout_status(request, pk):
 
 @manager_required
 @require_POST
+@managers_only
 def payout_action(request, pk):
     """Send a failed payout again, cancel an unclaimed one, or remind the person to accept it."""
     item = get_object_or_404(PayoutItem.objects.select_related("share__staff", "share__night"), pk=pk,
@@ -770,13 +841,14 @@ REVIEW_CHOICES = [(0, "Don't wait: pay right away"), (30, "30 minutes"), (60, "1
 
 
 def _locations_overview(business):
-    rows = list(Location.objects.filter(business=business).annotate(team_count=Count("memberships", filter=Q(memberships__active=True))))
+    rows = list(Location.objects.filter(business=business).order_by("archived", "created_at").annotate(team_count=Count("memberships", filter=Q(memberships__active=True))))
     for loc in rows:
         loc.type_label = role_presets.PRESETS.get(loc.business_type, {}).get("label", "Business")
     return rows
 
 
 @manager_required
+@managers_only
 def settings_page(request):
     from datetime import time as dtime
     restaurant = request.location
@@ -846,6 +918,8 @@ def settings_page(request):
                      if request.user.manager.is_owner else "")
                     for i in request.business.invites.filter(accepted_at__isnull=True) if i.usable],
         "is_owner": request.user.manager.is_owner,
+        "profile": request.user.manager,
+        **two_step_setup_context(request),
         "currencies": list(request.business.CURRENCIES.items()),
         "fee_modes": request.business.FeeMode.choices,
         "has_tips": Tip.objects.filter(night__location__business=request.business).exists(),
@@ -863,7 +937,7 @@ def overview(request):
     business = request.business
     week_start = timezone.localdate() - timedelta(days=timezone.localdate().weekday())
     rows = []
-    for loc in Location.objects.filter(business=business):
+    for loc in Location.objects.filter(business=business, archived=False):
         night = Night.objects.filter(location=loc, status=Night.Status.OPEN).first()
         waiting = list(Night.objects.filter(location=loc, status__in=[
             Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).order_by("date"))
@@ -890,6 +964,7 @@ def overview(request):
 
 # --- Reports -------------------------------------------------------------------
 @manager_required
+@managers_only
 def reports_page(request):
     from datetime import date
     from . import reports
@@ -926,6 +1001,7 @@ def reports_page(request):
 
 @manager_required
 @require_POST
+@managers_only
 def ask_confirm(request):
     from . import actions
     try:
@@ -948,6 +1024,9 @@ def messages_page(request):
             Change.log(request, f"Marked as handled: {alert.text[:120]}")
             return redirect("messages_page")
         msg = get_object_or_404(Message, pk=request.POST.get("message"), staff__business=business)
+        if msg.kind == Message.Kind.PAYOUT_CHANGE and request.user.manager.is_lead:
+            messages.error(request, "Only a manager can approve where someone is paid.")
+            return redirect("messages_page")
         if msg.kind == Message.Kind.PAYOUT_CHANGE:
             if not msg.is_open:
                 return redirect("messages_page")
@@ -992,6 +1071,30 @@ def location_switch(request):
 
 @manager_required
 @require_POST
+@managers_only
+def location_archive(request, pk):
+    location = get_object_or_404(Location, pk=pk, business=request.business)
+    restore = request.POST.get("restore") == "1"
+    if not restore:
+        if not Location.objects.filter(business=request.business, archived=False).exclude(pk=location.pk).exists():
+            messages.error(request, "You can't archive your only location.")
+            return redirect(f"{reverse('settings')}#locations")
+        if Night.objects.filter(location=location, status__in=[Night.Status.CLOSED, Night.Status.REVIEW,
+                                                              Night.Status.PAYING]).exists():
+            messages.error(request, f"{location.display_name} has shifts waiting to be paid. Finish them first.")
+            return redirect(f"{reverse('settings')}#locations")
+    location.archived = not restore
+    location.save(update_fields=["archived"])
+    if not restore and request.session.get("location_id") == location.pk:
+        request.session.pop("location_id", None)
+    Change.log(request, f"{'Restored' if restore else 'Archived'} the location {location.display_name}", location=location)
+    messages.success(request, f"{location.display_name} is {'back' if restore else 'archived: its tip codes no longer work'}.")
+    return redirect(f"{reverse('settings')}#locations")
+
+
+@manager_required
+@require_POST
+@managers_only
 def location_add(request):
     name = request.POST.get("name", "").strip()[:80]
     if not name:

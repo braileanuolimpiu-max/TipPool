@@ -21,6 +21,8 @@
     <a href="#locations"><span>07</span>Locations</a>
     <a href="#managers"><span>08</span>Managers</a>
     <a href="#changes"><span>09</span>Recent changes</a>
+    <p class="settings-nav-title">You</p>
+    <a href="#signin"><span>10</span>Your sign-in</a>
   </nav>
 
   <div class="settings-main">
@@ -189,10 +191,15 @@
           <li>
             <div style="flex:1;min-width:0"><strong>{{ loc.display_name }}</strong>
               <div class="small muted">{{ loc.type_label }} · {{ loc.team_count }} on the team</div></div>
-            {% if loc.pk == restaurant.pk %}<span class="pill live">Selected</span>
+            {% if loc.archived %}<span class="pill wait">Archived</span>
+            <form method="post" action="{% url 'location_archive' loc.pk %}">{% csrf_token %}<input type="hidden" name="restore" value="1">
+              <button class="btn btn-quiet small">Restore</button></form>
+            {% elif loc.pk == restaurant.pk %}<span class="pill live">Selected</span>
             {% else %}<form method="post" action="{% url 'location_switch' %}">{% csrf_token %}
               <input type="hidden" name="location" value="{{ loc.pk }}"><input type="hidden" name="next" value="{% url 'settings' %}">
               <button class="btn btn-quiet small">Switch to it</button></form>{% endif %}
+            {% if not loc.archived and all_locations|length > 1 %}<form method="post" action="{% url 'location_archive' loc.pk %}" data-confirm="Archive {{ loc.display_name }}? Its tip codes stop working. You can restore it later.">{% csrf_token %}
+              <button class="btn btn-quiet small">Archive</button></form>{% endif %}
           </li>
           {% endfor %}
         </ul>
@@ -208,7 +215,7 @@
 
     <section class="panel setting" id="managers">
       <div class="setting-intro"><span class="setting-no">08</span><h2>Managers</h2>
-        <p>Who can sign in to {{ business.name }}. Managers see every location and can close out and pay. Staff don't need this: they use their own tips link.</p></div>
+        <p>Who can sign in to {{ business.name }}. <strong>Managers</strong> do everything except payments settings. <strong>Shift leads</strong> run the shift (who worked, card and cash tips, codes) but can't pay, change rules or see reports. Staff don't need a login.</p></div>
       <div class="setting-body stack">
         <ul class="rows boxed">
           {% for m in managers %}
@@ -216,7 +223,14 @@
             <div style="flex:1;min-width:0"><strong>{{ m.user.get_full_name|default:m.user.username }}</strong>{% if m.user == user %} <span class="small muted">(you)</span>{% endif %}
               <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.user.email|default:"no email" }}</div></div>
             {% if m.is_owner %}<span class="pill live">Owner</span>
-            {% elif is_owner %}<form method="post" action="{% url 'remove_manager' m.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Remove</button></form>{% endif %}
+            {% elif is_owner %}
+            <form method="post" action="{% url 'manager_level' m.pk %}" class="role-pick">{% csrf_token %}
+              <select name="level" aria-label="Level for {{ m.user.get_full_name|default:m.user.username }}" onchange="this.form.submit()">
+                <option value="manager" {% if m.level == "manager" %}selected{% endif %}>Manager</option>
+                <option value="lead" {% if m.level == "lead" %}selected{% endif %}>Shift lead</option>
+              </select></form>
+            <form method="post" action="{% url 'remove_manager' m.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Remove</button></form>
+            {% else %}<span class="small muted">{{ m.level_label }}</span>{% endif %}
           </li>
           {% endfor %}
           {% for invite, link in invites %}
@@ -228,11 +242,48 @@
         </ul>
         {% if is_owner %}
         <form method="post" action="{% url 'invite_manager' %}" class="inline-form">{% csrf_token %}
-          <div><label for="invite_email">Invite a manager</label>
+          <div><label for="invite_email">Invite someone</label>
             <input type="email" id="invite_email" name="email" required placeholder="their@email.com"></div>
+          <div style="flex:0 1 170px"><label for="invite_level">As</label>
+            <select id="invite_level" name="level"><option value="manager">Manager</option><option value="lead">Shift lead</option></select></div>
           <button class="btn btn-secondary">Send invite</button>
         </form>
         {% else %}<p class="muted small" style="margin:0">Only the owner can invite or remove managers.</p>{% endif %}
+      </div>
+    </section>
+
+    <section class="panel setting" id="signin">
+      <div class="setting-intro"><span class="setting-no">10</span><h2>Your sign-in</h2>
+        <p>Two-step sign-in asks for a code from your phone after your password, so a stolen password alone isn't enough.{% if profile.is_owner %} Recommended for owners: you control payouts.{% endif %}</p></div>
+      <div class="setting-body stack">
+        {% if two_step_qr %}
+        <div class="two-step-setup">
+          <img src="{{ two_step_qr }}" alt="Code to scan with your authenticator app" width="168" height="168">
+          <div class="stack" style="gap:10px">
+            <p style="margin:0"><strong>1.</strong> Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…).</p>
+            <p class="small muted" style="margin:0">Can't scan? Type this key: <code>{{ two_step_secret }}</code></p>
+            <form method="post" action="{% url 'two_step' %}" class="inline-form">{% csrf_token %}
+              <div><label for="code_new"><strong>2.</strong> Type the 6-digit code it shows</label>
+                <input type="text" id="code_new" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required placeholder="123 456"></div>
+              <button class="btn btn-primary" name="action" value="confirm">Turn on</button>
+              <button class="btn btn-quiet" name="action" value="cancel" formnovalidate>Cancel</button>
+            </form>
+          </div>
+        </div>
+        {% elif profile.totp_enabled %}
+        <p style="margin:0"><span class="pill ok">On</span> Two-step sign-in is on for {{ user.email|default:user.username }}.</p>
+        <form method="post" action="{% url 'two_step' %}" class="inline-form">{% csrf_token %}
+          <div><label for="code_off">To turn it off, type a current code</label>
+            <input type="text" id="code_off" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required placeholder="123 456"></div>
+          <button class="btn btn-secondary" name="action" value="disable">Turn off</button>
+        </form>
+        {% else %}
+        <form method="post" action="{% url 'two_step' %}" class="actions">{% csrf_token %}
+          <span class="pill wait">Off</span>
+          <button class="btn btn-primary" name="action" value="start">Turn on two-step sign-in</button>
+        </form>
+        {% endif %}
+        <p class="hint tight"><a href="{% url 'password_change' %}">Change your password</a></p>
       </div>
     </section>
 

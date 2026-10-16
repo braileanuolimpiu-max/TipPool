@@ -42,6 +42,18 @@ def manager_required(view):
     return wrapper
 
 
+def managers_only(view):
+    """Managers and owners, not shift leads (paying, rules, team, settings, reports)."""
+    @wraps(view)
+    @manager_required
+    def wrapper(request, *args, **kwargs):
+        if request.user.manager.is_lead:
+            messages.error(request, "Shift leads can't open that. Ask a manager.")
+            return redirect("dashboard")
+        return view(request, *args, **kwargs)
+    return wrapper
+
+
 def owner_required(view):
     @wraps(view)
     @manager_required
@@ -176,7 +188,9 @@ def invite_manager(request):
     if Manager.objects.filter(business=request.business, user__email__iexact=email).exists():
         messages.error(request, f"{email} already manages {request.business.name}.")
         return redirect("settings")
-    invite = Invite.objects.create(business=request.business, email=email, invited_by=request.user.get_username())
+    level = Manager.Level.LEAD if request.POST.get("level") == "lead" else Manager.Level.MANAGER
+    invite = Invite.objects.create(business=request.business, email=email, level=level,
+                                   invited_by=request.user.get_username())
     link = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
     send_mail(f"Join {request.business.name} on TipPool",
               f"{request.user.get_full_name() or request.user.get_username()} invited you to manage "
@@ -198,6 +212,18 @@ def remove_manager(request, pk):
         manager.delete()
         Change.log(request, f"Removed {name} as a manager")
         messages.success(request, f"{name} can no longer sign in to {request.business.name}.")
+    return redirect(f"{reverse('settings')}#managers")
+
+
+@require_POST
+@owner_required
+def manager_level(request, pk):
+    manager = get_object_or_404(Manager, pk=pk, business=request.business, is_owner=False)
+    if request.POST.get("level") in Manager.Level.values:
+        manager.level = request.POST["level"]
+        manager.save(update_fields=["level"])
+        name = manager.user.get_full_name() or manager.user.email or manager.user.get_username()
+        Change.log(request, f"{name} is now a {manager.get_level_display().lower()}")
     return redirect(f"{reverse('settings')}#managers")
 
 
@@ -237,7 +263,7 @@ def accept_invite(request, token):
                 errors.append(f"This login already manages {user.manager.business.name}. "
                               "Use a different email for this business.")
             elif not errors:
-                Manager.objects.get_or_create(user=user, defaults={"business": invite.business})
+                Manager.objects.get_or_create(user=user, defaults={"business": invite.business, "level": invite.level})
                 invite.accepted_at = timezone.now()
                 invite.save(update_fields=["accepted_at"])
                 Change.log(user.get_username(), f"Joined as a manager (invited by {invite.invited_by})",
@@ -304,3 +330,108 @@ def payment_settings(request):
     Change.log(request, f"Changed payment settings: {business.currency}, {business.get_fee_mode_display().lower()}")
     messages.success(request, "Payment settings saved.")
     return redirect(f"{reverse('settings')}#payments")
+
+
+# --- Two-step sign-in ---------------------------------------------------------------
+from django.contrib.auth.views import LoginView  # noqa: E402
+
+TWO_STEP_SECONDS = 300
+
+
+class TwoStepLoginView(LoginView):
+    """Password first; people with two-step sign-in on then type the code from their app."""
+    template_name = "registration/login.html"
+    redirect_authenticated_user = True
+
+    def form_valid(self, form):
+        user = form.get_user()
+        profile = getattr(user, "manager", None)
+        if profile and profile.totp_enabled:
+            self.request.session["two_step"] = {"uid": user.pk, "backend": user.backend, "at": int(timezone.now().timestamp()),
+                                                "next": self.get_success_url()}
+            return redirect("login_code")
+        return super().form_valid(form)
+
+
+@limited("login-code", 12, 900)
+def login_code(request):
+    from django.utils.http import url_has_allowed_host_and_scheme
+    from . import totp
+    from .vault import decrypt
+    pending = request.session.get("two_step")
+    if not pending or timezone.now().timestamp() - pending["at"] > TWO_STEP_SECONDS:
+        request.session.pop("two_step", None)
+        messages.error(request, "Please sign in again.")
+        return redirect("login")
+    error = ""
+    if request.method == "POST":
+        user = User.objects.filter(pk=pending["uid"]).select_related("manager").first()
+        if user and totp.verify(decrypt(user.manager.totp_secret_encrypted), request.POST.get("code", "")):
+            request.session.pop("two_step", None)
+            login(request, user, backend=pending["backend"])
+            nxt = pending.get("next") or reverse("dashboard")
+            safe = url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()})
+            return redirect(nxt if safe else "dashboard")
+        error = "That code isn't right. Use the newest code in your authenticator app."
+    return render(request, "registration/login_code.html", {"error": error})
+
+
+@manager_required
+def two_step(request):
+    """Turn two-step sign-in on (scan, then confirm one code) or off (needs a current code)."""
+    import base64
+    import io
+
+    import qrcode
+    import qrcode.image.svg
+
+    from . import totp
+    from .vault import decrypt, encrypt
+    profile = request.user.manager
+    if request.method == "POST":
+        action = request.POST.get("action")
+        code = request.POST.get("code", "")
+        if action == "start":
+            request.session["two_step_new"] = totp.new_secret()
+        elif action == "confirm":
+            secret = request.session.get("two_step_new", "")
+            if totp.verify(secret, code):
+                profile.totp_secret_encrypted, profile.totp_enabled = encrypt(secret), True
+                profile.save(update_fields=["totp_secret_encrypted", "totp_enabled"])
+                request.session.pop("two_step_new", None)
+                Change.log(request, "Turned on two-step sign-in")
+                messages.success(request, "Two-step sign-in is on. You'll type a code from your app after your password.")
+            else:
+                messages.error(request, "That code didn't match. Scan the code again and type the newest number.")
+        elif action == "disable":
+            if totp.verify(decrypt(profile.totp_secret_encrypted), code):
+                profile.totp_secret_encrypted, profile.totp_enabled = "", False
+                profile.save(update_fields=["totp_secret_encrypted", "totp_enabled"])
+                Change.log(request, "Turned off two-step sign-in")
+                messages.success(request, "Two-step sign-in is off.")
+            else:
+                messages.error(request, "That code didn't match, so two-step sign-in stays on.")
+        elif action == "cancel":
+            request.session.pop("two_step_new", None)
+        return redirect(f"{reverse('settings')}#signin")
+    return redirect(f"{reverse('settings')}#signin")
+
+
+def two_step_setup_context(request):
+    """For the settings page: the QR code to scan while turning two-step sign-in on."""
+    import base64
+    import io
+
+    import qrcode
+    import qrcode.image.svg
+
+    from . import totp
+    secret = request.session.get("two_step_new")
+    if not secret:
+        return {}
+    account = request.user.email or request.user.get_username()
+    image = qrcode.make(totp.setup_uri(secret, account), image_factory=qrcode.image.svg.SvgPathImage, box_size=8, border=2)
+    buffer = io.BytesIO()
+    image.save(buffer)
+    return {"two_step_secret": " ".join(secret[i:i + 4] for i in range(0, len(secret), 4)),
+            "two_step_qr": "data:image/svg+xml;base64," + base64.b64encode(buffer.getvalue()).decode()}

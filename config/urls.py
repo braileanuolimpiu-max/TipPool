@@ -2,12 +2,15 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from tips.accounts import TwoStepLoginView, login_code
 from tips.ratelimit import limited
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html",
-                                                redirect_authenticated_user=True), name="login"),
+    path("login/", TwoStepLoginView.as_view(), name="login"),
+    path("login/code/", login_code, name="login_code"),
+    path("password/change/", auth_views.PasswordChangeView.as_view(), name="password_change"),
+    path("password/change/done/", auth_views.PasswordChangeDoneView.as_view(), name="password_change_done"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("password/reset/", limited("password-reset", 5, 3600)(auth_views.PasswordResetView.as_view()),
          name="password_reset"),

@@ -36,6 +36,18 @@
         <form method="post" action="{% url 'staff_toggle' m.pk %}">{% csrf_token %}
           <button class="btn btn-quiet small">{% if m.active %}Remove{% else %}Bring back{% endif %}</button></form>
         {% if m.active %}
+        <details class="week-edit person-edit">
+          <summary>Edit</summary>
+          <form method="post" action="{% url 'staff_edit' m.pk %}" class="inline-form">{% csrf_token %}
+            <div><label for="n{{ m.pk }}">Name</label><input type="text" id="n{{ m.pk }}" name="name" value="{{ m.staff.name }}" maxlength="80" required></div>
+            <div><label for="e{{ m.pk }}">PayPal email</label><input type="email" id="e{{ m.pk }}" name="paypal_email" value="{{ m.staff.paypal_email }}" required></div>
+            <button class="btn btn-secondary small">Save</button>
+          </form>
+          <form method="post" action="{% url 'staff_erase' m.pk %}" class="erase-form" data-confirm="Erase {{ m.staff.name }}'s name, email and tips link for good? Their amounts stay in your reports. This can't be undone.">{% csrf_token %}
+            <button class="btn btn-quiet small danger">Erase their personal data</button>
+            <span class="hint tight">For privacy requests. Removing someone from the team keeps their data.</span>
+          </form>
+        </details>
         <details class="week-edit">
           <summary>{% if m.schedule_summary %}Usual week: {{ m.schedule_summary }}{% else %}Add usual hours{% endif %}</summary>
           <form method="post" action="{% url 'staff_schedule' m.pk %}">{% csrf_token %}
@@ -124,9 +136,6 @@
     btn.classList.add("done");
     btn.setAttribute("title", "Copied");
     setTimeout(() => { btn.classList.remove("done"); btn.setAttribute("title", "Copy link"); }, 1600);
-  }));
-  document.querySelectorAll("form[data-confirm]").forEach((f) => f.addEventListener("submit", (e) => {
-    if (!window.confirm(f.dataset.confirm)) e.preventDefault();
   }));
 </script>
 {% endblock %}

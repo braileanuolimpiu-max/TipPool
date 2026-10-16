@@ -156,5 +156,5 @@ def shifts_csv(report):
 def scope_locations(request, scope):
     """This location, or all the locations of the manager's own business."""
     if scope == "all":
-        return list(Location.objects.filter(business=request.business))
+        return list(Location.objects.filter(business=request.business, archived=False))
     return [request.location]

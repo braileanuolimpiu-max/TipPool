@@ -3,7 +3,7 @@ def app_context(request):
     location = getattr(request, "location", None)
     business = getattr(request, "business", None)
     try:
-        locations = list(Location.objects.filter(business=business)) if business else []
+        locations = list(Location.objects.filter(business=business, archived=False)) if business else []
     except Exception:  # e.g. before the first migration
         locations = []
     open_messages = 0
@@ -17,7 +17,10 @@ def app_context(request):
                                                 resolved_at__isnull=True).count())
     owner = business or (location.business if location is not None else None)
     from django.conf import settings
+    user = getattr(request, "user", None)
+    profile = getattr(user, "manager", None) if user is not None and user.is_authenticated else None
     return {
+        "is_lead": bool(profile and profile.is_lead),
         "email_enabled": settings.EMAIL_ENABLED,
         "cur": owner.symbol if owner else "$",
         "business": business,

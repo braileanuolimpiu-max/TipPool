@@ -921,3 +921,13 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible { box-shadow
   .sticky-bar .btn { flex: 1 1 0; padding-left: 10px; padding-right: 10px; }
   .stepper { overflow-x: auto; scrollbar-width: none; }
 }
+.person-edit { display: grid; gap: 10px; }
+.person-edit .inline-form { margin-top: 10px; }
+.erase-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.btn.danger { color: var(--void); }
+.btn.danger:hover { background: var(--void-soft); }
+.two-step-setup { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 18px; align-items: start; }
+.two-step-setup img { border: 1px solid var(--hair); border-radius: 6px; background: #fff; }
+.two-step-setup code { font: .82rem var(--mono); word-break: break-all; }
+.code-input { font: 600 1.3rem var(--mono) !important; letter-spacing: .2em; text-align: center; }
+@media (max-width: 560px) { .two-step-setup { grid-template-columns: minmax(0, 1fr); justify-items: center; } }

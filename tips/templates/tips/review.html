@@ -73,7 +73,9 @@
       {% endfor %}
     </section>
 
-    {% if night.status == "review" %}
+    {% if night.status == "review" and is_lead %}
+    <div class="panel panel-body"><p style="margin:0">Ready for a manager to approve and pay. Shift leads can check the split but not pay it.</p></div>
+    {% elif night.status == "review" %}
     <form method="post" action="{% url 'pay' night.pk %}" class="panel panel-body stack" id="pay-form">{% csrf_token %}
       <p style="margin:0">Each person gets their share straight to their PayPal or Venmo, in one PayPal payout.</p>
       {% if balance is not None %}<p class="small {% if balance_short %}flash error{% else %}muted{% endif %}" style="margin:0">Your PayPal balance: {{ cur }}{{ balance }}{% if balance_short %}. That's less than this payout: add money to PayPal first.{% endif %}</p>{% endif %}

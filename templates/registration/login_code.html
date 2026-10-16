@@ -1,0 +1,13 @@
+{% extends "registration/_auth_simple.html" %}
+{% block title %}Your code{% endblock %}
+{% block panel %}
+<form method="post" class="stack">{% csrf_token %}
+  <h2>Type your code</h2>
+  <p class="muted" style="margin:0">Open your authenticator app and type the 6-digit code for TipPool.</p>
+  {% if error %}<div class="flash error" style="margin:0">{{ error }}</div>{% endif %}
+  <div><label for="code">Code</label>
+    <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required autofocus placeholder="123 456" class="code-input"></div>
+  <button class="btn btn-primary btn-block">Sign in</button>
+  <p class="auth-switch"><a href="{% url 'login' %}">Start over</a></p>
+</form>
+{% endblock %}

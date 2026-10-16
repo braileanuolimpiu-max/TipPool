@@ -63,7 +63,7 @@ def run(now=None):
     """Close every open shift whose closing time has passed, at every location. Returns what happened."""
     now = now or timezone.now()
     results = []
-    for location in Location.objects.filter(auto_close_enabled=True):
+    for location in Location.objects.filter(auto_close_enabled=True, archived=False):
         tz = location_tz(location)
         done = []
         for night in Night.objects.filter(location=location, status=Night.Status.OPEN):

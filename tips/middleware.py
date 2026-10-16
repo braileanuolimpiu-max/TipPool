@@ -20,7 +20,7 @@ def pick_location(request):
     Public pages name the location in the link (?at=<slug>)."""
     business = request.business
     if business is not None:
-        own = Location.objects.filter(business=business)
+        own = Location.objects.filter(business=business, archived=False)
         slug = request.GET.get("at")
         location_id = request.session.get("location_id")
         return ((own.filter(slug=slug).first() if slug else None)
@@ -32,7 +32,7 @@ def public_location(request):
     """For guest pages: the location named in the link, whoever is looking. None when the link doesn't
     name a real location: a tip must never land in some other business's PayPal."""
     slug = request.GET.get("at")
-    return Location.objects.filter(slug=slug).first() if slug else None
+    return Location.objects.filter(slug=slug, archived=False).first() if slug else None
 
 
 class LocationMiddleware:

@@ -27,6 +27,8 @@ class Business(models.Model):
     paypal_secret_encrypted = models.TextField(blank=True)
     paypal_webhook_id = models.CharField(max_length=60, blank=True)
     paypal_live = models.BooleanField(default=False)
+    # made by "Try the demo": sample data, sandbox only, deleted after a week
+    is_demo = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -52,12 +54,29 @@ class Business(models.Model):
 class Manager(models.Model):
     """A login that manages a business. Staff don't need one (they use their private link)."""
 
+    class Level(models.TextChoices):
+        MANAGER = "manager", "Manager"
+        LEAD = "lead", "Shift lead"
+
     user = models.OneToOneField("auth.User", related_name="manager", on_delete=models.CASCADE)
     business = models.ForeignKey(Business, related_name="managers", on_delete=models.CASCADE)
     is_owner = models.BooleanField(default=False)
+    # shift leads run the shift (who worked, card/cash tips, codes) but can't pay, change rules or see pay
+    level = models.CharField(max_length=10, choices=Level.choices, default=Level.MANAGER)
+    # two-step sign-in: a 6-digit code from an authenticator app (secret stored encrypted)
+    totp_secret_encrypted = models.TextField(blank=True)
+    totp_enabled = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.user} at {self.business}"
+
+    @property
+    def is_lead(self):
+        return self.level == self.Level.LEAD and not self.is_owner
+
+    @property
+    def level_label(self):
+        return "Owner" if self.is_owner else self.get_level_display()
 
 
 def new_invite_token():
@@ -69,6 +88,7 @@ class Invite(models.Model):
 
     business = models.ForeignKey(Business, related_name="invites", on_delete=models.CASCADE)
     email = models.EmailField()
+    level = models.CharField(max_length=10, default="manager")
     token = models.CharField(max_length=60, unique=True, default=new_invite_token)
     invited_by = models.CharField(max_length=150, blank=True)
     created_at = models.DateTimeField(default=now)
@@ -94,6 +114,8 @@ class Location(models.Model):
 
     business = models.ForeignKey(Business, related_name="locations", on_delete=models.CASCADE)
     name = models.CharField(max_length=80, blank=True)
+    # closed for good: hidden everywhere, its tip codes stop working; history stays for the books
+    archived = models.BooleanField(default=False)
     # used in public links (tip page, QR codes): /tip/?at=<slug>
     slug = models.SlugField(max_length=40, unique=True)
     business_type = models.CharField(max_length=20, default="restaurant", blank=True)
@@ -209,6 +231,8 @@ class StaffMember(models.Model):
     venmo_phone = models.CharField(max_length=20, blank=True)
     # the worker said "yes, pay me here" on their own page (the manager only typed it)
     payout_confirmed_at = models.DateTimeField(null=True, blank=True)
+    # personal data erased on request; the amounts stay for the business's records
+    erased_at = models.DateTimeField(null=True, blank=True)
     # secret link so a staff member can see their own tips without a login
     access_token = models.CharField(max_length=40, default=new_access_token, unique=True, editable=False)
 
