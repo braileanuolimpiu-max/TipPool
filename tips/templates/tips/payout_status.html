@@ -13,6 +13,7 @@
   </div>
 </header>
 {% include "tips/_stepper.html" with step=3 %}
+{% if unclear %}<div class="flash warning">PayPal didn't answer clearly when this payout was sent, so it may or may not have gone out. <strong>Don't pay again.</strong> Press "Check PayPal again": it sends the very same request, which PayPal never pays twice.</div>{% endif %}
 
 <div class="split-2 reverse">
   <div class="tray"><div class="receipt-wrap">

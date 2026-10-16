@@ -129,8 +129,6 @@ def propose(kind, params, location, user):
 
 def execute(token, request):
     """Do a confirmed action. Returns a sentence for the manager; raises ActionError."""
-    from . import services
-    from .models import Change
     try:
         data = signing.loads(token, salt=SALT, max_age=MAX_AGE)
     except signing.SignatureExpired:
@@ -144,9 +142,20 @@ def execute(token, request):
     from .models import UsedConfirmation
     try:
         with transaction.atomic():
-            UsedConfirmation.objects.create(nonce=data.get("n", ""))
+            used = UsedConfirmation.objects.create(nonce=data.get("n", ""))
     except IntegrityError:
         raise ActionError("That was already done.")
+    try:
+        return _run(data, request)
+    except ActionError:
+        used.delete()  # nothing happened: the same confirmation may be tried again
+        raise
+
+
+def _run(data, request):
+    from . import services
+    from .models import Change
+    from .paypal import PayPalError
     kind, params, location = data["k"], data["p"], request.location
     try:
         if kind == "pay_shift":
@@ -173,6 +182,8 @@ def execute(token, request):
         raise ActionError("That shift or person isn't there any more.")
     except services.TipPoolError as exc:
         raise ActionError(str(exc))
+    except PayPalError as exc:
+        raise ActionError(f"PayPal said no: {exc}")
     raise ActionError("I can't do that one.")
 
 

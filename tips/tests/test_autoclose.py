@@ -127,4 +127,4 @@ class SettingsPageTests(TestCase):
         friday = CloseTime.objects.get(weekday=4)
         self.assertEqual((friday.time, friday.enabled, friday.after_midnight), (time(1, 30), True, True))
         self.assertFalse(CloseTime.objects.get(weekday=0).enabled)
-        self.assertContains(self.client.get(reverse("settings")), "Next automatic close-out")
+        self.assertContains(self.client.get(reverse("settings")), "Next: ")

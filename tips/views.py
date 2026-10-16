@@ -123,7 +123,7 @@ def tip_page(request):
         "tip_message": location.tip_message,
         "tip_mode": location.tip_mode,
         "people": people,
-        "to": int(to) if to.isdigit() and any(m.pk == int(to) for m in people) else None,
+        "to": int(to) if to.isascii() and to.isdigit() and any(m.pk == int(to) for m in people) else None,
         "cancelled": "cancelled" in request.GET,
         "table": request.GET.get("table", "")[:20],
         "paypal_client_id": checkout_config(location.business)[0],
@@ -169,7 +169,7 @@ def api_create_order(request):
         to = str(data.get("to") or "")
         if to:
             member = (Membership.objects.filter(pk=int(to), location=location, active=True).select_related("staff")
-                      .first() if to.isdigit() else None)
+                      .first() if to.isascii() and to.isdigit() else None)
             no_tips = member is not None and Role.objects.filter(location=location, key=member.default_role,
                                                                 no_tips=True).exists()
             if member is None or no_tips:
@@ -226,7 +226,8 @@ def qr_show(request):
         raise Http404("Unknown business.")
     table = request.GET.get("table", "")[:20]
     to = request.GET.get("to", "")
-    member = Membership.objects.filter(pk=to, location=request.location).select_related("staff").first() if to.isdigit() else None
+    member = (Membership.objects.filter(pk=int(to), location=request.location).select_related("staff").first()
+              if to.isascii() and to.isdigit() else None)
     url = request.build_absolute_uri(reverse("tip_page")) + f"?at={request.location.slug}" + (
         f"&table={table}" if table else "") + (f"&to={member.pk}" if member else "")
     label = f"Tip {member.staff.name}" if member else (
@@ -612,15 +613,18 @@ def payout_status(request, pk):
     if request.method == "POST":
         try:
             for each in night.payout_batches.all():
+                if services.needs_recheck(each):
+                    services.recheck_unclear(each)
                 services.refresh_batch(each)
-        except PayPalError as exc:
-            messages.error(request, f"Could not refresh from PayPal: {exc}")
+        except (PayPalError, services.TipPoolError) as exc:
+            messages.error(request, f"Could not check with PayPal: {exc}")
         return redirect("payout_status", pk=pk)
     items = (PayoutItem.objects.filter(batch__night=night).select_related("share__staff", "batch")
              .order_by("superseded", "-share__amount", "-pk"))
     paid = sum((i.share.amount for i in items if i.status == "SUCCESS" and not i.superseded), Decimal("0"))
     return render(request, "tips/payout_status.html", {
         "night": night, "batch": batch, "items": items, "paid": paid,
+        "unclear": any(services.needs_recheck(b) for b in night.payout_batches.all()),
         "payout_fees": sum((i.fee for i in items), Decimal("0")),
     })
 
@@ -666,7 +670,7 @@ def payout_status_json(request, pk):
     for each in night.payout_batches.all():
         try:
             services.refresh_batch(each)
-        except PayPalError:
+        except (PayPalError, services.TipPoolError):
             pass
     night.refresh_from_db()
     return JsonResponse({
@@ -929,7 +933,7 @@ def location_add(request):
 
 
 # --- Staff's own page (secret link, no login) ----------------------------------
-@limited("staff-page", 30, 600)
+@limited("staff-page", 30, 600, key=lambda request, token: token)
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
     if request.method == "POST" and request.POST.get("text"):
@@ -1143,7 +1147,7 @@ def _check_with_paypal(event, business):
             if batch:
                 services.refresh_batch(batch)
         # disputes need a signed event: without one we don't raise alarms from unverified data
-    except PayPalError:
+    except (PayPalError, services.TipPoolError):
         log.warning("Could not check unverified webhook %s with PayPal", event.get("id"))
 
 

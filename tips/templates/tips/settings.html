@@ -4,230 +4,257 @@
 <header class="page-head">
   <div>
     <h1>Settings</h1>
-    <p>Your business, and when each shift closes. At closing time tips stop counting toward the shift, new tips start the next one, and the split is prepared for you.</p>
+    <p>How {{ restaurant.display_name }} takes tips, shares them and closes each shift, plus payments and who can sign in to {{ business.name }}.</p>
   </div>
 </header>
 
-<form method="post" class="split-2">{% csrf_token %}
-  <section class="panel">
-    <div class="panel-head">
-      <h2>Closing time</h2>
-      <label class="actions" style="margin:0;font-weight:600">
-        <span class="switch"><input type="checkbox" name="auto_close_enabled" {% if restaurant.auto_close_enabled %}checked{% endif %}><span></span></span>
-        Close out automatically
-      </label>
-    </div>
-    <ul class="rows week" id="week">
-      {% for d in days %}
-      <li class="{% if not d.close or not d.close.enabled %}off{% endif %}">
-        <span class="switch"><input type="checkbox" name="on_{{ d.n }}" aria-label="Close out on {{ d.name }}" {% if d.close and d.close.enabled %}checked{% endif %}><span></span></span>
-        <span class="day">{{ d.name }}</span>
-        <input type="time" name="time_{{ d.n }}" value="{% if d.close %}{{ d.close.time|time:'H:i' }}{% endif %}" aria-label="{{ d.name }} closing time">
-        <span class="after">{% if d.close and d.close.after_midnight %}after midnight, early {{ d.name|slice:":3" }}+1{% endif %}</span>
-      </li>
-      {% endfor %}
-    </ul>
-    <div class="panel-body" style="border-top:1px solid var(--hair-soft)">
-      <div class="actions">
-        <input type="time" id="same-time" value="23:00" style="width:140px" aria-label="Time for every day">
-        <button type="button" class="btn btn-secondary" id="apply-all">Use for every day</button>
-      </div>
-      <p class="hint">A time before 6:00 AM counts as the same shift after midnight (Friday 1:00 AM closes Friday's service on Saturday morning).</p>
-    </div>
-  </section>
+<div class="settings">
+  <nav class="settings-nav" aria-label="Settings sections">
+    <p class="settings-nav-title">{{ restaurant.display_name }}</p>
+    <a href="#business"><span>01</span>Your business</a>
+    <a href="#tip-page"><span>02</span>Tip page</a>
+    <a href="#sharing"><span>03</span>How tips are shared</a>
+    <a href="#closing"><span>04</span>Closing time</a>
+    <a href="#after-close"><span>05</span>When a shift closes</a>
+    <p class="settings-nav-title">{{ business.name }}</p>
+    <a href="#payments"><span>06</span>Payments</a>
+    <a href="#locations"><span>07</span>Locations</a>
+    <a href="#managers"><span>08</span>Managers</a>
+    <a href="#changes"><span>09</span>Recent changes</a>
+  </nav>
 
-  <div class="stack">
-    <section class="panel">
-      <div class="panel-head"><h2>Your business</h2></div>
-      <div class="panel-body">
-        <label for="name">Name</label>
-        <input type="text" id="name" name="name" value="{{ restaurant.name }}" maxlength="80" placeholder="e.g. Luna Trattoria, Studio 9 Salon">
-        <p class="hint">Shown to guests on the tip page and on your table cards.</p>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>Tip page</h2><a class="small" href="{% url 'tip_page' %}?at={{ restaurant.slug }}" target="_blank" rel="noopener">See it</a></div>
-      <div class="panel-body stack">
-        <label class="choice"><input type="radio" name="tip_style" value="" {% if not restaurant.tip_style %}checked{% endif %}>
-          <span><strong>The usual for a {{ type_label }}</strong>
-            <span class="small muted">{% if usual_tips.0 == "percent" %}{% for v in usual_tips.1 %}{{ v }}%{% if not forloop.last %}, {% endif %}{% endfor %} of the bill{% else %}{% for v in usual_tips.1 %}{{ cur }}{{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></span></label>
-        {% for value, label in tip_styles %}
-        <label class="choice"><input type="radio" name="tip_style" value="{{ value }}" {% if restaurant.tip_style == value %}checked{% endif %}>
-          <span><strong>{{ label }}</strong></span></label>
-        {% endfor %}
-        <div class="tip-values" aria-label="Your four tip buttons">
-          {% for v in tip_values_now %}<input type="number" name="tip_value_{{ forloop.counter0 }}" value="{{ v }}" min="1" max="500" aria-label="Tip button {{ forloop.counter }}">{% endfor %}
+  <div class="settings-main">
+    <form method="post" id="location-settings" class="stack" style="gap:18px">{% csrf_token %}
+      <section class="panel setting" id="business">
+        <div class="setting-intro"><span class="setting-no">01</span><h2>Your business</h2>
+          <p>The name guests see on the tip page and on your printed codes, and the time zone for closing times.</p></div>
+        <div class="setting-body form-grid">
+          <div><label for="name">Name</label>
+            <input type="text" id="name" name="name" value="{{ restaurant.name }}" maxlength="80" placeholder="e.g. Luna Trattoria, Studio 9 Salon"></div>
+          <div><label for="timezone">Time zone</label>
+            <select id="timezone" name="timezone">
+              {% for value, label in timezones %}<option value="{{ value }}" {% if restaurant.timezone == value %}selected{% endif %}>{{ label }} ({{ value }})</option>{% endfor %}
+            </select></div>
         </div>
-        <p class="hint" style="margin:0">Your four buttons, used when you choose amounts or percent above. Guests can always type their own amount.</p>
-        <div><label for="tip_message">A line for guests <span class="muted">(optional)</span></label>
-          <input type="text" id="tip_message" name="tip_message" maxlength="160" value="{{ restaurant.tip_message }}" placeholder="e.g. Thanks for visiting! See you soon."></div>
+      </section>
+
+      <section class="panel setting" id="tip-page">
+        <div class="setting-intro"><span class="setting-no">02</span><h2>Tip page</h2>
+          <p>The four buttons guests tap. Guests can always type their own amount.</p>
+          <a class="small" href="{% url 'tip_page' %}?at={{ restaurant.slug }}" target="_blank" rel="noopener">Open the tip page</a></div>
+        <div class="setting-body stack">
+          <div class="choice-grid three">
+            <label class="choice"><input type="radio" name="tip_style" value="" {% if not restaurant.tip_style %}checked{% endif %}>
+              <span><strong>The usual for a {{ type_label }}</strong>
+                <span class="small muted">{% if usual_tips.0 == "percent" %}{% for v in usual_tips.1 %}{{ v }}%{% if not forloop.last %}, {% endif %}{% endfor %} of the bill{% else %}{% for v in usual_tips.1 %}{{ cur }}{{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></span></label>
+            {% for value, label in tip_styles %}
+            <label class="choice"><input type="radio" name="tip_style" value="{{ value }}" {% if restaurant.tip_style == value %}checked{% endif %}>
+              <span><strong>{% if value == "amounts" %}Fixed amounts{% else %}Percent of the bill{% endif %}</strong>
+                <span class="small muted">{% if value == "amounts" %}e.g. {{ cur }}5, {{ cur }}10, {{ cur }}15{% else %}The guest types the bill, each button shows the amount{% endif %}</span></span></label>
+            {% endfor %}
+          </div>
+          <div class="form-grid">
+            <div><label>Your four buttons</label>
+              <div class="tip-values" aria-label="Your four tip buttons">
+                {% for v in tip_values_now %}<input type="number" name="tip_value_{{ forloop.counter0 }}" value="{{ v }}" min="1" max="500" aria-label="Tip button {{ forloop.counter }}">{% endfor %}
+              </div>
+              <p class="hint">Used when you pick fixed amounts or percent.</p></div>
+            <div><label for="tip_message">A line for guests <span class="muted">(optional)</span></label>
+              <input type="text" id="tip_message" name="tip_message" maxlength="160" value="{{ restaurant.tip_message }}" placeholder="e.g. Thanks for visiting! See you soon."></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel setting" id="sharing">
+        <div class="setting-intro"><span class="setting-no">03</span><h2>How tips are shared</h2>
+          <p>Pooled under your tip rules, kept by each person, or the guest's choice.</p></div>
+        <div class="setting-body">
+          <div class="choice-grid three">
+            {% for value, label in tip_modes %}
+            <label class="choice"><input type="radio" name="tip_mode" value="{{ value }}" {% if restaurant.tip_mode == value %}checked{% endif %}>
+              <span><strong>{{ label }}</strong>
+                <span class="small muted">{% if value == "pool" %}Usual for restaurants and bars. Your tip rules split everything.{% elif value == "personal" %}Usual for salons, barbers and delivery. The guest picks a person, who gets the whole tip.{% else %}The guest picks "the whole team" or one person. Team tips follow your rules.{% endif %}</span></span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="panel setting" id="closing">
+        <div class="setting-intro"><span class="setting-no">04</span><h2>Closing time</h2>
+          <p>At closing time tips stop counting toward the shift, new tips start the next one, and the split is prepared for you.</p>
+          <p class="hint">A time before 6:00 AM counts as the same shift after midnight: Friday 1:00 AM closes Friday's service on Saturday morning.</p></div>
+        <div class="setting-body stack">
+          <label class="switch-line">
+            <span class="switch"><input type="checkbox" name="auto_close_enabled" {% if restaurant.auto_close_enabled %}checked{% endif %}><span></span></span>
+            <span><strong>Close out automatically</strong><span class="small muted">{% if next_close %}Next: {{ next_close|date:"l, M j \a\t g:i A" }}{% else %}Off: you close each shift yourself.{% endif %}</span></span>
+          </label>
+          <ul class="week-grid-days" id="week">
+            {% for d in days %}
+            <li class="{% if not d.close or not d.close.enabled %}off{% endif %}">
+              <label class="day-toggle"><span class="switch"><input type="checkbox" name="on_{{ d.n }}" aria-label="Close out on {{ d.name }}" {% if d.close and d.close.enabled %}checked{% endif %}><span></span></span>
+                <span class="day">{{ d.name|slice:":3" }}</span></label>
+              <input type="time" name="time_{{ d.n }}" value="{% if d.close %}{{ d.close.time|time:'H:i' }}{% endif %}" aria-label="{{ d.name }} closing time">
+              <span class="after">{% if d.close and d.close.after_midnight %}after midnight{% endif %}</span>
+            </li>
+            {% endfor %}
+          </ul>
+          <div class="actions">
+            <input type="time" id="same-time" value="23:00" style="width:140px" aria-label="Time for every day">
+            <button type="button" class="btn btn-secondary small" id="apply-all">Use for every day</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel setting" id="after-close">
+        <div class="setting-intro"><span class="setting-no">05</span><h2>When a shift closes</h2>
+          <p>Hours come from clock-ins first. If anything looks off, the payout waits for you. Nobody is paid by guesswork.</p></div>
+        <div class="setting-body stack">
+          <div class="choice-grid two">
+            {% for value, label in after_choices %}
+            <label class="choice"><input type="radio" name="after_close" value="{{ value }}" {% if restaurant.after_close == value %}checked{% endif %}>
+              <span><strong>{{ label }}</strong>
+                <span class="small muted">{% if value == "review" %}You check the split, then press pay.{% else %}PayPal pays everyone when the shift closes, if the close-out check finds nothing.{% endif %}</span></span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="form-grid">
+            <div><label for="review_minutes">Before an automatic payout, wait</label>
+              <select id="review_minutes" name="review_minutes">
+                {% for value, label in review_choices %}<option value="{{ value }}" {% if restaurant.review_minutes == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+              <p class="hint">Time for the team to check their share and flag a mistake.</p></div>
+            <label class="choice"><input type="checkbox" name="use_usual_schedule" {% if restaurant.use_usual_schedule %}checked{% endif %}>
+              <span><strong>Use the usual week when nobody clocked in</strong>
+                <span class="small muted">Without it, a shift with nobody saved and no clock-ins waits for you.</span></span></label>
+          </div>
+        </div>
+      </section>
+
+      <div class="save-bar">
+        <span class="small">Sections 01–05 apply to <strong>{{ restaurant.display_name }}</strong>.</span>
+        <button class="btn btn-primary">Save settings</button>
       </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>How tips are shared</h2></div>
-      <div class="panel-body stack">
-        {% for value, label in tip_modes %}
-        <label class="choice"><input type="radio" name="tip_mode" value="{{ value }}" {% if restaurant.tip_mode == value %}checked{% endif %}>
-          <span><strong>{{ label }}</strong>
-            <span class="small muted">{% if value == "pool" %}Usual for restaurants and bars. Your tip rules split everything.{% elif value == "personal" %}Usual for salons, barbers and delivery. The guest picks a person, who gets the whole tip.{% else %}The guest picks "the whole team" or one person. Team tips follow your rules.{% endif %}</span></span>
-        </label>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>When a shift closes</h2></div>
-      <div class="panel-body stack">
-        {% for value, label in after_choices %}
-        <label class="choice"><input type="radio" name="after_close" value="{{ value }}" {% if restaurant.after_close == value %}checked{% endif %}>
-          <span><strong>{{ label }}</strong>
-            <span class="small muted">{% if value == "review" %}You check the split, then press pay.{% else %}PayPal pays everyone as soon as the shift closes. Only happens if you saved who's working.{% endif %}</span></span>
-        </label>
-        {% endfor %}
-        <div><label for="review_minutes">Before an automatic payout, wait</label>
-          <select id="review_minutes" name="review_minutes">
-            {% for value, label in review_choices %}<option value="{{ value }}" {% if restaurant.review_minutes == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-          </select>
-          <p class="hint">Gives the team time to check their share on their tips page and flag a mistake. A flagged shift waits for you.</p></div>
-        <label class="choice"><input type="checkbox" name="use_usual_schedule" {% if restaurant.use_usual_schedule %}checked{% endif %}>
-          <span><strong>Use the usual week when nobody clocked in</strong>
-            <span class="small muted">Without it, a shift with nobody saved and no clock-ins waits for you.</span></span></label>
-        <p class="hint" style="margin:0">Hours come from clock-ins first. If someone forgets to clock out, the split waits for you to check it. Nobody is paid by guesswork.</p>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>Time zone</h2></div>
-      <div class="panel-body">
-        <select name="timezone" aria-label="Time zone">
-          {% for value, label in timezones %}<option value="{{ value }}" {% if restaurant.timezone == value %}selected{% endif %}>{{ label }} ({{ value }})</option>{% endfor %}
-        </select>
-      </div>
-    </section>
-
-    <div class="flash {% if next_close %}info{% else %}warning{% endif %}" style="margin:0">
-      {% if next_close %}Next automatic close-out: <strong>{{ next_close|date:"l, M j \a\t g:i A" }}</strong>
-      {% else %}Automatic close-out is off. You close each shift yourself.{% endif %}
-    </div>
-    <button class="btn btn-primary btn-block">Save settings</button>
-  </div>
-</form>
-
-<section class="panel" id="locations" style="margin-top:28px">
-  <div class="panel-head"><h2>Locations</h2><span class="small muted">{{ all_locations|length }} location{{ all_locations|length|pluralize }}</span></div>
-  <div class="split-2" style="gap:0">
-    <ul class="rows">
-      {% for loc in all_locations %}
-      <li>
-        <div style="flex:1;min-width:0"><strong>{{ loc.display_name }}</strong>
-          <div class="small muted">{{ loc.type_label }} · {{ loc.team_count }} on the team</div></div>
-        {% if loc.pk == restaurant.pk %}<span class="pill live">Selected</span>
-        {% else %}<form method="post" action="{% url 'location_switch' %}">{% csrf_token %}
-          <input type="hidden" name="location" value="{{ loc.pk }}"><input type="hidden" name="next" value="{% url 'settings' %}">
-          <button class="btn btn-quiet small">Switch to it</button></form>{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    <form method="post" action="{% url 'location_add' %}" class="panel-body stack" style="border-left:1px solid var(--hair-soft)">{% csrf_token %}
-      <div><label for="loc_name">Add a location</label>
-        <input type="text" id="loc_name" name="name" maxlength="80" required placeholder="e.g. Luna Café, Downtown"></div>
-      <div><label for="loc_type">Type of business</label>
-        <select id="loc_type" name="business_type">{% for value, label in presets %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
-        <p class="hint">Each location has its own team, roles, tip rules, QR codes and closing times. People can work at several.</p></div>
-      <button class="btn btn-secondary">Add location</button>
     </form>
-  </div>
-</section>
 
-<form method="post" action="{% url 'payment_settings' %}" class="panel" id="payments" style="margin-top:28px">{% csrf_token %}
-  <div class="panel-head"><h2>Payments</h2>
-    {% if business.paypal_connected %}<span class="pill ok">{% if business.paypal_live %}Live PayPal connected{% else %}Sandbox PayPal connected{% endif %}</span>
-    {% else %}<span class="pill wait">Demo: TipPool's sandbox account</span>{% endif %}</div>
-  <fieldset class="split-2" style="gap:0;border:0;margin:0;padding:0"{% if not is_owner %} disabled{% endif %}>
-    <div class="panel-body stack">
-      <div><label for="currency">Currency</label>
-        <select id="currency" name="currency" {% if has_tips %}disabled{% endif %}>{% for code, sym in currencies %}<option value="{{ code }}" {% if business.currency == code %}selected{% endif %}>{{ code }} ({{ sym }})</option>{% endfor %}</select>
-        {% if has_tips %}<input type="hidden" name="currency" value="{{ business.currency }}"><p class="hint">Fixed once you have tips, so past amounts stay right.</p>{% else %}<p class="hint">For tips, payouts and reports at every location. Venmo payouts are US dollars only.</p>{% endif %}</div>
-      <div><label>Card and PayPal fees</label>
-        {% for value, label in fee_modes %}<label class="choice" style="margin-top:6px"><input type="radio" name="fee_mode" value="{{ value }}" {% if business.fee_mode == value %}checked{% endif %}>
-          <span><strong>{{ label }}</strong><span class="small muted">{% if value == "business" %}The team gets every cent guests tipped. Simple, and staff like it.{% else %}Allowed in the US: only the actual processing fee comes off, before the split.{% endif %}</span></span></label>{% endfor %}</div>
-      <div><label for="card_fee_percent">Card machine fee on card tips</label>
-        <input type="number" id="card_fee_percent" name="card_fee_percent" min="0" max="10" step="0.01" value="{{ business.card_fee_percent }}" style="max-width:120px"> %
-        <p class="hint">Only taken off when fees come out of the tips. PayPal's own fee is read from each payment.</p></div>
-    </div>
-    <div class="panel-body stack" style="border-left:1px solid var(--hair-soft)">
-      <p style="margin:0">{% if business.paypal_connected %}Tips go straight into <strong>your</strong> PayPal account and payouts come from it.{% else %}Connect your own PayPal so tips go into your account and payouts come from it. Until then, this account runs as a demo on TipPool's PayPal sandbox: no real money.{% endif %}</p>
-      <div><label for="paypal_client_id">PayPal client ID</label>
-        <input type="text" id="paypal_client_id" name="paypal_client_id" value="{{ business.paypal_client_id }}" autocomplete="off" spellcheck="false"></div>
-      <div><label for="paypal_secret">Secret</label>
-        <input type="password" id="paypal_secret" name="paypal_secret" autocomplete="new-password" placeholder="{% if business.paypal_connected %}Saved (hidden). Type a new one to replace it{% endif %}">
-        <p class="hint">From developer.paypal.com, Apps &amp; Credentials. Stored encrypted and never shown again. Turn on Payouts for the app.</p></div>
-      <div><label for="paypal_webhook_id">Webhook ID <span class="muted">(optional)</span></label>
-        <input type="text" id="paypal_webhook_id" name="paypal_webhook_id" value="{{ business.paypal_webhook_id }}" autocomplete="off" spellcheck="false">
-        <p class="hint">Point a webhook at {{ webhook_url }} for instant updates, refunds and disputes.</p></div>
-      <label class="choice"><input type="checkbox" name="paypal_live" {% if business.paypal_live %}checked{% endif %}><span><strong>Live (real money)</strong><span class="small muted">Leave off for sandbox testing.</span></span></label>
-    </div>
-  </fieldset>
-  {% if is_owner %}
-  <div class="panel-body actions" style="border-top:1px solid var(--hair-soft)">
-    <button class="btn btn-primary">Save payment settings</button>
-    {% if business.paypal_connected %}<button class="btn btn-quiet" name="action" value="disconnect" formnovalidate>Disconnect PayPal</button>{% endif %}
-    <span class="small muted">We check the keys with PayPal before saving.</span>
-  </div>
-  {% else %}
-  <div class="panel-body" style="border-top:1px solid var(--hair-soft)"><p class="muted" style="margin:0">Only the owner can change payment settings.</p></div>
-  {% endif %}
-</form>
-
-<section class="panel" id="managers" style="margin-top:28px">
-  <div class="panel-head"><h2>Managers</h2><span class="small muted">who can sign in to {{ business.name }}</span></div>
-  <div class="split-2" style="gap:0">
-    <ul class="rows">
-      {% for m in managers %}
-      <li><span class="avatar" aria-hidden="true">{{ m.user.first_name|default:m.user.username|slice:":1"|upper }}</span>
-        <div style="flex:1;min-width:0"><strong>{{ m.user.get_full_name|default:m.user.username }}</strong>{% if m.user == user %} <span class="small muted">(you)</span>{% endif %}
-          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.user.email|default:"no email" }}</div></div>
-        {% if m.is_owner %}<span class="pill live">Owner</span>
-        {% elif is_owner %}<form method="post" action="{% url 'remove_manager' m.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Remove</button></form>{% endif %}
-      </li>
-      {% endfor %}
-      {% for invite, link in invites %}
-      <li class="invite-row"><div style="flex:1;min-width:0"><strong>{{ invite.email }}</strong> <span class="pill wait">Invited</span>
-          {% if link %}<div class="small muted">Send them this link: <input class="copy-link" type="text" readonly value="{{ link }}" aria-label="Invite link for {{ invite.email }}" onclick="this.select()"></div>{% endif %}</div>
-        {% if is_owner %}<form method="post" action="{% url 'cancel_invite' invite.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Cancel</button></form>{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    {% if is_owner %}
-    <form method="post" action="{% url 'invite_manager' %}" class="panel-body stack" style="border-left:1px solid var(--hair-soft)">{% csrf_token %}
-      <div><label for="invite_email">Invite a manager</label>
-        <input type="email" id="invite_email" name="email" required placeholder="their@email.com"></div>
-      <p class="hint" style="margin:0">They get an email with a link to join. Managers see every location and can close out and pay. Staff don't need this: they use their own tips link.</p>
-      <button class="btn btn-secondary">Send invite</button>
+    <form method="post" action="{% url 'payment_settings' %}" class="panel setting" id="payments">{% csrf_token %}
+      <div class="setting-intro"><span class="setting-no">06</span><h2>Payments</h2>
+        <p>For every location of {{ business.name }}.</p>
+        {% if business.paypal_connected %}<span class="pill ok">{% if business.paypal_live %}Live PayPal connected{% else %}Sandbox PayPal connected{% endif %}</span>
+        {% else %}<span class="pill wait">Demo: TipPool's sandbox</span>{% endif %}</div>
+      <fieldset class="setting-body stack"{% if not is_owner %} disabled{% endif %}>
+        <div class="form-grid">
+          <div><label for="currency">Currency</label>
+            <select id="currency" name="currency" {% if has_tips %}disabled{% endif %}>{% for code, sym in currencies %}<option value="{{ code }}" {% if business.currency == code %}selected{% endif %}>{{ code }} ({{ sym }})</option>{% endfor %}</select>
+            {% if has_tips %}<input type="hidden" name="currency" value="{{ business.currency }}"><p class="hint">Fixed once you have tips, so past amounts stay right.</p>{% else %}<p class="hint">Venmo payouts are US dollars only.</p>{% endif %}</div>
+          <div><label for="card_fee_percent">Card machine fee on card tips</label>
+            <div class="with-unit"><input type="number" id="card_fee_percent" name="card_fee_percent" min="0" max="10" step="0.01" value="{{ business.card_fee_percent }}"><span>%</span></div>
+            <p class="hint">Only taken off when fees come out of the tips.</p></div>
+        </div>
+        <div><label>Card and PayPal fees</label>
+          <div class="choice-grid two">
+            {% for value, label in fee_modes %}<label class="choice"><input type="radio" name="fee_mode" value="{{ value }}" {% if business.fee_mode == value %}checked{% endif %}>
+              <span><strong>{{ label }}</strong><span class="small muted">{% if value == "business" %}The team gets every cent guests tipped.{% else %}Allowed in the US: only the actual processing fee comes off, before the split.{% endif %}</span></span></label>{% endfor %}
+          </div></div>
+        <div class="connect-box">
+          <p style="margin:0">{% if business.paypal_connected %}Tips go straight into <strong>your</strong> PayPal account and payouts come from it.{% else %}<strong>Connect your own PayPal</strong> so tips go into your account and payouts come from it. Until then this is a demo on TipPool's sandbox: no real money.{% endif %}</p>
+          <div class="form-grid">
+            <div><label for="paypal_client_id">Client ID</label>
+              <input type="text" id="paypal_client_id" name="paypal_client_id" value="{{ business.paypal_client_id }}" autocomplete="off" spellcheck="false"></div>
+            <div><label for="paypal_secret">Secret</label>
+              <input type="password" id="paypal_secret" name="paypal_secret" autocomplete="new-password" placeholder="{% if business.paypal_connected %}Saved (hidden){% endif %}"></div>
+            <div><label for="paypal_webhook_id">Webhook ID <span class="muted">(optional)</span></label>
+              <input type="text" id="paypal_webhook_id" name="paypal_webhook_id" value="{{ business.paypal_webhook_id }}" autocomplete="off" spellcheck="false"></div>
+            <label class="choice"><input type="checkbox" name="paypal_live" {% if business.paypal_live %}checked{% endif %}><span><strong>Live (real money)</strong><span class="small muted">Leave off for sandbox testing.</span></span></label>
+          </div>
+          <p class="hint" style="margin:0">From developer.paypal.com, Apps &amp; Credentials, with Payouts turned on. The secret is stored encrypted and never shown again. Webhook address: <code>{{ webhook_url }}</code></p>
+        </div>
+      </fieldset>
+      <div class="setting-foot">
+        {% if is_owner %}
+        <span class="small muted">We check the keys with PayPal before saving.</span>
+        {% if business.paypal_connected %}<button class="btn btn-quiet" name="action" value="disconnect" formnovalidate>Disconnect PayPal</button>{% endif %}
+        <button class="btn btn-primary">Save payments</button>
+        {% else %}<span class="muted">Only the owner can change payment settings.</span>{% endif %}
+      </div>
     </form>
-    {% else %}
-    <div class="panel-body" style="border-left:1px solid var(--hair-soft)"><p class="muted" style="margin:0">Only the owner can invite or remove managers.</p></div>
-    {% endif %}
-  </div>
-</section>
 
-<section class="panel" id="changes" style="margin-top:28px">
-  <div class="panel-head"><h2>Recent changes</h2><span class="small muted">who changed what at {{ restaurant.display_name }}</span></div>
-  {% if changes %}
-  <div class="table-wrap"><table class="data changes">
-    <tbody>
-    {% for c in changes %}
-      <tr><td class="when">{{ c.at|date:"M j, g:i A" }}</td><td class="who">{{ c.who }}</td><td>{{ c.what }}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-  {% if not show_all_changes and changes|length >= 12 %}<div class="panel-body" style="border-top:1px solid var(--hair-soft)"><a href="?all=1#changes">Show all changes</a></div>{% endif %}
-  {% else %}
-  <div class="panel-body"><p class="muted" style="margin:0">Nothing yet. Changes to rules, hours, tips, the team and payouts are listed here.</p></div>
-  {% endif %}
-</section>
+    <section class="panel setting" id="locations">
+      <div class="setting-intro"><span class="setting-no">07</span><h2>Locations</h2>
+        <p>Each location has its own team, roles, tip rules, QR codes and closing times. People can work at several.</p></div>
+      <div class="setting-body stack">
+        <ul class="rows boxed">
+          {% for loc in all_locations %}
+          <li>
+            <div style="flex:1;min-width:0"><strong>{{ loc.display_name }}</strong>
+              <div class="small muted">{{ loc.type_label }} · {{ loc.team_count }} on the team</div></div>
+            {% if loc.pk == restaurant.pk %}<span class="pill live">Selected</span>
+            {% else %}<form method="post" action="{% url 'location_switch' %}">{% csrf_token %}
+              <input type="hidden" name="location" value="{{ loc.pk }}"><input type="hidden" name="next" value="{% url 'settings' %}">
+              <button class="btn btn-quiet small">Switch to it</button></form>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        <form method="post" action="{% url 'location_add' %}" class="inline-form">{% csrf_token %}
+          <div><label for="loc_name">Add a location</label>
+            <input type="text" id="loc_name" name="name" maxlength="80" required placeholder="e.g. Luna Café, Downtown"></div>
+          <div><label for="loc_type">Type of business</label>
+            <select id="loc_type" name="business_type">{% for value, label in presets %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+          <button class="btn btn-secondary">Add location</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel setting" id="managers">
+      <div class="setting-intro"><span class="setting-no">08</span><h2>Managers</h2>
+        <p>Who can sign in to {{ business.name }}. Managers see every location and can close out and pay. Staff don't need this: they use their own tips link.</p></div>
+      <div class="setting-body stack">
+        <ul class="rows boxed">
+          {% for m in managers %}
+          <li><span class="avatar" aria-hidden="true">{{ m.user.first_name|default:m.user.username|slice:":1"|upper }}</span>
+            <div style="flex:1;min-width:0"><strong>{{ m.user.get_full_name|default:m.user.username }}</strong>{% if m.user == user %} <span class="small muted">(you)</span>{% endif %}
+              <div class="small muted" style="overflow:hidden;text-overflow:ellipsis">{{ m.user.email|default:"no email" }}</div></div>
+            {% if m.is_owner %}<span class="pill live">Owner</span>
+            {% elif is_owner %}<form method="post" action="{% url 'remove_manager' m.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Remove</button></form>{% endif %}
+          </li>
+          {% endfor %}
+          {% for invite, link in invites %}
+          <li class="invite-row"><div style="flex:1;min-width:0"><strong>{{ invite.email }}</strong> <span class="pill wait">Invited</span>
+              {% if link %}<div class="small muted">Send them this link: <input class="copy-link" type="text" readonly value="{{ link }}" aria-label="Invite link for {{ invite.email }}" onclick="this.select()"></div>{% endif %}</div>
+            {% if is_owner %}<form method="post" action="{% url 'cancel_invite' invite.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Cancel</button></form>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% if is_owner %}
+        <form method="post" action="{% url 'invite_manager' %}" class="inline-form">{% csrf_token %}
+          <div><label for="invite_email">Invite a manager</label>
+            <input type="email" id="invite_email" name="email" required placeholder="their@email.com"></div>
+          <button class="btn btn-secondary">Send invite</button>
+        </form>
+        {% else %}<p class="muted small" style="margin:0">Only the owner can invite or remove managers.</p>{% endif %}
+      </div>
+    </section>
+
+    <section class="panel setting wide" id="changes">
+      <div class="setting-intro"><span class="setting-no">09</span><h2>Recent changes</h2>
+        <p>Who changed rules, hours, tips, the team, settings or payouts at {{ restaurant.display_name }}, including automatic close-outs.</p></div>
+      <div class="setting-body">
+        {% if changes %}
+        <div class="table-wrap"><table class="data changes">
+          <tbody>
+          {% for c in changes %}
+            <tr><td class="when">{{ c.at|date:"M j, g:i A" }}</td><td class="who">{{ c.who }}</td><td>{{ c.what }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        {% if not show_all_changes and changes|length >= 12 %}<p style="margin:12px 0 0"><a href="?all=1#changes">Show all changes</a></p>{% endif %}
+        {% else %}
+        <p class="muted" style="margin:0">Nothing yet.</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -244,5 +271,14 @@
       li.classList.remove("off");
     });
   });
+  // highlight the section you're looking at in the side menu
+  const links = [...document.querySelectorAll(".settings-nav a")];
+  const spy = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      links.forEach((a) => a.classList.toggle("here", a.getAttribute("href") === "#" + e.target.id));
+    });
+  }, {rootMargin: "-40% 0px -55% 0px"});
+  document.querySelectorAll(".setting[id]").forEach((s) => spy.observe(s));
 </script>
 {% endblock %}

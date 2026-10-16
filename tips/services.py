@@ -3,7 +3,7 @@ import logging
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from . import ai
@@ -324,7 +324,8 @@ def pay_night(night, allow_unconfirmed=False):
         destinations = {s.pk: payout_destination(s.staff, business.currency) for s in shares}
         check_balance(business, sum((s.amount for s in shares), Decimal("0")))
         # one fixed id per shift: if anything sends it twice, PayPal refuses to pay it twice
-        batch = PayoutBatch.objects.create(night=night, sender_batch_id=f"tippool-shift-{night.pk}")
+        batch = PayoutBatch.objects.create(night=night, status="SENDING",
+                                           sender_batch_id=f"tippool-shift-{night.pk}-a{night.payout_attempt}")
         for share in shares:
             PayoutItem.objects.create(batch=batch, share=share, receiver=destinations[share.pk][1],
                                       sender_item_id=f"{batch.sender_batch_id}-{share.staff_id}")
@@ -351,9 +352,12 @@ def _send_batch(batch, business, subject, replaces=None):
         response = get_client(business).create_payout_batch(batch.sender_batch_id, items, subject=subject,
                                                             currency=business.currency)
     except PayPalError as exc:
-        if exc.status is not None and 400 <= exc.status < 500 and batch.status != "UNKNOWN":
-            # PayPal said no and sent nothing: undo so the manager can fix it and try again
+        issue = str((exc.details or {}).get("name", "")).upper()
+        duplicate = "DUPLICATE" in issue or "ALREADY" in issue
+        if exc.status is not None and 400 <= exc.status < 500 and batch.status != "UNKNOWN" and not duplicate:
+            # PayPal said no and sent nothing: undo so the manager can fix it and try again (new id next time)
             night = batch.night
+            Night.objects.filter(pk=night.pk).update(payout_attempt=models.F("payout_attempt") + 1)
             batch.delete()
             if replaces is not None:
                 replaces.superseded = False
@@ -364,6 +368,10 @@ def _send_batch(batch, business, subject, replaces=None):
             raise
         batch.status = "UNKNOWN"
         batch.save(update_fields=["status"])
+        if duplicate:
+            raise_alert(business_of(batch.night), f"PayPal says the payout for the {batch.night} was already sent, "
+                        "but didn't tell TipPool its result. Check the payout in your PayPal account.",
+                        location=batch.night.location, night=batch.night, key=f"payout-duplicate:{batch.pk}")
         raise TipPoolError("PayPal didn't answer clearly, so the payout may or may not have gone out. Don't pay "
                            "again: TipPool checks with PayPal (\"Check PayPal again\" on the payout page).") from exc
     header = response["batch_header"]
@@ -385,7 +393,8 @@ def resend_payout(item):
             raise TipPoolError("Only a failed or returned payout can be sent again.")
         fields, receiver = payout_destination(share.staff, business.currency)
         # the id is tied to the payout it replaces: resending the same failed payout twice can't pay twice
-        batch = PayoutBatch.objects.create(night=night, is_retry=True, sender_batch_id=f"tippool-again-{item.pk}")
+        batch = PayoutBatch.objects.create(night=night, is_retry=True, status="SENDING",
+                                           sender_batch_id=f"tippool-again-{item.pk}-a{night.payout_attempt}")
         new = PayoutItem.objects.create(batch=batch, share=share, receiver=receiver,
                                         sender_item_id=f"{batch.sender_batch_id}-{share.staff_id}")
         batch.request_items = [{**fields, "amount": str(share.amount), "sender_item_id": new.sender_item_id,
@@ -406,12 +415,29 @@ def cancel_unclaimed(item):
     return item
 
 
+def needs_recheck(batch):
+    """A payout PayPal never clearly answered: an unclear error, or the server stopped mid-call."""
+    if batch.paypal_batch_id:
+        return False
+    return batch.status == "UNKNOWN" or (batch.status == "SENDING"
+                                         and batch.created_at < timezone.now() - timedelta(minutes=2))
+
+
+def recheck_unclear(batch):
+    """Only from a manager's "Check PayPal again": send the very same request (same id), under a lock.
+    PayPal answers with the batch it already made, or makes it now; it never pays one id twice."""
+    with transaction.atomic():
+        batch = PayoutBatch.objects.select_for_update().get(pk=batch.pk)
+        if not needs_recheck(batch) or not batch.request_items:
+            return batch
+        batch.status = "UNKNOWN"
+        batch.save(update_fields=["status"])
+        return _send_batch(batch, business_of(batch.night), subject=f"Your tips for {batch.night.date:%b %d}")
+
+
 def refresh_batch(batch):
-    """Ask PayPal for the latest status of a batch and each person's payment."""
+    """Ask PayPal for the latest status of a batch and each person's payment. Never sends anything."""
     if not batch.paypal_batch_id:
-        if batch.status == "UNKNOWN" and batch.request_items:
-            # same id + same request: PayPal answers with the batch if it exists, creates it if it doesn't
-            _send_batch(batch, business_of(batch.night), subject=f"Your tips for {batch.night.date:%b %d}")
         return batch
     data = get_client(business_of(batch.night)).get_payout_batch(batch.paypal_batch_id)
     batch.status = data["batch_header"]["batch_status"]

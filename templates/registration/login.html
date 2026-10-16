@@ -8,7 +8,8 @@
     <form method="post" class="stack">{% csrf_token %}
       <h2>Manager sign in</h2>
       {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
-      {% if form.errors %}<div class="flash error">That email and password don't match.</div>{% endif %}
+      {% if request.login_limited %}<div class="flash error">Too many wrong tries. Wait 15 minutes, or reset your password.</div>
+      {% elif form.errors %}<div class="flash error">That email and password don't match.</div>{% endif %}
       <div><label for="id_username">Email</label><input type="text" name="username" id="id_username" autocomplete="username" inputmode="email" value="{{ form.username.value|default:'' }}" autofocus required></div>
       <div><label for="id_password">Password</label><input type="password" name="password" id="id_password" autocomplete="current-password" required>
         <p class="hint"><a href="{% url 'password_reset' %}">Forgot your password?</a></p></div>

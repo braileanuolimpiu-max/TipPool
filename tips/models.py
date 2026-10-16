@@ -319,6 +319,8 @@ class Night(models.Model):
     auto_closed = models.BooleanField(default=False)
     # why an automatic payout was held back for the manager (empty = nothing to check)
     hold = models.CharField(max_length=200, blank=True)
+    # bumped each time PayPal clearly rejects a payout, so the corrected retry gets a fresh id
+    payout_attempt = models.PositiveSmallIntegerField(default=0)
     # the close-out check (rules + AI): {"ok", "summary", "findings": [...], "suggestions": [...], "by"}
     review_check = models.JSONField(default=dict, blank=True)
 

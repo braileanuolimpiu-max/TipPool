@@ -375,9 +375,31 @@ class UnclearPayPalAnswerTests(TestCase):
         self.assertEqual((self.night.status, batch.status), (Night.Status.PAYING, "UNKNOWN"))
         with self.assertRaises(services.TipPoolError):
             services.pay_night(self.night)  # can't pay again while it's unknown
-        services.refresh_batch(batch)  # sends the very same request: PayPal dedupes by id
+        services.refresh_batch(batch)  # polling (and webhooks) never send anything
+        self.assertEqual(self.paypal.payout_bodies, [])
+        services.recheck_unclear(batch)  # the manager's "Check PayPal again": the very same request
         batch.refresh_from_db()
-        self.assertEqual((batch.status, batch.sender_batch_id), ("PENDING", f"tippool-shift-{self.night.pk}"))
+        self.assertEqual((batch.status, batch.sender_batch_id), ("PENDING", f"tippool-shift-{self.night.pk}-a0"))
+        self.assertEqual(len(self.paypal.payout_bodies), 1)
+        services.recheck_unclear(batch)  # already answered: nothing is sent again
+        self.assertEqual(len(self.paypal.payout_bodies), 1)
+
+    def test_server_stopped_mid_payout_can_be_rechecked(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from tips.models import PayoutBatch
+        with mock.patch.object(self.paypal, "create_payout_batch", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                services.pay_night(self.night)
+        batch = self.night.payout_batches.get()
+        self.assertEqual(batch.status, "SENDING")
+        self.assertFalse(services.needs_recheck(batch))  # might still be on its way
+        PayoutBatch.objects.filter(pk=batch.pk).update(created_at=timezone.now() - timedelta(minutes=5))
+        batch.refresh_from_db()
+        self.assertTrue(services.needs_recheck(batch))
+        services.recheck_unclear(batch)
         self.assertEqual(len(self.paypal.payout_bodies), 1)
 
     def test_no_answer_at_all_is_unknown_too(self):
@@ -395,6 +417,7 @@ class UnclearPayPalAnswerTests(TestCase):
         self.assertFalse(self.night.payout_batches.exists())
         services.pay_night(self.night)
         self.assertEqual(len(self.paypal.payout_bodies), 1)
+        self.assertEqual(self.night.payout_batch.sender_batch_id, f"tippool-shift-{self.night.pk}-a1")  # fresh id
 
     def test_payout_note_is_ours_not_ai_text(self):
         share = self.night.shares.get()

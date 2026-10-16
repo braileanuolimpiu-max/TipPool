@@ -32,12 +32,21 @@ def hit(key, limit, seconds):
     return count <= limit
 
 
-def limited(name, limit, seconds, methods=("POST",), json=False):
-    """Decorator: at most `limit` requests per IP every `seconds` for this view (only for `methods`)."""
+def over(key, limit):
+    """True when this key already used up its limit (without counting a new attempt)."""
+    if not getattr(settings, "RATELIMIT_ENABLED", True):
+        return False
+    return (cache.get(f"rl:{key}") or 0) >= limit
+
+
+def limited(name, limit, seconds, methods=("POST",), json=False, key=None):
+    """Decorator: at most `limit` requests every `seconds` for this view (only for `methods`), per IP,
+    or per whatever `key(request, *args, **kwargs)` returns."""
     def decorator(view):
         @wraps(view)
         def wrapper(request, *args, **kwargs):
-            if request.method in methods and not hit(f"{name}:{client_ip(request)}", limit, seconds):
+            who = key(request, *args, **kwargs) if key else client_ip(request)
+            if request.method in methods and not hit(f"{name}:{who}", limit, seconds):
                 message = "Too many tries. Please wait a few minutes and try again."
                 if json:
                     return JsonResponse({"error": message}, status=429)

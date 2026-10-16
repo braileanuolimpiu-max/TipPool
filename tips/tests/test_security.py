@@ -26,11 +26,17 @@ class RateLimitTests(TestCase):
         make_manager("boss")
 
     def test_password_guessing_is_stopped(self):
-        for _ in range(8):
+        for _ in range(10):
             self.client.post(reverse("login"), {"username": "boss@example.com", "password": "wrong"})
         res = self.client.post(reverse("login"), {"username": "boss@example.com", "password": "pw"})
-        self.assertEqual(res.status_code, 200)  # even the right password is refused for a while
+        self.assertContains(res, "Too many wrong tries")  # even the right password waits a while
         self.assertFalse(res.wsgi_request.user.is_authenticated)
+
+    def test_successful_logins_never_lock_anyone_out(self):
+        for _ in range(15):
+            res = self.client.post(reverse("login"), {"username": "boss@example.com", "password": "pw"})
+            self.assertEqual(res.status_code, 302)
+            self.client.logout()
 
     def test_tip_orders_per_ip(self):
         with mock.patch("tips.services.get_client", return_value=FakePayPal()):
@@ -42,12 +48,19 @@ class RateLimitTests(TestCase):
 
     @override_settings(TRUSTED_PROXY_COUNT=1)
     def test_made_up_forwarded_for_does_not_help(self):
-        for n in range(8):
-            self.client.post(reverse("login"), {"username": "boss@example.com", "password": "x"},
+        for n in range(50):
+            self.client.post(reverse("login"), {"username": f"guess{n}@example.com", "password": "x"},
                              HTTP_X_FORWARDED_FOR=f"10.0.0.{n}, 1.2.3.4")
         res = self.client.post(reverse("login"), {"username": "someone@else.com", "password": "x"},
                                HTTP_X_FORWARDED_FOR="9.9.9.9, 1.2.3.4")
-        self.assertEqual(res.status_code, 200)  # same real address (1.2.3.4) keeps counting
+        self.assertContains(res, "Too many wrong tries")  # same real address (1.2.3.4) keeps counting
+
+    def test_whole_team_on_one_wifi_can_clock_in(self):
+        people = [hire(f"P{n}", "server") for n in range(12)]
+        for person in people:
+            for _ in range(3):
+                res = self.client.post(reverse("my_tips", args=[person.access_token]), {"clock": "out"})
+                self.assertNotEqual(res.status_code, 429)
 
 
 @override_settings(AI_MODE="mock")

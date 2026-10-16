@@ -66,7 +66,10 @@ class PayPalClient:
                 # no answer at all: the caller can't know whether PayPal did it (status None = unclear)
                 raise PayPalError(f"No answer from PayPal ({exc.__class__.__name__})") from exc
             if response.status_code == 429 and attempt < retries - 1:
-                wait = int(response.headers.get("Retry-After", 2 ** attempt))
+                try:
+                    wait = min(int(response.headers.get("Retry-After", 2 ** attempt)), 4)
+                except ValueError:
+                    wait = 2
                 log.warning("PayPal rate limit, retrying in %ss", wait)
                 time.sleep(wait)
                 continue

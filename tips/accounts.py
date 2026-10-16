@@ -19,7 +19,7 @@ from django.views.decorators.http import require_POST
 
 from . import roles as role_presets
 from .models import Business, Change, Invite, Location, Manager
-from .ratelimit import client_ip, hit, limited
+from .ratelimit import client_ip, hit, limited, over
 
 User = get_user_model()
 
@@ -61,12 +61,19 @@ class EmailBackend(ModelBackend):
         if not username or not password:
             return None
         ip = client_ip(request) if request is not None else "local"
-        if not (hit(f"login-ip:{ip}", 20, 900) and hit(f"login-user:{username.strip().lower()}", 8, 900)):
+        name = username.strip().lower()
+        # only wrong passwords count, so nobody can lock a manager out who knows their own password...
+        if over(f"login-ip:{ip}", 50) or over(f"login-user:{name}", 10):
+            if request is not None:
+                request.login_limited = True
             return None
         user = (User.objects.filter(email__iexact=username.strip()).order_by("pk").first()
                 or User.objects.filter(username__iexact=username.strip()).first())
         if user and user.check_password(password) and self.user_can_authenticate(user):
             return user
+        # ...and guessing stops after 10 wrong tries per address (50 per network) for 15 minutes
+        hit(f"login-ip:{ip}", 50, 900)
+        hit(f"login-user:{name}", 10, 900)
         return None
 
 
