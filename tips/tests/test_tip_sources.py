@@ -125,7 +125,8 @@ class QrPrintTests(TestCase):
         self.location.tip_mode = Location.TipMode.PERSONAL
         self.location.save()
         page = self.client.get(reverse("qr_print") + "?codes=people&copies=2")
-        self.assertContains(page, "Tip Maria", count=2)
+        cards = [item for sheet in page.context["pages"] for item in sheet]
+        self.assertEqual([c["title"] for c in cards], ["Tip Maria", "Tip Maria"])
 
     def test_downloads(self):
         url = f"http://testserver/tip/?at={self.location.slug}"
