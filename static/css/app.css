@@ -508,3 +508,10 @@ hr.soft { border: 0; border-top: 1px solid var(--hair); margin: 4px 0; }
 .alert-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--void); flex: none; margin-top: 6px; }
 .conf { font: 600 .7rem var(--mono); margin-left: 6px; white-space: nowrap; }
 .conf.ok { color: var(--go); } .conf.wait { color: var(--wait); }
+
+/* All locations */
+.loc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+.loc-card.has-work { border-color: var(--wait); }
+.loc-now b { font: 800 1.8rem/1.1 var(--display); font-stretch: 80%; display: block; }
+.loc-todo { margin: 0; padding-left: 18px; font-size: .9rem; display: grid; gap: 4px; }
+.kpis .needs { border-color: var(--wait); background: var(--wait-soft); }

@@ -743,6 +743,40 @@ def settings_page(request):
     })
 
 
+# --- All locations at a glance ------------------------------------------------------
+@manager_required
+def overview(request):
+    from datetime import timedelta
+
+    from .models import Message
+    business = request.business
+    week_start = timezone.localdate() - timedelta(days=timezone.localdate().weekday())
+    rows = []
+    for loc in Location.objects.filter(business=business):
+        night = Night.objects.filter(location=loc, status=Night.Status.OPEN).first()
+        waiting = list(Night.objects.filter(location=loc, status__in=[
+            Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).order_by("date"))
+        week = Night._sum(Tip.objects.filter(night__location=loc, night__date__gte=week_start,
+                                             status=Tip.Status.COMPLETED))
+        rows.append({
+            "location": loc,
+            "now": night.tip_total if night else Decimal("0.00"),
+            "tips_now": night.tips.filter(status=Tip.Status.COMPLETED).count() if night else 0,
+            "on_clock": night.clock_entries.filter(ended_at__isnull=True).count() if night else 0,
+            "week": week,
+            "waiting": waiting,
+            "held": [n for n in waiting if n.hold],
+            "messages": Message.objects.filter(location=loc, resolved_at__isnull=True).count(),
+            "alerts": Alert.objects.filter(location=loc, resolved_at__isnull=True).count(),
+        })
+    return render(request, "tips/overview.html", {
+        "rows": rows,
+        "total_now": sum((r["now"] for r in rows), Decimal("0.00")),
+        "total_week": sum((r["week"] for r in rows), Decimal("0.00")),
+        "attention": sum(len(r["waiting"]) + r["messages"] + r["alerts"] for r in rows),
+    })
+
+
 # --- Reports -------------------------------------------------------------------
 @manager_required
 def reports_page(request):
@@ -946,6 +980,10 @@ def _staff_message(request, member, token):
         messages.error(request, "Please write a message.")
         return redirect("my_tips", token=token)
     Message.objects.create(staff=member, location=location, night=night, text=text)
+    from .alerts import email_managers
+    email_managers(member.business, f"{member.name} {'flagged a problem' if night else 'sent you a message'}",
+                   f"{member.name} wrote" + (f" about the {night}" if night else "") + f":\n\n{text}\n\n"
+                   "Answer in Messages.")
     if night and night.status == Night.Status.REVIEW and not night.hold:
         night.hold = f"{member.name} flagged a problem."
         night.save(update_fields=["hold"])
