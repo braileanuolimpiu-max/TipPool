@@ -19,7 +19,7 @@
     select.removeAttribute("aria-activedescendant");
     select.classList.remove("pick-open");
     open = null;
-    if (refocus) select.focus();
+    if (refocus) select.focus({preventScroll: true});
   }
 
   function choose(select, index) {
@@ -83,8 +83,7 @@
   function place(select, list) {
     const r = select.getBoundingClientRect();
     const below = window.innerHeight - r.bottom - 12, above = r.top - 12;
-    list.style.minWidth = `${r.width}px`;
-    list.style.maxWidth = `${Math.max(Math.min(r.width, window.innerWidth - 16), Math.min(480, window.innerWidth - 16))}px`;
+    list.style.width = `${Math.min(r.width, window.innerWidth - 16)}px`;  // exactly as wide as its box
     const upward = below < 220 && above > below;
     list.style.maxHeight = `${Math.min(320, upward ? above : below)}px`;
     if (upward) list.style.bottom = `${window.innerHeight - r.top + 4}px`;
@@ -127,7 +126,7 @@
     const select = e.target.closest && e.target.closest("select");
     if (e.button === 0 && usable(select)) {
       e.preventDefault();  // no browser list
-      select.focus();
+      select.focus({preventScroll: true});
       if (open && open.select === select) close();
       else openFor(select);
       return;
