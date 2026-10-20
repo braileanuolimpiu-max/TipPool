@@ -16,7 +16,7 @@
     <a href="#sharing"><span>03</span>How tips are shared</a>
     <a href="#closing"><span>04</span>Closing time</a>
     <a href="#after-close"><span>05</span>When a shift closes</a>
-    <p class="settings-nav-title">{{ business.name }}</p>
+    <p class="settings-nav-title">{% if business.name == restaurant.display_name %}Whole business{% else %}{{ business.name }}{% endif %}</p>
     <a href="#payments"><span>06</span>Payments</a>
     <a href="#owner"><span>07</span>Owner controls</a>
     <a href="#locations"><span>08</span>Locations</a>

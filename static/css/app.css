@@ -213,7 +213,7 @@ table.data .r { text-align: right; font-variant-numeric: tabular-nums; }
 .receipt .foot { text-align: center; color: #6a6d70; font-size: .78rem; margin-top: 14px; }
 .receipt .lines > .line + .line { margin-top: 6px; }
 .receipt .lines.roomy > .line + .line { margin-top: 12px; }
-.receipt a { color: inherit; }
+.receipt a:not(.btn) { color: inherit; }
 .receipt .btn { font-family: var(--body); }
 .big-stamp { display: inline-block; border: 3px solid var(--go); color: var(--go); padding: 2px 14px; font: 700 1.4rem var(--mono);
   transform: rotate(-7deg); border-radius: 4px; margin: 4px 0 12px; animation: thunk .3s cubic-bezier(.2,1.6,.4,1); }
@@ -1127,8 +1127,8 @@ body.menu-open .tour { display: none; }
 :root[data-theme="dark"] body.app-shell .hl { background: linear-gradient(100deg, transparent 2%, rgba(245, 214, 61, .38) 3% 97%, transparent 98%) 0 85% / 100% 42% no-repeat; }
 :root[data-theme="dark"] body.app-shell .panel, .kpis > div, .tour { box-shadow: none; }
 :root[data-theme="dark"] body.app-shell .demo-banner { border-color: #6b5c17; }
-:root[data-theme="dark"] body.app-shell .receipt, .ticket, .qr-face, .tent, .sheet, .show-screen, .house-qr, .two-step-setup img { --ink: #141414; --paper: #ffffff; --graphite: #5c5c58; --hair: #dcdcd6; --hair-soft: #ececE7; --steel-1: #f2f3f1; --marker-soft: #fff6c7; --go: #12703d; --wait: #9a5b00; --void: #c4291f; --thermal: #fffefc; color-scheme: light; }
-:root[data-theme="dark"] body.app-shell .ticket { color: #141414; }
+:root[data-theme="dark"] body.app-shell .receipt, .qr-face, .tent, .sheet, .show-screen, .house-qr, .two-step-setup img { --ink: #141414; --paper: #ffffff; --graphite: #5c5c58; --hair: #dcdcd6; --hair-soft: #ececE7; --steel-1: #f2f3f1; --marker-soft: #fff6c7; --go: #12703d; --wait: #9a5b00; --void: #c4291f; --thermal: #fffefc; color-scheme: light; }
+:root[data-theme="dark"] body.app-shell .ticket[aria-current="page"] { color: #141414; }
 :root[data-theme="dark"] body.app-shell .tour { background: var(--tray-deep); border-color: var(--hair); }
 :root[data-theme="dark"] body.app-shell .btn-danger { color: #141414; }
 .theme-btn { background: none; border: 1px solid var(--hair); border-radius: 4px; padding: 5px 8px; cursor: pointer; color: var(--ink); font: 600 .8rem var(--body); display: inline-flex; align-items: center; gap: 6px; }
@@ -1287,3 +1287,42 @@ input[type=time]::-webkit-calendar-picker-indicator { display: none !important; 
   .settings-nav, .stepper { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
     mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); padding-right: 24px; }
 }
+
+/* ---------- responsive round 2 ---------- */
+/* the rail's last resort before scrolling: icons, with the current tab's name */
+@media (min-width: 761px) {
+  .rail nav.icon-tabs .ticket svg { display: block; }
+  .rail nav.icon-tabs .ticket .label { display: none; }
+  .rail nav.icon-tabs .ticket[aria-current="page"] .label { display: inline; }
+}
+/* rows on phones: the actions drop below the text instead of squeezing it to a column */
+@media (max-width: 600px) {
+  .rows > li { flex-wrap: wrap; }
+  .rows > li > div[style*="flex:1"] { flex: 1 1 200px !important; }
+}
+/* the demo tour never covers the last things on a page */
+.main:has(.tour) { padding-bottom: 96px; }
+@media (max-width: 900px) { .tour[open] { max-height: 60vh; } }
+/* a field's error never pushes its row out of line */
+.inline-form > div { position: relative; }
+.inline-form .field-error { position: absolute; left: 0; top: 100%; margin-top: 3px; white-space: nowrap; z-index: 2; }
+.inline-form:has(.field-error) { margin-bottom: 18px; }
+/* filter rows: one height for every control */
+.activity-filter select, .activity-filter input:not([type=checkbox]),
+.page-head .report-filter select, .page-head .report-filter input { min-height: 40px; height: 40px; }
+/* the breadcrumb wraps as whole pieces */
+.eyebrow .eb-place { display: inline-flex; align-items: center; gap: 8px; }
+@media (max-width: 600px) { .eyebrow .sep { display: none; } }
+/* "on the clock now" stays a small chip on phones */
+@media (max-width: 520px) {
+  .roster .who strong { flex: 1 1 calc(100% - 50px); }
+  .roster .who .src { flex-basis: auto; width: max-content; margin-left: 42px; }
+}
+/* no sideways jump between short and long pages */
+html { scrollbar-gutter: stable; }
+/* overview tiles: labels line up; a little air above the stats */
+.kpis > div { align-content: start; }
+.loc-card .pace-stats { margin-top: 4px; }
+
+.who-am-i > span, .who-am-i button, .who-am-i a { white-space: nowrap; }
+@media (max-width: 1100px) { .who-am-i .who-label { display: none; } }

@@ -70,7 +70,7 @@
           <div class="bar-col" tabindex="0" data-tip="{{ r.night.date|date:'D M j' }} · {{ cur }}{{ r.total|money }}">
             <span class="bar-val">{% if r.label %}{{ cur }}{{ r.total|floatformat:"0" }}{% endif %}</span>
             <span class="bar" style="--h:{{ r.height }}"></span>
-            <span class="bar-day">{{ r.night.date|date:"D" }}</span>
+            <span class="bar-day">{{ r.night.date|date:"D j" }}</span>
           </div>
           {% endfor %}
         </div>

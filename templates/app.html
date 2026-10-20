@@ -19,7 +19,7 @@
   </button>
   <div class="who-am-i">
     {% if is_operator %}<a class="platform-link" href="{% url 'platform_settings' %}" title="Email, AI, PayPal and the scheduler, for the whole site">Platform</a>{% endif %}
-    <span>Signed in as <a href="{% url 'two_step' %}" title="Your password and two-step sign-in">{{ user.get_full_name|default:user.username }}</a></span>
+    <span><span class="who-label">Signed in as </span><a href="{% url 'two_step' %}" title="Your password and two-step sign-in">{{ user.get_full_name|default:user.username }}</a></span>
     <button type="button" class="theme-btn" id="theme-btn" role="switch" aria-checked="false" aria-label="Dark mode" title="Switch between light and dark">
       <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       <svg class="icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
@@ -71,7 +71,7 @@
 <main class="main" id="content" tabindex="-1">
   {% if business.payouts_frozen %}<div class="flash error frozen-banner no-print" role="alert"><strong>All payouts are frozen</strong> by {{ business.payouts_frozen_by }}. Tips still come in; nothing is paid out.{% if user.manager.is_owner %} <a href="{% url 'settings' %}#owner">Turn payouts back on</a>{% endif %}</div>{% endif %}
   {% if business.is_demo %}<div class="demo-banner no-print"><strong>Demo business.</strong> Sample data and PayPal sandbox money only. It's removed after a week. <a href="{% url 'signup' %}">Create your own account</a></div>{% endif %}
-  <p class="eyebrow" aria-hidden="true"><span class="dot"></span>{{ restaurant_name }}<span class="sep">/</span>{% block eyebrow_date %}{% now "l, M j" %}{% endblock %}</p>
+  <p class="eyebrow" aria-hidden="true"><span class="eb-place"><span class="dot"></span>{{ restaurant_name }}</span><span class="sep">/</span>{% block eyebrow_date %}{% now "l, M j" %}{% endblock %}</p>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}
   {% if demo_tour %}{% include "_demo_tour.html" %}{% endif %}
@@ -99,9 +99,10 @@
     const nav = document.querySelector(".rail nav");
     if (!nav) return;
     const fit = () => {
-      nav.classList.remove("no-icons", "scrolls");
+      nav.classList.remove("no-icons", "icon-tabs", "scrolls");
       if (window.innerWidth <= 760) return;  // phones use the menu sheet
       if (nav.scrollWidth > nav.clientWidth + 1) nav.classList.add("no-icons");
+      if (nav.scrollWidth > nav.clientWidth + 1) { nav.classList.remove("no-icons"); nav.classList.add("icon-tabs"); }
       if (nav.scrollWidth > nav.clientWidth + 1) {
         nav.classList.add("scrolls");
         const current = nav.querySelector('[aria-current="page"]');

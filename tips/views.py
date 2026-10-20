@@ -210,6 +210,8 @@ def tip_thanks(request):
             log.warning("Capture on return page failed for %s", order_id)
     if tip:  # show the business the tip went to, even without ?at= in the return link
         request.location = tip.night.location
+    elif request.GET.get("at"):
+        request.location = public_location(request)
     if request.location is None:
         raise Http404("We couldn't find that tip.")
     timezone.activate(autoclose.location_tz(request.location))

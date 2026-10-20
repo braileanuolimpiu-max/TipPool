@@ -23,7 +23,7 @@
     const tour = document.getElementById("demo-tour");
     let seen = false;
     try { seen = localStorage.getItem("tp-tour-seen") === "1"; } catch (e) { seen = true; }
-    if (!seen && {% if u == "dashboard" %}true{% else %}false{% endif %} && !window.matchMedia("(max-width: 640px)").matches) {
+    if (!seen && {% if u == "dashboard" %}true{% else %}false{% endif %} && !window.matchMedia("(max-width: 1100px)").matches) {
       tour.open = true;
       try { localStorage.setItem("tp-tour-seen", "1"); } catch (e) {}
     }

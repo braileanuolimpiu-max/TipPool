@@ -83,13 +83,13 @@
   function place(select, list) {
     const r = select.getBoundingClientRect();
     const below = window.innerHeight - r.bottom - 12, above = r.top - 12;
-    list.style.width = `${Math.min(r.width, window.innerWidth - 16)}px`;  // exactly as wide as its box
+    list.style.width = `${Math.min(r.width, document.documentElement.clientWidth - 16)}px`;  // exactly as wide as its box
     const upward = below < 220 && above > below;
     list.style.maxHeight = `${Math.min(320, upward ? above : below)}px`;
     if (upward) list.style.bottom = `${window.innerHeight - r.top + 4}px`;
     else list.style.top = `${r.bottom + 4}px`;
     const width = list.offsetWidth;
-    list.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - width - 8))}px`;
+    list.style.left = `${Math.max(8, Math.min(r.left, document.documentElement.clientWidth - width - 8))}px`;
   }
 
   function openFor(select) {

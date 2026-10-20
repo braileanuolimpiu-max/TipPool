@@ -134,7 +134,7 @@
       const r = input.getBoundingClientRect();
       const up = window.innerHeight - r.bottom < box.offsetHeight + 12 && r.top > box.offsetHeight + 12;
       box.style.top = `${up ? r.top - box.offsetHeight - 4 : r.bottom + 4}px`;
-      box.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8))}px`;
+      box.style.left = `${Math.max(8, Math.min(r.left, document.documentElement.clientWidth - box.offsetWidth - 8))}px`;
       box.addEventListener("mousedown", (e) => e.preventDefault());
       box.addEventListener("click", (e) => {
         const day = e.target.closest(".cal-day"), nav = e.target.closest(".cal-nav"), act = e.target.closest("[data-act]");
@@ -216,7 +216,7 @@
         const above = r.top > tip.offsetHeight + 12;
         tip.classList.toggle("below", !above);
         tip.style.top = `${above ? r.top - tip.offsetHeight - 8 : r.bottom + 8}px`;
-        tip.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 8))}px`;
+        tip.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - tip.offsetWidth / 2, document.documentElement.clientWidth - tip.offsetWidth - 8))}px`;
       }, 350);
     });
     document.addEventListener("mouseout", (e) => {
