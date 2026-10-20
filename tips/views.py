@@ -577,6 +577,18 @@ def staff_role(request, pk):
     return redirect("staff_list")
 
 
+def _works_elsewhere(request, person):
+    """A manager limited to some locations can't change a person who also works at one they don't run
+    (their email, link and data are shared by every location). Says so and returns True."""
+    if request.user.manager.all_access:
+        return False
+    if person.memberships.filter(active=True).exclude(location__in=request.allowed_locations).exists():
+        messages.error(request, f"{person.name} also works at a location you don't run, so only the owner (or a "
+                                "manager of every location) can change this.")
+        return True
+    return False
+
+
 @manager_required
 @require_POST
 @managers_only
@@ -584,6 +596,8 @@ def staff_new_link(request, pk):
     """The old private link stops working (e.g. it was sent to the wrong person)."""
     from .models import new_access_token
     member = get_object_or_404(Membership, pk=pk, location=request.location)
+    if _works_elsewhere(request, member.staff):
+        return redirect("staff_list")
     member.staff.access_token = new_access_token()
     member.staff.save(update_fields=["access_token"])
     Change.log(request, f"Made a new tips link for {member.staff.name} (the old one no longer works)")
@@ -599,6 +613,8 @@ def staff_edit(request, pk):
     """Fix someone's name or PayPal email. A new email has to be confirmed by them again."""
     member = get_object_or_404(Membership.objects.select_related("staff"), pk=pk, location=request.location)
     person = member.staff
+    if _works_elsewhere(request, person):
+        return redirect("staff_list")
     name = " ".join(request.POST.get("name", "").split())[:80]
     email = request.POST.get("paypal_email", "").strip().lower()
     try:
@@ -640,6 +656,8 @@ def staff_erase(request, pk):
     from .models import Message, new_access_token
     member = get_object_or_404(Membership.objects.select_related("staff"), pk=pk, location=request.location)
     person = member.staff
+    if _works_elsewhere(request, person):
+        return redirect("staff_list")
     if Share.objects.filter(staff=person, night__status__in=[Night.Status.REVIEW, Night.Status.PAYING]).exists():
         messages.error(request, f"{person.name} still has a payout waiting. Pay or recalculate it first.")
         return redirect("staff_list")
@@ -1064,6 +1082,16 @@ def payout_action(request, pk):
             messages.success(request, "Cancelled. The money is back in your PayPal account. Fix where they're paid, "
                                       "then send it again.")
         elif action == "remind":
+            from django.core.cache import cache
+            if item.status != "UNCLAIMED" or item.superseded:
+                messages.error(request, "Only a payout that's waiting to be accepted can be reminded about.")
+                return redirect("payout_status", night.pk)
+            if request.business.is_demo:
+                messages.info(request, "The demo doesn't send emails. In your own account this emails the person.")
+                return redirect("payout_status", night.pk)
+            if not cache.add(f"payout-remind:{item.pk}", 1, 86400):
+                messages.info(request, f"{staff.name} was already reminded today.")
+                return redirect("payout_status", night.pk)
             link = request.build_absolute_uri(reverse("my_tips", args=[staff.access_token]))
             send_mail(f"{request.business.symbol}{item.share.amount} in tips is waiting for you",
                       f"Hi {staff.name},\n\nYour tips for the {night} were sent to {item.receiver}, but nobody has "
@@ -1325,6 +1353,9 @@ def messages_page(request):
             alert = get_object_or_404(Alert.objects.filter(Q(location__in=request.allowed_locations) |
                                                            Q(location__isnull=True)),
                                       pk=_id(request.POST["alert"]), business=business)
+            if alert.key.startswith("owner-ok:") and not request.user.manager.is_owner:
+                messages.error(request, "This one waits for the owner. It closes by itself once the shift is paid.")
+                return redirect("messages_page")
             alert.resolved_at = timezone.now()
             alert.resolved_by = request.user.get_full_name() or request.user.get_username()
             alert.save(update_fields=["resolved_at", "resolved_by"])

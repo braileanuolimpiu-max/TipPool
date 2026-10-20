@@ -20,13 +20,21 @@ def _code(secret, counter):
     return f"{number % 1_000_000:06d}"
 
 
-def verify(secret, code, at=None, window=1):
-    """True if `code` is right for now, or 30 seconds either side (phone clocks drift)."""
+def matching_step(secret, code, at=None, window=1):
+    """The 30-second step `code` belongs to (now, or one step either side: phone clocks drift), or None."""
     code = "".join(ch for ch in str(code) if ch.isdigit())
     if not secret or len(code) != 6:
-        return False
+        return None
     counter = int((at or time.time()) // 30)
-    return any(hmac.compare_digest(_code(secret, counter + d), code) for d in range(-window, window + 1))
+    for d in range(-window, window + 1):
+        if hmac.compare_digest(_code(secret, counter + d), code):
+            return counter + d
+    return None
+
+
+def verify(secret, code, at=None, window=1):
+    """True if `code` is right for now, or 30 seconds either side."""
+    return matching_step(secret, code, at, window) is not None
 
 
 def setup_uri(secret, account, issuer="TipPool"):

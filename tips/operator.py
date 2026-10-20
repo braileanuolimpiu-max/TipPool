@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import platform
+from .ratelimit import limited
 from .models import Change, PlatformConfig
 from .vault import encrypt
 
@@ -74,6 +75,7 @@ def platform_settings(request):
 
 
 @require_POST
+@limited("platform-claim", 5, 3600)
 def claim_platform(request):
     """On a fresh site with no operator yet, the owner of a real business can take the role."""
     import hmac

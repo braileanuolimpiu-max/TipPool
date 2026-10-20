@@ -41,6 +41,27 @@ def public_location(request):
     return Location.objects.filter(slug=slug, archived=False).first() if slug else None
 
 
+MAX_REQUEST_BYTES = 12 * 1024 * 1024  # the largest upload is an 8 MB schedule photo
+
+
+class SizeLimitMiddleware:
+    """Refuse a request body bigger than any form needs, before it's read or saved to disk."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.http import HttpResponse
+        try:
+            size = int(request.META.get("CONTENT_LENGTH") or 0)
+        except ValueError:
+            size = 0
+        if size > MAX_REQUEST_BYTES:
+            return HttpResponse("That file is too big (12 MB at most).", status=413,
+                                content_type="text/plain; charset=utf-8")
+        return self.get_response(request)
+
+
 class LocationMiddleware:
     """Set request.location, show times in its time zone, and run due auto close-outs
     (at most once a minute) while a manager is using the app."""

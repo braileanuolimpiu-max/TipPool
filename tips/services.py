@@ -165,10 +165,11 @@ def _apply_order_result(tip, result):
         _late_tip(tip)
 
 
+@transaction.atomic
 def _late_tip(tip):
     """A guest's tip finished after its shift moved on. Before payout: the split is calculated again.
     After payout: the tip moves to the current shift, so it's shared next time instead of lost."""
-    night = tip.night
+    night = _locked(tip.night)  # the status now, not when the capture started
     if night.status == Night.Status.REVIEW:
         _invalidate_split(night)
     elif night.status in (Night.Status.PAYING, Night.Status.PAID):

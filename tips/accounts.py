@@ -91,7 +91,9 @@ class EmailBackend(ModelBackend):
             if request is not None:
                 request.login_limited = "pause"
             return None
-        if user and user.check_password(password) and self.user_can_authenticate(user):
+        if user is None:
+            User().set_password(password)  # same time as a real check, so timing can't tell who has an account
+        elif user.check_password(password) and self.user_can_authenticate(user):
             cache.delete(f"login-streak:{name}")  # only wrong tries *in a row* count
             return user
         hit(f"login-ip:{ip}", 50, 900)
@@ -342,6 +344,27 @@ def accept_invite(request, token):
 
 
 # --- Payments: currency, fees, the business's own PayPal ---------------------------------
+def _paypal_switch_blocked(business, client_id, live):
+    """Why another PayPal account (or real money after test money) can't take over yet, or "".
+    Payouts in progress belong to the old account, and test tips must never be paid out with real money."""
+    from . import services
+    from .models import Night, PayoutBatch, Tip
+    if client_id == business.paypal_client_id and live == business.paypal_live:
+        return ""
+    nights = Night.objects.filter(location__business=business)
+    if nights.filter(status__in=[Night.Status.REVIEW, Night.Status.PAYING]).exists():
+        return "a shift is waiting to be paid or being paid. Pay it (or recalculate it) first, then connect again."
+    if any(services.needs_recheck(b) for b in PayoutBatch.objects.filter(night__location__business=business)
+           .exclude(paypal_batch_id__gt="")):
+        return "a payout's answer from PayPal is still unclear. Check it again on its shift first."
+    if live and not business.paypal_live and Tip.objects.filter(
+            night__in=nights.exclude(status=Night.Status.PAID), source=Tip.Source.PAYPAL,
+            status=Tip.Status.COMPLETED).exists():
+        return ("some unpaid shifts have tips paid with test money. Close and pay them with the test account first, "
+                "so test money is never paid out as real money.")
+    return ""
+
+
 @require_POST
 @owner_required
 def payment_settings(request):
@@ -399,6 +422,11 @@ def payment_settings(request):
             messages.error(request, "Your other payment settings were saved, but PayPal didn't accept those two codes. "
                                     "Copy them again from PayPal (step 4 below): the Client ID, then the Secret.")
             return redirect(f"{reverse('settings')}#payments")
+        stop = _paypal_switch_blocked(business, client_id, live)
+        if stop:
+            business.save()
+            messages.error(request, "Your other payment settings were saved, but PayPal wasn't switched: " + stop)
+            return redirect(f"{reverse('settings')}#payments")
         business.paypal_client_id, business.paypal_live = client_id, live
         business.set_paypal_secret(secret)
         # PayPal tells TipPool about payments and payouts as they happen (needs the site's https address)
@@ -443,8 +471,13 @@ class TwoStepLoginView(LoginView):
         return super().form_valid(form)
 
 
+CODE_TRIES = 5
+CODE_LOCK_SECONDS = 900
+
+
 @limited("login-code", 12, 900)
 def login_code(request):
+    from django.core.cache import cache
     from django.utils.http import url_has_allowed_host_and_scheme
     from . import totp
     from .vault import decrypt
@@ -453,15 +486,47 @@ def login_code(request):
         request.session.pop("two_step", None)
         messages.error(request, "Please sign in again.")
         return redirect("login")
+    uid = pending["uid"]
+    if cache.get(f"login-code-lock:{uid}"):
+        request.session.pop("two_step", None)
+        messages.error(request, "Too many wrong codes for this account. Please try again in 15 minutes.")
+        return redirect("login")
     error = ""
     if request.method == "POST":
-        user = User.objects.filter(pk=pending["uid"]).select_related("manager").first()
-        if user and totp.verify(decrypt(user.manager.totp_secret_encrypted), request.POST.get("code", "")):
+        user = User.objects.filter(pk=uid).select_related("manager").first()
+        step = totp.matching_step(decrypt(user.manager.totp_secret_encrypted), request.POST.get("code", "")) \
+            if user else None
+        used = cache.get(f"login-code-used:{uid}")
+        if step is not None and (used is None or step > used):
+            cache.set(f"login-code-used:{uid}", step, 120)  # the same code can't sign in twice
+            cache.delete(f"login-code-fails:{uid}")
             request.session.pop("two_step", None)
             login(request, user, backend=pending["backend"])
             nxt = pending.get("next") or reverse("dashboard")
             safe = url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()})
             return redirect(nxt if safe else "dashboard")
+        fails_key = f"login-code-fails:{uid}"
+        if not cache.add(fails_key, 1, CODE_LOCK_SECONDS):
+            try:
+                fails = cache.incr(fails_key)
+            except ValueError:
+                cache.add(fails_key, 1, CODE_LOCK_SECONDS)
+                fails = 1
+        else:
+            fails = 1
+        if fails >= CODE_TRIES:
+            cache.set(f"login-code-lock:{uid}", 1, CODE_LOCK_SECONDS)
+            cache.delete(fails_key)
+            request.session.pop("two_step", None)
+            if user and user.email and cache.add(f"login-code-warned:{uid}", 1, 3600):
+                send_mail("Someone has your TipPool password",
+                          f"Hi {user.get_full_name() or user.get_username()},\n\n"
+                          f"Someone typed your TipPool password correctly, then got the two-step code wrong "
+                          f"{CODE_TRIES} times. Your two-step sign-in stopped them. Please change your password "
+                          f"now (Settings → Your account).\n\nTipPool",
+                          settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+            messages.error(request, "Too many wrong codes for this account. Please try again in 15 minutes.")
+            return redirect("login")
         error = "That code isn't right. Use the newest code in your authenticator app."
     return render(request, "registration/login_code.html", {"error": error})
 

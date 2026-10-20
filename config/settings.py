@@ -61,6 +61,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'tips.middleware.SizeLimitMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # serves the CSS and icons in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

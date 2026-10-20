@@ -1,9 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.views import redirect_to_login
 from django.urls import include, path
 
 from tips.accounts import ResetConfirmView, TwoStepLoginView, change_password, login_code
 from tips.ratelimit import limited
+
+# the admin has no sign-in of its own: it would skip the two-step code
+admin.site.login = lambda request, extra_context=None: redirect_to_login(request.GET.get("next") or "/admin/")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
