@@ -40,12 +40,12 @@
         </div>
       </li>
       {% empty %}
-      <li class="muted">Your team list is empty. <a href="{% url 'staff_list' %}">Add your team</a> first.</li>
+      <li class="muted empty-row">Your team list is empty. <a href="{% url 'staff_list' %}">Add your team</a> first.</li>
       {% endfor %}
     </ul>
     <div class="sticky-bar">
       {% if night.status == "open" %}<button class="btn btn-secondary" name="save_roster">Save for later</button>{% else %}<span class="small muted">You can change this after checking the split.</span>{% endif %}
-      <button class="btn btn-primary" {% if not rule_set and night.pool_total %}disabled{% endif %}>{% if night.status == "open" %}Close out and calculate{% else %}Calculate the split{% endif %}</button>
+      <button class="btn btn-primary" {% if not rows or not rule_set and night.pool_total %}disabled{% endif %}>{% if night.status == "open" %}Close out and calculate{% else %}Calculate the split{% endif %}</button>
     </div>
   </form>
 

@@ -1,4 +1,4 @@
-<details class="tour no-print" id="demo-tour"{% if u == "dashboard" %} open{% endif %}>
+<details class="tour no-print" id="demo-tour">
   <summary>
     <span class="tour-title">Demo tour</span>
     <span class="tour-count num">{{ demo_tour.done }}/{{ demo_tour.total }}</span>
@@ -18,6 +18,14 @@
   {% if demo_tour.done == demo_tour.total %}<p class="tour-end">That's the whole loop. <a href="{% url 'signup' %}">Make your own business</a></p>{% endif %}
 </details>
 <script>
-  // on phones the tour starts folded, so it never covers the page
-  if (window.matchMedia("(max-width: 640px)").matches) document.getElementById("demo-tour").open = false;
+  // the tour unfolds by itself once, on the first visit to the dashboard (never on phones)
+  (() => {
+    const tour = document.getElementById("demo-tour");
+    let seen = false;
+    try { seen = localStorage.getItem("tp-tour-seen") === "1"; } catch (e) { seen = true; }
+    if (!seen && {% if u == "dashboard" %}true{% else %}false{% endif %} && !window.matchMedia("(max-width: 640px)").matches) {
+      tour.open = true;
+      try { localStorage.setItem("tp-tour-seen", "1"); } catch (e) {}
+    }
+  })();
 </script>

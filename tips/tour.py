@@ -35,7 +35,7 @@ def steps(request, business, location):
         {"title": "Check yesterday's split", "url": review_url, "done": "review" in seen or paid,
          "text": "AI turned the house rules into exact shares and explains each one. The close-out check looks "
                  "for anything odd before money moves."},
-        {"title": "Answer the team", "url": reverse("messages_page"), "done": answered or "messages_page" in seen,
+        {"title": "Answer the team", "url": reverse("messages_page"), "done": answered,
          "text": "John says he stayed late. A flagged shift is never paid automatically."},
         {"title": "Pay everyone in one click", "url": review_url + "#pay-form", "done": paid,
          "text": "Approve the split: one PayPal Payouts batch pays the whole team (sandbox money)."},

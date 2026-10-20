@@ -73,6 +73,7 @@
   </section>
 
   {% for s in shares %}
+  {% if forloop.counter == 6 %}<details class="older-receipts"><summary>Older shifts ({{ shares|length|add:"-5" }})</summary>{% endif %}
   <div class="receipt-wrap" style="width:100%;margin-bottom:22px">
     <div class="receipt">
       <div class="head"><h2>Tips receipt</h2><p>{% if several %}{{ s.night.location.display_name }} · {% endif %}{{ s.night.date|date:"l, M j, Y" }}</p></div>
@@ -107,6 +108,7 @@
       {% endif %}
     </div>
   </div>
+  {% if forloop.last and forloop.counter > 5 %}</details>{% endif %}
   {% empty %}
   <div class="receipt-wrap" style="width:100%"><div class="receipt"><p style="margin:0;text-align:center">No tips yet. After the next close-out, your share and how it was calculated show up here.</p></div></div>
   {% endfor %}

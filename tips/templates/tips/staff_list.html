@@ -4,7 +4,7 @@
 <header class="page-head">
   <div><h1>Team</h1><p>Tips are paid to each person's PayPal email. Everyone also has a private page with their own tips.</p></div>
 </header>
-<div class="split-2">
+<div class="split-2 top">
   <div class="stack">
   <section class="panel">
     {% if staff %}
@@ -15,7 +15,7 @@
         <div style="flex:1;min-width:0">
           <strong>{{ m.staff.name }}</strong>{% if not m.active %} <span class="small muted">{{ m.role_name }}</span>{% endif %}
           {% if m.staff.payout_confirmed_at %}<span class="conf ok" title="They confirmed where they're paid on their tips page">✓ confirmed</span>{% else %}<span class="conf wait" title="They haven't confirmed where they're paid yet">not confirmed</span>{% endif %}
-          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.staff.payout_to }}</div>
+          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ m.staff.payout_to }}">{{ m.staff.payout_to }}</div>
         </div>
         {% if m.active %}<form method="post" action="{% url 'staff_role' m.pk %}" class="role-pick">{% csrf_token %}
           <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" onchange="this.form.submit()">

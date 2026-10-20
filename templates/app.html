@@ -24,39 +24,39 @@
 <div class="rail" id="main-nav">
   <nav aria-label="Main">
     {% if locations|length > 1 %}
-    <a class="ticket" href="{% url 'overview' %}" {% if u == 'overview' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'overview' %}" {% if u == 'overview' %}aria-current="page"{% endif %} title="All locations">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       <span class="label">All locations</span></a>
     {% endif %}
-    <a class="ticket" href="{% url 'dashboard' %}" {% if u == 'dashboard' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'dashboard' %}" {% if u == 'dashboard' %}aria-current="page"{% endif %} title="Current shift">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 1.5"/></svg>
       <span class="label">Current shift</span></a>
-    <a class="ticket" href="{% url 'close_night' %}" {% if u == 'close_night' or u == 'close_night_pk' or u == 'review' or u == 'payout_status' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'close_night' %}" {% if u == 'close_night' or u == 'close_night_pk' or u == 'review' or u == 'payout_status' %}aria-current="page"{% endif %} title="Close out">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
       <span class="label">Close out</span></a>
-    <a class="ticket" href="{% url 'history' %}" {% if u == 'history' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'history' %}" {% if u == 'history' %}aria-current="page"{% endif %} title="Past shifts">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 10h16M4 15h10M4 20h7"/></svg>
       <span class="label">Past shifts</span></a>
     {% if not is_lead %}
-    <a class="ticket" href="{% url 'reports' %}" {% if u == 'reports' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'reports' %}" {% if u == 'reports' %}aria-current="page"{% endif %} title="Reports">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
       <span class="label">Reports</span></a>{% endif %}
-    <a class="ticket" href="{% url 'messages_page' %}" {% if u == 'messages_page' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'messages_page' %}" {% if u == 'messages_page' %}aria-current="page"{% endif %} title="Messages">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>
       <span class="label">Messages</span>{% if open_messages %}<span class="badge" aria-label="{{ open_messages }} open">{{ open_messages }}</span>{% endif %}</a>
     {% if not is_lead %}
-    <a class="ticket" href="{% url 'staff_list' %}" {% if u == 'staff_list' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'staff_list' %}" {% if u == 'staff_list' %}aria-current="page"{% endif %} title="Team">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.5 3.5 5.2"/></svg>
       <span class="label">Team</span></a>{% endif %}
     {% if not is_lead %}
-    <a class="ticket" href="{% url 'rules' %}" {% if u == 'rules' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'rules' %}" {% if u == 'rules' %}aria-current="page"{% endif %} title="Tip rules">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>
       <span class="label">Tip rules</span></a>{% endif %}
-    <a class="ticket" href="{% url 'qr_page' %}" {% if u == 'qr_page' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'qr_page' %}" {% if u == 'qr_page' %}aria-current="page"{% endif %} title="QR codes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>
       <span class="label">QR codes</span></a>
     {% if not is_lead %}
-    <a class="ticket" href="{% url 'settings' %}" {% if u == 'settings' %}aria-current="page"{% endif %}>
+    <a class="ticket" href="{% url 'settings' %}" {% if u == 'settings' %}aria-current="page"{% endif %} title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
       <span class="label">Settings</span></a>{% endif %}
   </nav>
