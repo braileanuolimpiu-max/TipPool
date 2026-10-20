@@ -70,12 +70,13 @@ def suggested_roster(night):
     return out
 
 
-def finish_running_entries(night, at=None):
-    """At close-out: clock out whoever forgot. Returns how many had to be clocked out."""
+def finish_running_entries(night, at=None, mark_forgotten=True):
+    """At close-out: clock out whoever forgot. Returns how many had to be clocked out.
+    `mark_forgotten`: flag those hours for a check (not when the manager typed everyone's hours)."""
     at = at or timezone.now()
     forgot = night.clock_entries.filter(ended_at__isnull=True)
     count = forgot.count()
-    forgot.update(ended_at=at, auto_ended=True)
+    forgot.update(ended_at=at, auto_ended=mark_forgotten)
     return count
 
 
@@ -88,8 +89,11 @@ def fill_roster(night, use_usual):
     suggestions = suggested_roster(night)
     clocked = {k: v for k, v in suggestions.items() if v["source"] == "clock"}
     chosen = clocked or ({k: v for k, v in suggestions.items() if v["source"] == "usual"} if use_usual else {})
+    too_long = False
     for staff_id, row in chosen.items():
         if row["hours"] > 0:
-            Shift.objects.create(night=night, staff_id=staff_id, role=row["role"], hours=row["hours"])
-    needs_check = any(row["auto_ended"] or row["running"] for row in chosen.values())
+            hours = min(row["hours"], Decimal("24"))  # a clock-in left running for days isn't a shift
+            too_long |= hours < row["hours"]
+            Shift.objects.create(night=night, staff_id=staff_id, role=row["role"], hours=hours)
+    needs_check = too_long or any(row["auto_ended"] or row["running"] for row in chosen.values())
     return night.shifts.count(), needs_check

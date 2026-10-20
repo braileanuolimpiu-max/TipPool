@@ -163,7 +163,7 @@ def _run(data, request):
             from .check import blocking
             if night.status != Night.Status.REVIEW or blocking(night):
                 raise ActionError(f"The {night} can't be paid from here any more. Open it to check.")
-            services.pay_night(night)
+            services.pay_night(night, by_owner=request.user.manager.is_owner)
             Change.log(request, f"Paid the {night} (asked in Ask about your tips)")
             return f"Payout for the {night} sent to PayPal."
         if kind == "set_week":

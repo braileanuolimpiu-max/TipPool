@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from . import check, hours, services
 from .alerts import raise_alert
-from .models import Change, CloseTime, Location, Night, TipRuleSet
+from .models import Change, CloseTime, Location, Night, Tip, TipRuleSet
 from .paypal import PayPalError
 
 log = logging.getLogger("tips.autoclose")
@@ -77,17 +77,31 @@ def run(now=None):
     now = now or timezone.now()
     results = []
     for location in Location.objects.filter(auto_close_enabled=True, archived=False):
-        tz = location_tz(location)
-        done = []
-        for night in Night.objects.filter(location=location, status=Night.Status.OPEN):
-            due = close_due_at(night, tz)
-            if due and now >= due:
-                done.append(close_night(night, location))
-        done += pay_after_review(location, now)
+        try:  # one location's problem must never stop the others
+            done = _run_location(location, now)
+        except Exception:
+            log.exception("Automatic close-out failed at %s", location)
+            continue
         for what in done:
             Change.log("Automatic close-out", what, location=location)
         results += done
     return results
+
+
+def _run_location(location, now):
+    tz = location_tz(location)
+    done = []
+    for night in Night.objects.filter(location=location, status=Night.Status.OPEN):
+        due = close_due_at(night, tz)
+        if due and now >= due:
+            done.append(close_night(night, location))
+    # a tip that arrived late sent an automatic shift back to "closed": split it again
+    for night in Night.objects.filter(location=location, status=Night.Status.CLOSED, auto_closed=True, hold="",
+                                      shifts__isnull=False).distinct():
+        if night.tip_total > 0:
+            done.append(split_and_pay(night, location, needs_check=False))
+    done += pay_after_review(location, now)
+    return done
 
 
 def pay_after_review(location, now):
@@ -97,6 +111,8 @@ def pay_after_review(location, now):
     results = []
     waiting = Night.objects.filter(location=location, status=Night.Status.REVIEW, auto_closed=True, hold="",
                                    closed_at__lte=now - timedelta(minutes=location.review_minutes))
+    if location.business.payouts_frozen:
+        return []  # the owner stopped payouts: they wait, and go out by themselves once unfrozen
     for night in waiting:
         stops = check.blocking(night)
         if stops:
@@ -106,6 +122,10 @@ def pay_after_review(location, now):
         try:
             services.pay_night(night)
             results.append(f"{night}: paid after the review window")
+        except services.PayoutsFrozen:
+            break
+        except services.NeedsOwner as exc:
+            results.append(f"{night}: {exc}")
         except (services.TipPoolError, PayPalError) as exc:
             log.warning("Auto payout failed for %s: %s", night, exc)
             hold(night, f"The automatic payout didn't go out: {exc}")
@@ -147,12 +167,21 @@ def close_night(night, location):
     if not night.shifts.exists():
         # nothing saved: use clock-ins (and the usual week, if the location allows it)
         added, needs_check = hours.fill_roster(night, location.use_usual_schedule)
-        if not added:
-            log.info("%s closed automatically; waiting for who worked", night)
-            return f"{night}: closed, waiting for who worked"
+    if night.tip_total <= 0 and not night.tips.filter(status=Tip.Status.CREATED).exists():
+        # no tips at all: nothing to share, so the shift is simply done (hours stay on record)
+        Night.objects.filter(pk=night.pk).update(status=Night.Status.PAID)
+        return f"{night}: closed with no tips, nothing to pay"
+    if not night.shifts.exists():
+        log.info("%s closed automatically; waiting for who worked", night)
+        return f"{night}: closed, waiting for who worked"
     if night.tip_total <= 0:
-        return f"{night}: closed, no tips"
+        return f"{night}: closed, a guest's tip is still being confirmed"
+    return split_and_pay(night, location, needs_check)
 
+
+def split_and_pay(night, location, needs_check):
+    """After an automatic close: split with the location's rules, check it, and pay when the location
+    pays automatically (right away, or after its review window)."""
     rule_set = TipRuleSet.active(location)
     if not rule_set:
         return f"{night}: closed, no tip rules yet"
@@ -177,6 +206,10 @@ def close_night(night, location):
         try:
             services.pay_night(night)
             return f"{night}: closed, split and paid automatically"
+        except services.PayoutsFrozen:
+            return f"{night}: closed and split; payouts are frozen, so it waits"
+        except services.NeedsOwner as exc:
+            return f"{night}: closed and split; {exc}"
         except (services.TipPoolError, PayPalError) as exc:
             log.warning("Auto payout failed for %s: %s", night, exc)
             hold(night, f"The automatic payout didn't go out: {exc}")

@@ -145,7 +145,7 @@ def calculate_split(total, shifts, rules, never_in_pool=frozenset(), role_names=
             part = amount * weight / weight_total
             exact[person.key] += part
             if method == "hours":
-                basis = f"{person.hours.normalize()}h of {weight_total.normalize()}h"
+                basis = f"{person.hours.normalize():f}h of {weight_total.normalize():f}h"
             else:
                 basis = "the whole pool" if len(members) == 1 else f"an equal 1/{len(members)} share"
             person.breakdown.append({"group": group_name, "pool": str(amount.quantize(CENT)),

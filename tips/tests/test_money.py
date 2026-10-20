@@ -379,7 +379,7 @@ class UnclearPayPalAnswerTests(TestCase):
         self.assertEqual(self.paypal.payout_bodies, [])
         services.recheck_unclear(batch)  # the manager's "Check PayPal again": the very same request
         batch.refresh_from_db()
-        self.assertEqual((batch.status, batch.sender_batch_id), ("PENDING", f"tippool-shift-{self.night.pk}-a0"))
+        self.assertEqual((batch.status, batch.sender_batch_id), ("PENDING", f"tippool-shift-{self.night.pk}-{self.night.payout_key}-a0"))
         self.assertEqual(len(self.paypal.payout_bodies), 1)
         services.recheck_unclear(batch)  # already answered: nothing is sent again
         self.assertEqual(len(self.paypal.payout_bodies), 1)
@@ -417,7 +417,7 @@ class UnclearPayPalAnswerTests(TestCase):
         self.assertFalse(self.night.payout_batches.exists())
         services.pay_night(self.night)
         self.assertEqual(len(self.paypal.payout_bodies), 1)
-        self.assertEqual(self.night.payout_batch.sender_batch_id, f"tippool-shift-{self.night.pk}-a1")  # fresh id
+        self.assertEqual(self.night.payout_batch.sender_batch_id, f"tippool-shift-{self.night.pk}-{self.night.payout_key}-a1")  # fresh id
 
     def test_payout_note_is_ours_not_ai_text(self):
         share = self.night.shares.get()

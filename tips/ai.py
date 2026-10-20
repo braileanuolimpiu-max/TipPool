@@ -327,7 +327,7 @@ def _template_explanation(share, role, cur="$"):
             parts.append(f"guests left {cur}{b['amount']} for you by name, all yours")
         else:
             parts.append(f"from the {b['group']} pool of {cur}{b['pool']} you get {b['basis']} = {cur}{b['amount']}")
-    start = f"You worked {share.hours.normalize()}h as {role}: " if share.hours else "You got personal tips: "
+    start = f"You worked {share.hours.normalize():f}h as {role}: " if share.hours else "You got personal tips: "
     return start + "; ".join(parts) + f". Total: {cur}{share.amount}."
 
 

@@ -75,13 +75,21 @@ class PayPalClient:
                 continue
             break
         if not response.ok:
-            body = response.json() if response.content else {}
+            try:
+                body = response.json() if response.content else {}
+            except ValueError:  # e.g. an HTML error page from a proxy
+                body = {"raw": response.text[:500]}
+            if not isinstance(body, dict):
+                body = {"raw": str(body)[:500]}
             debug_id = body.get("debug_id") or response.headers.get("PayPal-Debug-Id")
             log.error("PayPal %s %s failed: %s debug_id=%s body=%s", method, path,
                       response.status_code, debug_id, body)
             raise PayPalError(body.get("message") or f"PayPal error {response.status_code}",
                               response.status_code, debug_id, body)
-        return response.json() if response.content else {}
+        try:
+            return response.json() if response.content else {}
+        except ValueError as exc:
+            raise PayPalError("PayPal sent an answer TipPool couldn't read", response.status_code) from exc
 
     # --- Orders API v2 (collecting tips) -------------------------------------
     def create_order(self, amount, currency="USD", description="Tip", reference_id=None,

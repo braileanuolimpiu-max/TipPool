@@ -41,24 +41,45 @@ def create_tip_order(location, amount, table="", return_url=None, cancel_url=Non
     if for_staff is None and location.tip_mode == location.TipMode.PERSONAL:
         raise TipPoolError("Please choose who you'd like to tip.")
     night = Night.current(location)
+    # the tip is saved first: an empty shift being closed at this very moment then can't vanish under it
+    tip = Tip.objects.create(night=night, amount=amount, table=table[:20], staff=for_staff)
     who = f" for {for_staff.name}" if for_staff else ""
-    order = get_client(business).create_order(amount, business.currency,
-                                              description=f"Tip{who} at {location.display_name}"[:127],
-                                              reference_id=f"night-{night.pk}",
-                                              return_url=return_url, cancel_url=cancel_url)
-    Tip.objects.create(night=night, amount=amount, paypal_order_id=order["id"], table=table[:20], staff=for_staff)
+    try:
+        order = get_client(business).create_order(amount, business.currency,
+                                                  description=f"Tip{who} at {location.display_name}"[:127],
+                                                  reference_id=f"night-{night.pk}",
+                                                  return_url=return_url, cancel_url=cancel_url)
+    except Exception:
+        tip.delete()
+        raise
+    tip.paypal_order_id = order["id"]
+    tip.save(update_fields=["paypal_order_id"])
     return order["id"]
 
 
-def add_manual_tip(night, amount, source, staff=None, note=""):
-    """Card-machine or cash tips the manager adds at close-out."""
+def _locked(night):
+    """The shift's row, locked until the transaction ends, with its current status (not a stale copy)."""
+    return Night.objects.select_for_update().get(pk=night.pk)
+
+
+def _not_paid(night):
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
         raise TipPoolError("This shift has already been paid out.")
+
+
+@transaction.atomic
+def add_manual_tip(night, amount, source, staff=None, note=""):
+    """Card-machine or cash tips the manager adds at close-out."""
+    night = _locked(night)
+    _not_paid(night)
     if source not in (Tip.Source.CARD, Tip.Source.CASH):
         raise TipPoolError("Choose card or cash.")
-    amount = Decimal(str(amount)).quantize(CENT)
-    if amount <= 0 or amount > Decimal("20000"):
+    amount = Decimal(str(amount))
+    if not amount.is_finite() or amount <= 0:
         raise TipPoolError("Enter an amount above 0.")
+    if amount > Decimal("20000"):
+        raise TipPoolError("That's more than 20,000 in one entry. Add it in parts, or check the amount.")
+    amount = amount.quantize(CENT)
     fee = Decimal("0")
     if source == Tip.Source.CARD:
         fee = (amount * business_of(night).card_fee_percent / 100).quantize(CENT, rounding=ROUND_HALF_UP)
@@ -68,22 +89,26 @@ def add_manual_tip(night, amount, source, staff=None, note=""):
     return tip
 
 
+@transaction.atomic
 def remove_manual_tip(tip):
-    night = tip.night
-    if night.status in (Night.Status.PAYING, Night.Status.PAID):
-        raise TipPoolError("This shift has already been paid out.")
+    night = _locked(tip.night)
+    _not_paid(night)
     if tip.source == Tip.Source.PAYPAL:
         raise TipPoolError("PayPal tips can't be removed here.")
     tip.delete()
     _invalidate_split(night)
 
 
+@transaction.atomic
 def _invalidate_split(night):
-    """Tips changed after the split was calculated: it has to be calculated again."""
-    if night.status == Night.Status.REVIEW:
-        night.shares.all().delete()
-        night.status = Night.Status.CLOSED
-        night.save(update_fields=["status"])
+    """Tips changed after the split was calculated: it has to be calculated again.
+    Never touches a shift that is being paid (its shares belong to a payout now)."""
+    locked = _locked(night)
+    if locked.status == Night.Status.REVIEW:
+        locked.shares.all().delete()
+        locked.status = Night.Status.CLOSED
+        locked.save(update_fields=["status"])
+    night.status = locked.status
 
 
 def capture_tip(order_id):
@@ -147,6 +172,12 @@ def _late_tip(tip):
     if night.status == Night.Status.REVIEW:
         _invalidate_split(night)
     elif night.status in (Night.Status.PAYING, Night.Status.PAID):
+        if night.location.archived:  # no shift will ever be shared there again: tell the business instead
+            business = business_of(night)
+            raise_alert(business, f"A {business.symbol}{tip.amount} tip for {night.location.display_name} arrived "
+                                  "after its shift was paid, and the location is archived. Share it by hand.",
+                        location=night.location, night=night, key=f"late-archived:{tip.pk}")
+            return
         tip.night = Night.current(night.location)
         tip.save(update_fields=["night"])
 
@@ -169,7 +200,7 @@ def sync_capture(capture_id):
     tip = Tip.objects.select_related("night__location__business").get(paypal_capture_id=capture_id)
     status = get_client(business_of(tip.night)).get_capture(capture_id).get("status")
     if status in ("REFUNDED", "PARTIALLY_REFUNDED"):
-        return tip_given_back(capture_id, "refund")
+        return tip_given_back(capture_id, "refund")  # reads how much went back from the order
     if status == "REVERSED":
         return tip_given_back(capture_id, "reversal")
     return tip
@@ -207,17 +238,42 @@ def tip_given_back(capture_id, what):
                               f"({night}). Answer it in your PayPal account.",
                     location=night.location, night=night, key=f"dispute:{capture_id}")
         return tip
-    tip.status = Tip.Status.REFUNDED
-    tip.problem = "Refunded to the guest" if what == "refund" else "Taken back by the guest's bank (chargeback)"
-    tip.save(update_fields=["status", "problem"])
+    original = tip.amount + tip.refunded
+    back = original
+    if what == "refund":
+        back = min(refunded_so_far(tip), original) or original
+    if back <= tip.refunded:
+        return tip  # this refund was already counted
+    given_back_now = back - tip.refunded
+    if back >= original:
+        tip.status = Tip.Status.REFUNDED
+        tip.problem = "Refunded to the guest" if what == "refund" else "Taken back by the guest's bank (chargeback)"
+    else:  # part of the tip went back: only that part leaves the split (records stay as paid once paid)
+        if night.status not in (Night.Status.PAYING, Night.Status.PAID):
+            tip.amount = (original - back).quantize(CENT)
+        tip.problem = f"{business.symbol}{back} of {business.symbol}{original} refunded to the guest"
+    tip.refunded = back
+    tip.save(update_fields=["status", "problem", "amount", "refunded"])
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
-        raise_alert(business, f"A {business.symbol}{tip.amount} tip from the {night} was "
+        raise_alert(business, f"{business.symbol}{given_back_now} of a tip from the {night} was "
                               f"{'refunded' if what == 'refund' else 'charged back'} after the team was paid. "
                               "The business covers it.",
-                    location=night.location, night=night, key=f"refund:{capture_id}")
+                    location=night.location, night=night, key=f"refund:{capture_id}" + ("" if back >= original else f":{back}"))
     else:
         _invalidate_split(night)
     return tip
+
+
+def refunded_so_far(tip):
+    """How much of this tip PayPal has refunded in total (from the order's list of refunds). 0 if unknown."""
+    try:
+        order = get_client(business_of(tip.night)).get_order(tip.paypal_order_id)
+    except PayPalError:
+        return Decimal("0")
+    unit = (order.get("purchase_units") or [{}])[0] or {}
+    refunds = ((unit.get("payments") or {}).get("refunds")) or []
+    return sum((Decimal(str((r.get("amount") or {}).get("value", "0"))) for r in refunds
+                if isinstance(r, dict) and r.get("status") in ("COMPLETED", "PENDING")), Decimal("0"))
 
 
 # --- Split -------------------------------------------------------------------
@@ -237,8 +293,9 @@ def fees_to_share(night):
 @transaction.atomic
 def build_split(night, rule_set):
     """Calculate everyone's share for a night and store it (replaces an earlier draft)."""
-    if night.status in (Night.Status.PAYING, Night.Status.PAID):
-        raise TipPoolError("This shift has already been paid out.")
+    asked = night
+    night = _locked(night)  # a payout starting right now must never lose its shares to a new split
+    _not_paid(night)
     shifts = list(night.shifts.select_related("staff"))
     if night.tip_total <= 0:
         raise TipPoolError("There are no completed tips for this shift yet.")
@@ -277,9 +334,10 @@ def build_split(night, rule_set):
         )
     night.rule_set = rule_set
     night.status = Night.Status.REVIEW
-    night.save()
+    night.save(update_fields=["rule_set", "status"])
     from . import check
     check.run(night)
+    asked.rule_set, asked.status, asked.review_check = night.rule_set, night.status, night.review_check
     return result
 
 
@@ -332,9 +390,43 @@ def check_balance(business, needed):
     return balance
 
 
-def pay_night(night, allow_unconfirmed=False):
-    """Send one PayPal Payouts batch with everyone's share."""
+class PayoutsFrozen(TipPoolError):
+    pass
+
+
+class NeedsOwner(TipPoolError):
+    pass
+
+
+def check_not_frozen(business):
+    frozen = Business.objects.filter(pk=business.pk).values_list("payouts_frozen_at", "payouts_frozen_by").first()
+    if frozen and frozen[0]:
+        raise PayoutsFrozen(f"Payouts are frozen by {frozen[1] or 'the owner'}, so nothing was sent. "
+                            "The owner can turn payouts back on in Settings.")
+
+
+def over_limit(night, business):
+    """The amount, when one shift's payout is above the owner's approval limit."""
+    limit = business.approval_limit
+    total = sum((s.amount for s in night.shares.all() if s.amount > 0), Decimal("0"))
+    return total if limit is not None and total > limit else None
+
+
+def pay_night(night, allow_unconfirmed=False, by_owner=False):
+    """Send one PayPal Payouts batch with everyone's share.
+    Not while the owner froze payouts; above the owner's limit only with the owner's OK."""
     business = business_of(night)
+    check_not_frozen(business)
+    total = over_limit(night, business)
+    if total is not None and not by_owner:
+        sym = business.symbol
+        reason = f"Waiting for the owner's OK: {sym}{total} is over the {sym}{business.approval_limit} limit for one payout."
+        Night.objects.filter(pk=night.pk, status=Night.Status.REVIEW).update(hold=reason[:200])
+        raise_alert(business, f"The {night} at {night.location.display_name} needs the owner's OK to pay: {sym}{total} "
+                              f"is over the {sym}{business.approval_limit} limit.",
+                    location=night.location, night=night, key=f"owner-ok:{night.pk}", owners_only=True)
+        raise NeedsOwner(f"{sym}{total} is over the owner's {sym}{business.approval_limit} limit for one payout, so it "
+                         "waits for the owner's OK. They've been told.")
     with transaction.atomic():
         night = Night.objects.select_for_update().get(pk=night.pk)
         if night.status != Night.Status.REVIEW:
@@ -349,8 +441,9 @@ def pay_night(night, allow_unconfirmed=False):
         destinations = {s.pk: payout_destination(s.staff, business.currency) for s in shares}
         check_balance(business, sum((s.amount for s in shares), Decimal("0")))
         # one fixed id per shift: if anything sends it twice, PayPal refuses to pay it twice
-        batch = PayoutBatch.objects.create(night=night, status="SENDING",
-                                           sender_batch_id=f"tippool-shift-{night.pk}-a{night.payout_attempt}")
+        batch = PayoutBatch.objects.create(
+            night=night, status="SENDING",
+            sender_batch_id=f"tippool-shift-{night.pk}-{night.payout_key}-a{night.payout_attempt}")
         for share in shares:
             PayoutItem.objects.create(batch=batch, share=share, receiver=destinations[share.pk][1],
                                       sender_item_id=f"{batch.sender_batch_id}-{share.staff_id}")
@@ -377,8 +470,10 @@ def _send_batch(batch, business, subject, replaces=None):
         response = get_client(business).create_payout_batch(batch.sender_batch_id, items, subject=subject,
                                                             currency=business.currency)
     except PayPalError as exc:
-        issue = str((exc.details or {}).get("name", "")).upper()
-        duplicate = "DUPLICATE" in issue or "ALREADY" in issue
+        body = exc.details if isinstance(exc.details, dict) else {}
+        issues = [str(body.get("name", ""))] + [str(d.get("issue", "")) for d in (body.get("details") or [])
+                                                 if isinstance(d, dict)]
+        duplicate = any("DUPLICATE" in i.upper() or "ALREADY" in i.upper() for i in issues)
         if exc.status is not None and 400 <= exc.status < 500 and batch.status != "UNKNOWN" and not duplicate:
             # PayPal said no and sent nothing: undo so the manager can fix it and try again (new id next time)
             night = batch.night
@@ -412,6 +507,7 @@ def resend_payout(item):
     share = item.share
     night = share.night
     business = business_of(night)
+    check_not_frozen(business)
     with transaction.atomic():
         item = PayoutItem.objects.select_for_update().get(pk=item.pk)
         if item.superseded or not item.failed:
@@ -451,6 +547,7 @@ def needs_recheck(batch):
 def recheck_unclear(batch):
     """Only from a manager's "Check PayPal again": send the very same request (same id), under a lock.
     PayPal answers with the batch it already made, or makes it now; it never pays one id twice."""
+    check_not_frozen(business_of(batch.night))
     with transaction.atomic():
         batch = PayoutBatch.objects.select_for_update().get(pk=batch.pk)
         if not needs_recheck(batch) or not batch.request_items:
@@ -478,7 +575,10 @@ def refresh_batch(batch):
 
 def apply_payout_item_event(resource):
     """Called from the webhook: PAYMENT.PAYOUTS-ITEM.*"""
-    sender_item_id = resource.get("payout_item", {}).get("sender_item_id")
+    payout_item = resource.get("payout_item") if isinstance(resource, dict) else None
+    sender_item_id = payout_item.get("sender_item_id") if isinstance(payout_item, dict) else None
+    if not sender_item_id:
+        return None
     item = PayoutItem.objects.filter(sender_item_id=sender_item_id).select_related("batch__night").first()
     if item:
         _apply_item(item, resource)
@@ -486,9 +586,17 @@ def apply_payout_item_event(resource):
     return item
 
 
+# a late or repeated update never moves a payout backwards (e.g. "unclaimed" after it already arrived)
+_ITEM_RANK = {"NEW": 0, "PENDING": 1, "ONHOLD": 1, "UNCLAIMED": 2}
+
+
 def _apply_item(item, row):
     before = item.status
-    item.status = row.get("transaction_status", item.status)
+    new = row.get("transaction_status") or item.status
+    final = before == "SUCCESS" or before in ITEM_FAILED
+    if final and _ITEM_RANK.get(new, 9) < 9:
+        new = before
+    item.status = new
     item.paypal_item_id = row.get("payout_item_id", item.paypal_item_id)
     item.transaction_id = row.get("transaction_id", item.transaction_id) or ""
     fee = (row.get("payout_item_fee") or {}).get("value")
@@ -525,6 +633,10 @@ def _finish_night_if_done(night):
         if night.status != Night.Status.PAID:
             night.status = Night.Status.PAID
             night.save(update_fields=["status"])
+    elif statuses & set(ITEM_FAILED) and night.status == Night.Status.PAID:
+        # e.g. an unclaimed payout came back after 30 days: not fully paid any more, so it can be sent again
+        night.status = Night.Status.PAYING
+        night.save(update_fields=["status"])
 
 
 # --- Where staff get paid ------------------------------------------------------
@@ -539,7 +651,10 @@ def apply_payout_change(staff, payload):
         staff.payout_method = StaffMember.PayoutMethod.VENMO
         staff.venmo_phone = payload.get("phone", "")[:20]
     else:
+        email = payload.get("email", staff.paypal_email)
+        if StaffMember.objects.filter(business=staff.business, paypal_email__iexact=email).exclude(pk=staff.pk).exists():
+            raise TipPoolError(f"Someone else on the team is already paid at {email}. Ask {staff.name} for their own.")
         staff.payout_method = StaffMember.PayoutMethod.PAYPAL
-        staff.paypal_email = payload.get("email", staff.paypal_email)
+        staff.paypal_email = email
     staff.payout_confirmed_at = timezone.now()
     staff.save()

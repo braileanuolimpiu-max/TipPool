@@ -30,8 +30,28 @@ class Business(models.Model):
     # made by "Try the demo": sample data, sandbox only, deleted after a week
     is_demo = models.BooleanField(default=False)
 
+    # --- owner controls ---
+    class Digest(models.TextChoices):
+        OFF = "off", "Off"
+        DAILY = "daily", "Every morning"
+        WEEKLY = "weekly", "Every Monday morning"
+
+    # payouts above this (one shift) wait for the owner's OK, even automatic ones. Empty = no limit.
+    approval_limit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # the owner's emergency stop: no payout leaves while this is set (tips still come in)
+    payouts_frozen_at = models.DateTimeField(null=True, blank=True)
+    payouts_frozen_by = models.CharField(max_length=150, blank=True)
+    # warn when something is quietly wrong (no tips by the usual time, far below normal, ...)
+    smart_alerts = models.BooleanField(default=True)
+    digest = models.CharField(max_length=10, choices=Digest.choices, default=Digest.WEEKLY)
+    digest_sent_on = models.DateField(null=True, blank=True)
+
     def __str__(self):
         return self.name
+
+    @property
+    def payouts_frozen(self):
+        return self.payouts_frozen_at is not None
 
     @property
     def symbol(self):
@@ -66,6 +86,8 @@ class Manager(models.Model):
     # two-step sign-in: a 6-digit code from an authenticator app (secret stored encrypted)
     totp_secret_encrypted = models.TextField(blank=True)
     totp_enabled = models.BooleanField(default=False)
+    # the locations this manager runs; none picked = every location (owners always see everything)
+    locations = models.ManyToManyField("Location", blank=True, related_name="location_managers")
 
     def __str__(self):
         return f"{self.user} at {self.business}"
@@ -77,6 +99,22 @@ class Manager(models.Model):
     @property
     def level_label(self):
         return "Owner" if self.is_owner else self.get_level_display()
+
+    @property
+    def all_access(self):
+        """Owner, or a manager not limited to some locations."""
+        return self.is_owner or not self.locations.exists()
+
+    def allowed_locations(self):
+        own = Location.objects.filter(business=self.business, archived=False)
+        if self.is_owner:
+            return own
+        picked = self.locations.filter(archived=False)
+        return picked if self.locations.exists() else own
+
+
+def new_payout_key():
+    return secrets.token_hex(3)
 
 
 def new_invite_token():
@@ -93,6 +131,7 @@ class Invite(models.Model):
     invited_by = models.CharField(max_length=150, blank=True)
     created_at = models.DateTimeField(default=now)
     accepted_at = models.DateTimeField(null=True, blank=True)
+    locations = models.ManyToManyField("Location", blank=True, related_name="+")
 
     VALID_DAYS = 7
 
@@ -369,6 +408,8 @@ class Night(models.Model):
     hold = models.CharField(max_length=200, blank=True)
     # bumped each time PayPal clearly rejects a payout, so the corrected retry gets a fresh id
     payout_attempt = models.PositiveSmallIntegerField(default=0)
+    # part of every PayPal payout id, so ids never repeat even across databases sharing one PayPal account
+    payout_key = models.CharField(max_length=8, default=new_payout_key)
     # the close-out check (rules + AI): {"ok", "summary", "findings": [...], "suggestions": [...], "by"}
     review_check = models.JSONField(default=dict, blank=True)
 
@@ -443,6 +484,8 @@ class Tip(models.Model):
     fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # e.g. "Refunded to the guest" / "Guest opened a dispute"
     problem = models.CharField(max_length=200, blank=True)
+    # partly refunded: `amount` is what still counts, this is what went back to the guest
+    refunded = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0"))
     paypal_capture_id = models.CharField(max_length=64, blank=True)
     payer_name = models.CharField(max_length=120, blank=True)
     table = models.CharField(max_length=20, blank=True)
@@ -546,7 +589,8 @@ class PayoutItem(models.Model):
     FAILED = {"FAILED", "RETURNED", "BLOCKED", "DENIED", "REFUNDED", "REVERSED"}
 
     batch = models.ForeignKey(PayoutBatch, related_name="items", on_delete=models.CASCADE)
-    share = models.ForeignKey(Share, related_name="payout_items", on_delete=models.CASCADE)
+    # a share that was paid can never be deleted by a new split (only together with its whole shift)
+    share = models.ForeignKey(Share, related_name="payout_items", on_delete=models.RESTRICT)
     receiver = models.CharField(max_length=200, blank=True)  # where it was sent, e.g. "PayPal maria@x.com"
     fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sender_item_id = models.CharField(max_length=64, unique=True)
