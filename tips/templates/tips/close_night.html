@@ -1,11 +1,12 @@
 {% extends "app.html" %}
 {% block title %}Close out{% endblock %}
+{% block eyebrow_date %}{% if night %}Shift of {{ night.date|date:"l, M j" }}{% else %}{% now "l, M j" %}{% endif %}{% endblock %}
 {% block content %}
 <a class="back" href="{% url 'dashboard' %}">← Current shift</a>
 <header class="page-head">
   <div>
     <h1>{% if night.status == "open" %}Who's working this shift{% else %}Who worked {{ night.date|date:"l" }}'s shift{% endif %}</h1>
-    <p>{{ cur }}{{ night.tip_total }} from {{ tip_count }} tip{{ tip_count|pluralize }} so far.
+    <p>{{ cur }}{{ night.tip_total|money }} from {{ tip_count }} tip{{ tip_count|pluralize }} so far.
       {% if night.status == "open" %}Save the roster during service and update the hours before closing, or calculate the split now.
       {% else %}This shift is closed{% if night.auto_closed %} automatically{% endif %}. Add who worked to calculate the split.{% endif %}</p>
   </div>
@@ -50,11 +51,11 @@
 
   <div class="stack">
     <section class="panel" id="other-tips">
-      <div class="panel-head"><h2>Card and cash tips</h2><span class="small muted">PayPal {{ cur }}{{ paypal_total }}</span></div>
+      <div class="panel-head"><h2>Card and cash tips</h2><span class="small muted">PayPal {{ cur }}{{ paypal_total|money }}</span></div>
       {% if manual_tips %}
       <ul class="rows">
         {% for t in manual_tips %}
-        <li><div style="flex:1;min-width:0"><strong>{{ cur }}{{ t.amount }}</strong> <span class="small muted">{{ t.get_source_display }}</span>
+        <li><div style="flex:1;min-width:0"><strong>{{ cur }}{{ t.amount|money }}</strong> <span class="small muted">{{ t.get_source_display }}</span>
           <div class="small muted">{% if t.staff %}For {{ t.staff.name }}{% else %}Shared by the team{% endif %}{% if t.note %} · {{ t.note }}{% endif %}</div></div>
           <form method="post" action="{% url 'night_tip_remove' t.pk %}">{% csrf_token %}<button class="role-x" aria-label="Remove this tip" title="Remove">&times;</button></form>
         </li>

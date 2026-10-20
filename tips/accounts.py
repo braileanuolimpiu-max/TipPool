@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
@@ -60,7 +61,7 @@ def owner_required(view):
     def wrapper(request, *args, **kwargs):
         if not request.user.manager.is_owner:
             messages.error(request, "Only the owner of the account can do that.")
-            return redirect("settings")
+            return redirect("dashboard" if request.user.manager.is_lead else "settings")
         return view(request, *args, **kwargs)
     return wrapper
 
@@ -125,11 +126,14 @@ def signup(request):
         if not finishing:
             if not data["name"]:
                 errors.append("Enter your name.")
-            if "@" not in data["email"]:
+            try:
+                validate_email(data["email"])
+            except ValidationError:
                 errors.append("Enter a valid email.")
-            elif User.objects.filter(email__iexact=data["email"]).exists() or \
-                    User.objects.filter(username__iexact=data["email"]).exists():
-                errors.append("There's already an account with that email. Sign in instead.")
+            else:
+                if User.objects.filter(email__iexact=data["email"]).exists() or \
+                        User.objects.filter(username__iexact=data["email"]).exists():
+                    errors.append("There's already an account with that email. Sign in instead.")
             errors += _check_password(password)
         if not errors:
             with transaction.atomic():
@@ -139,7 +143,8 @@ def signup(request):
                 location_name = data["location"] or data["business"]
                 location = Location.objects.create(
                     business=business, name=location_name[:80], slug=Location.new_slug(location_name),
-                    business_type=data["business_type"], timezone=data["timezone"])
+                    business_type=data["business_type"], timezone=data["timezone"],
+                    tip_mode=role_presets.default_tip_mode(data["business_type"]))
                 role_presets.apply_preset(location, data["business_type"])
                 Change.log(user.get_username(), f"Created the business account {business.name}", location=location)
             if not finishing:
@@ -181,14 +186,18 @@ def email_my_link(request):
 @require_POST
 @owner_required
 def invite_manager(request):
-    email = request.POST.get("email", "").strip().lower()
-    if "@" not in email:
-        messages.error(request, "Enter their email.")
-        return redirect("settings")
+    email = request.POST.get("email", "").strip().lower()[:254]
+    try:
+        validate_email(email)
+    except ValidationError:
+        messages.error(request, "Enter their email address.")
+        return redirect(f"{reverse('settings')}#managers")
     if Manager.objects.filter(business=request.business, user__email__iexact=email).exists():
         messages.error(request, f"{email} already manages {request.business.name}.")
         return redirect("settings")
     level = Manager.Level.LEAD if request.POST.get("level") == "lead" else Manager.Level.MANAGER
+    # a new invite replaces an older one to the same person
+    request.business.invites.filter(email__iexact=email, accepted_at__isnull=True).delete()
     invite = Invite.objects.create(business=request.business, email=email, level=level,
                                    invited_by=request.user.get_username())
     link = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
@@ -271,7 +280,8 @@ def accept_invite(request, token):
                 if not request.user.is_authenticated:
                     login(request, user, backend="tips.accounts.EmailBackend")
                 request.session.pop("location_id", None)
-                messages.success(request, f"You're now a manager of {invite.business.name}.")
+                role = "a shift lead" if invite.level == Manager.Level.LEAD else "a manager"
+                messages.success(request, f"You're now {role} at {invite.business.name}.")
                 return redirect("dashboard")
     return render(request, "registration/invite.html", {
         "invite": invite, "existing": existing, "errors": errors,
@@ -295,20 +305,26 @@ def payment_settings(request):
         messages.success(request, "PayPal disconnected.")
         return redirect(f"{reverse('settings')}#payments")
 
+    ignored = []
     currency = request.POST.get("currency", business.currency)
-    if currency != business.currency and currency in Business.CURRENCIES:
-        if Tip.objects.filter(night__location__business=business).exists():
-            messages.error(request, "The currency can't change once you have tips: past amounts would be wrong.")
+    if currency != business.currency:
+        if currency not in Business.CURRENCIES:
+            ignored.append("the currency (pick one from the list)")
+        elif Tip.objects.filter(night__location__business=business).exists():
+            ignored.append("the currency (it can't change once you have tips: past amounts would be wrong)")
         else:
             business.currency = currency
     if request.POST.get("fee_mode") in Business.FeeMode.values:
         business.fee_mode = request.POST["fee_mode"]
     try:
         percent = Decimal(request.POST.get("card_fee_percent", "0") or "0")
-        if 0 <= percent <= 10:
-            business.card_fee_percent = percent
+        if percent.is_finite() and 0 <= percent <= 10:
+            business.card_fee_percent = percent.quantize(Decimal("0.01"))
+        else:
+            ignored.append("the card fee (a percent from 0 to 10)")
     except InvalidOperation:
-        pass
+        ignored.append("the card fee (a percent from 0 to 10)")
+    business.paypal_webhook_id = request.POST.get("paypal_webhook_id", business.paypal_webhook_id).strip()[:60]
 
     client_id = request.POST.get("paypal_client_id", "").strip()
     secret = request.POST.get("paypal_secret", "").strip()
@@ -318,17 +334,20 @@ def payment_settings(request):
         try:
             PayPalClient(client_id, secret, LIVE_API if live else SANDBOX_API).access_token()
         except PayPalError:
-            business.save()
-            messages.error(request, "PayPal didn't accept that client ID and secret. Check them in your PayPal "
-                                    "developer dashboard (Apps & Credentials) and that you picked the right mode.")
+            business.save()  # everything else in the form is kept
+            messages.error(request, "Your other payment settings were saved, but PayPal didn't accept that client "
+                                    "ID and secret. Check them in your PayPal developer dashboard (Apps & "
+                                    "Credentials) and that you picked the right mode.")
             return redirect(f"{reverse('settings')}#payments")
         business.paypal_client_id, business.paypal_live = client_id, live
         business.set_paypal_secret(secret)
         Change.log(request, f"Connected a {'live' if live else 'sandbox'} PayPal account")
-    business.paypal_webhook_id = request.POST.get("paypal_webhook_id", business.paypal_webhook_id).strip()[:60]
     business.save()
     Change.log(request, f"Changed payment settings: {business.currency}, {business.get_fee_mode_display().lower()}")
-    messages.success(request, "Payment settings saved.")
+    if ignored:
+        messages.warning(request, "Saved, except " + " and ".join(ignored) + ".")
+    else:
+        messages.success(request, "Payment settings saved.")
     return redirect(f"{reverse('settings')}#payments")
 
 
@@ -413,8 +432,14 @@ def two_step(request):
                 messages.error(request, "That code didn't match, so two-step sign-in stays on.")
         elif action == "cancel":
             request.session.pop("two_step_new", None)
-        return redirect(f"{reverse('settings')}#signin")
-    return redirect(f"{reverse('settings')}#signin")
+        return redirect(_signin_page(request))
+    if profile.is_lead:  # shift leads can't open Settings: their sign-in gets a page of its own
+        return render(request, "tips/signin.html", {"profile": profile, **two_step_setup_context(request)})
+    return redirect(_signin_page(request))
+
+
+def _signin_page(request):
+    return reverse("two_step") if request.user.manager.is_lead else f"{reverse('settings')}#signin"
 
 
 def two_step_setup_context(request):

@@ -180,3 +180,56 @@ class AutoCloseTests(AuditBase):
                                     auto_close_enabled=True)
             Location.objects.filter(pk=self.location.pk).update(auto_close_enabled=True)
             self.assertEqual(autoclose.run(), ["ok"])
+
+
+class ShownCorrectlyTests(AuditBase):
+    def test_review_check_follows_new_flags(self):
+        from tips.models import Message
+        night = self.make_night()
+        night.review_check = {"findings": [], "summary": "Ready to pay: nothing unusual found.", "by": "rules"}
+        night.save()
+        Message.objects.create(staff=self.staff["John"], location=self.location, night=night, text="I stayed late")
+        page = self.client.get(reverse("review", args=[night.pk]))
+        self.assertNotContains(page, "nothing unusual found")
+        self.assertContains(page, "flagged a problem")
+
+    def test_answering_the_last_flag_lifts_the_hold(self):
+        from tips.models import Message
+        night = self.make_night()
+        msg = Message.objects.create(staff=self.staff["John"], location=self.location, night=night, text="Hours?")
+        Night.objects.filter(pk=night.pk).update(hold="John flagged a problem.")
+        self.client.post(reverse("messages_page"), {"message": msg.pk, "reply": "Fixed"})
+        night.refresh_from_db()
+        self.assertEqual(night.hold, "")
+
+    def test_shift_leads_get_their_own_sign_in_page(self):
+        lead = make_manager("lead", self.location.business, owner=False)
+        lead.manager.level = "lead"
+        lead.manager.save()
+        self.client.force_login(lead)
+        self.assertContains(self.client.get(reverse("two_step")), "Turn on two-step sign-in")
+
+    def test_approving_a_change_never_shares_an_email(self):
+        from tips.models import Message
+        john, maria = self.staff["John"], self.staff["Maria"]
+        msg = Message.objects.create(staff=john, location=self.location, kind="payout",
+                                     payload={"method": "paypal", "email": maria.paypal_email}, text="pay me there")
+        self.client.post(reverse("messages_page"), {"message": msg.pk, "decision": "approve"})
+        john.refresh_from_db()
+        self.assertNotEqual(john.paypal_email, maria.paypal_email)
+
+    def test_salons_start_with_personal_tips(self):
+        self.client.post(reverse("location_add"), {"name": "Studio Nine", "business_type": "salon"})
+        self.assertEqual(Location.objects.get(name="Studio Nine").tip_mode, "personal")
+
+    def test_ask_knows_first_names(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        night = self.make_night()
+        Night.objects.filter(pk=night.pk).update(status=Night.Status.PAID, date=timezone.localdate() - timedelta(days=1))
+        page = self.client.get(reverse("reports") + "?period=this_year&q=How+much+did+maria+make")
+        self.assertContains(page, "Maria made")
+
+    def test_money_has_thousands_separators(self):
+        self.make_night(amounts=(1500, 250))
+        self.assertContains(self.client.get(reverse("history")), "1,750.00")

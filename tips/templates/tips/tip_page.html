@@ -10,25 +10,28 @@
     <div class="receipt">
       <div class="head">
         <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}{{ t.thanks }}{% endif %}</h2>
-        <p>{% if table %}{{ t.table }} {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
+        <p>{% if table %}{{ t.table }} {{ table }}, {% endif %}{% now "MONTH_DAY_FORMAT" %}, {% now "TIME_FORMAT" %}</p>
       </div>
       <hr>
       {% if tip_message %}<p style="margin:0 0 10px;font-weight:700">{{ tip_message }}</p>{% endif %}
-      {% if tip_mode == "pool" or not people %}
+      {% if nobody %}
+      <p class="flash warning" style="margin:0">{{ t.nobody }}</p>
+      {% elif tip_mode == "pool" or not people %}
       <p style="margin:0">{{ t.pool_note }}</p>
       {% else %}
       <p style="margin:0 0 10px" id="who-label">{% if tip_mode == "personal" %}{{ t.who_personal }}{% else %}{{ t.who_both }}{% endif %}</p>
       <div class="who-pick" role="group" aria-labelledby="who-label">
         {% if tip_mode == "both" %}<button type="button" class="who-btn" data-to="" aria-pressed="{% if not to %}true{% else %}false{% endif %}">{{ t.whole_team }}</button>{% endif %}
-        {% for m in people %}<button type="button" class="who-btn" data-to="{{ m.pk }}" aria-pressed="{% if to == m.pk %}true{% else %}false{% endif %}">{{ m.staff.name }}<small>{{ m.role_name }}</small></button>{% endfor %}
+        {% for m in people %}<button type="button" class="who-btn" data-to="{{ m.pk }}" aria-pressed="{% if to == m.pk %}true{% else %}false{% endif %}">{{ m.staff.name }}<small>{{ m.guest_role }}</small></button>{% endfor %}
       </div>
       <p class="small" style="margin:8px 0 0;color:#5c5f62" id="who-note">{% if tip_mode == "both" %}{{ t.note_both }}{% else %}{{ t.note_personal }}{% endif %}</p>
       {% endif %}
       <hr>
+      {% if not nobody %}
       {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">{{ t.cancelled }}</p>{% endif %}
       {% if tip_style == "percent" %}
       <label for="bill">{{ t.bill }}</label>
-      <input type="number" id="bill" min="1" max="10000" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00">
+      <div class="money-input"><span aria-hidden="true">{{ cur }}</span><input type="number" id="bill" min="1" max="10000" step="0.01" inputmode="decimal" placeholder="0.00"></div>
       <div class="amounts" role="group" aria-label="{{ t.tip_percent }}">
         {% for p in presets %}<button type="button" class="amount pct" data-percent="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">{{ p }}%<small>–</small></button>{% endfor %}
       </div>
@@ -38,9 +41,7 @@
       </div>
       {% endif %}
       <label for="custom">{{ t.other }}</label>
-      <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00">
-      {% if nobody %}
-      <p class="flash warning" style="margin:12px 0 0">{{ t.nobody }}</p>
+      <div class="money-input"><span aria-hidden="true">{{ cur }}</span><input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="0.00"></div>
       {% endif %}
       <div class="pay-buttons"{% if nobody %} hidden{% endif %}>
         <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
@@ -121,12 +122,14 @@
     amountButtons.forEach((b) => b.setAttribute("aria-pressed", "false"));
     percent = null;
     amount = e.target.value ? Number(e.target.value).toFixed(2) : "";
+    statusEl.textContent = Number(e.target.value) > 500 ? T.too_much.replace("{max}", CUR + "500") : "";
   });
 
   // Our server creates the PayPal order, so the amount can't be tampered with in the browser
   async function createOrder() {
     if (!amount && percent !== null) throw new Error(T.err_bill);
     if (!amount || Number(amount) < 1) throw new Error(T.err_amount);
+    if (Number(amount) > 500) throw new Error(T.too_much.replace("{max}", CUR + "500"));
     if (MODE === "personal" && whoButtons.length && !to) throw new Error(T.err_who);
     const res = await fetch("{% url 'api_create_order' %}", {
       method: "POST",

@@ -15,7 +15,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from . import ai
-from .models import Night, Tip
+from .models import Night, Role, Tip
 
 log = logging.getLogger("tips.check")
 
@@ -63,8 +63,11 @@ def findings_for(night):
     if refunded.exists():
         found.append({"level": WARN, "text": f"{refunded.count()} tip(s) were refunded to guests and left out."})
     on_roster = {s.staff_id for s in shifts}
+    # roles the rules leave out on purpose (managers, "never gets tips") aren't a surprise
+    left_out = set((night.rule_set.rules or {}).get("excluded_roles", [])) if night.rule_set else set()
+    left_out |= set(Role.objects.filter(location=night.location, no_tips=True).values_list("key", flat=True))
     for share in shares:
-        if share.amount == 0 and share.hours > 0:
+        if share.amount == 0 and share.hours > 0 and share.role not in left_out:
             found.append({"level": WARN, "text": f"{share.staff.name} worked {share.hours.normalize():f}h as "
                                                  f"{share.role_name.lower()} but gets nothing: no rule covers "
                                                  "that role."})
@@ -101,6 +104,30 @@ def _usual_total(night):
     return Decimal(median(totals)) if len(totals) >= 3 else None
 
 
+def _summary(found):
+    stops = [f for f in found if f["level"] == STOP]
+    return ("Ready to pay: nothing unusual found." if not found else
+            f"Look at {len(stops)} thing{'s' if len(stops) != 1 else ''} before paying." if stops
+            else "Ready to pay, with a few things worth a look.")
+
+
+def live(night):
+    """The stored check with the rule findings looked at again now (someone may have flagged a problem or
+    confirmed their PayPal since the split). The AI's own notes are kept; its summary only while the rule
+    findings are still the ones it saw."""
+    stored = dict(night.review_check or {})
+    if night.status != Night.Status.REVIEW:
+        return stored
+    fresh = findings_for(night)
+    ai_notes = [f for f in stored.get("findings", []) if f.get("ai")]
+    before = [f["text"] for f in stored.get("findings", []) if not f.get("ai")]
+    stored["findings"] = fresh + ai_notes
+    if before != [f["text"] for f in fresh] or not stored.get("summary"):
+        stored["summary"] = _summary(stored["findings"])
+        stored["by"] = "rules"
+    return stored
+
+
 def run(night):
     """Check a split shift and store the result on it. Returns the stored dict."""
     found = findings_for(night)
@@ -118,10 +145,7 @@ def run(night):
         except ai.AIError as exc:
             log.warning("AI check failed, using the rules only: %s", exc)
     if not result["summary"]:
-        stops = [f for f in found if f["level"] == STOP]
-        result["summary"] = ("Ready to pay: nothing unusual found." if not found else
-                             f"Look at {len(stops)} thing{'s' if len(stops) != 1 else ''} before paying." if stops
-                             else "Ready to pay, with a few things worth a look.")
+        result["summary"] = _summary(found)
     result["ok"] = not any(f["level"] == STOP for f in found)
     night.review_check = result
     night.save(update_fields=["review_check"])

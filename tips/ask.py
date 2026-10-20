@@ -6,6 +6,7 @@ AI_MODE=mock   -> a small offline reader handles the common questions with exact
 The numbers always come from reports.py (plain sums). The AI only reads and explains them.
 """
 import calendar
+from collections import Counter
 import re
 from datetime import date, timedelta
 from typing import Literal, Optional
@@ -163,8 +164,12 @@ def _offline(question, locations, today):
     if not r["shift_count"]:
         return f"There are no closed shifts {when} yet."
 
+    firsts = Counter(p["name"].split()[0].lower() for p in r["people"] if p["name"].split())
     for p in r["people"]:
-        if re.search(rf"\b{re.escape(p['name'].lower())}\b", q):
+        first = p["name"].split()[0].lower() if p["name"].split() else ""
+        full_match = re.search(rf"\b{re.escape(p['name'].lower())}\b", q)
+        first_match = first and firsts[first] == 1 and re.search(rf"\b{re.escape(first)}\b", q)
+        if full_match or first_match:
             extra = f" ({_money(p['personal'])} of it personal tips)" if p["personal"] else ""
             rate = f", about {_money(p['per_hour'])} an hour from shared tips" if p["per_hour"] else ""
             return (f"{p['name']} made {_money(p['total'])} {when}{extra}: {p['shifts']} shift"
@@ -188,15 +193,19 @@ def _offline(question, locations, today):
         return f"{tied[0]} earned the most {when}: {_money(best)}.{runner}"
 
     if re.search(r"\b(average|avg|per shift)\b", q):
-        return f"The average shift {when} brought in {_money(r['per_shift'])} in tips ({r['shift_count']} shifts)."
+        return f"The average shift {when} brought in {_money(r['per_shift'])} in tips ({_count(r['shift_count'], 'shift')})."
 
     if re.search(r"\b(cash|card)\b", q):
         sources = ", ".join(f"{label}: {_money(v)}" for label, v in r["by_source"])
         return f"Tips by type {when}: {sources}."
 
     if re.search(r"\b(total|how much|collected|all tips|tips)\b", q):
-        return (f"Total tips {when}: {_money(r['collected'])} over {r['shift_count']} shifts, "
+        return (f"Total tips {when}: {_money(r['collected'])} over {_count(r['shift_count'], 'shift')}, "
                 f"{_money(r['paid_out'])} of it paid out so far.")
 
-    return ("Offline I can answer questions like: " + "; ".join(f'"{e}"' for e in EXAMPLES)
-            + ". Turn on Claude (AI_MODE=claude) to ask anything.")
+    return ("The built-in assistant can answer questions like: " + "; ".join(f'"{e}"' for e in EXAMPLES)
+            + ". With Claude turned on you can ask anything.")
+
+
+def _count(n, word):
+    return f"{n} {word}{'' if n == 1 else 's'}"

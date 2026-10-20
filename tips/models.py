@@ -393,7 +393,7 @@ class Night(models.Model):
     class Status(models.TextChoices):
         OPEN = "open", "Open (collecting tips)"
         CLOSED = "closed", "Closed, needs who worked"
-        REVIEW = "review", "Split ready for review"
+        REVIEW = "review", "Ready to approve"
         PAYING = "paying", "Paying out"
         PAID = "paid", "Paid"
 
@@ -605,6 +605,15 @@ class PayoutItem(models.Model):
     def failed(self):
         return self.status in self.FAILED
 
+    LABELS = {"SUCCESS": "Arrived", "UNCLAIMED": "Not accepted yet", "PENDING": "Sending", "PROCESSING": "Sending",
+              "NEW": "Sending", "SENDING": "Sending", "ONHOLD": "On hold at PayPal", "FAILED": "Failed",
+              "RETURNED": "Came back", "BLOCKED": "Blocked by PayPal", "REFUNDED": "Taken back",
+              "REVERSED": "Reversed", "DENIED": "Refused by PayPal", "UNKNOWN": "Checking with PayPal"}
+
+    @property
+    def status_label(self):
+        return self.LABELS.get(self.status, self.status.title())
+
 
 class WebhookEvent(models.Model):
     """Every PayPal webhook we receive (kept so duplicates are ignored)."""
@@ -690,7 +699,8 @@ class Change(models.Model):
     def log(cls, request_or_who, what, location=None):
         if hasattr(request_or_who, "user"):
             request = request_or_who
-            who = request.user.get_username() if request.user.is_authenticated else "someone"
+            user = request.user
+            who = (user.get_full_name() or user.get_username()) if user.is_authenticated else "someone"
             location = location or getattr(request, "location", None)
         else:
             who = request_or_who

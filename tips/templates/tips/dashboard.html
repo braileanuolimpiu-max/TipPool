@@ -19,10 +19,10 @@
   <div class="stack">
     <section aria-label="Tips so far">
       <div class="counter">
-        <div><div class="big"><span class="hl">{{ cur }}{{ total }}</span></div><div class="cap">in tips this shift</div></div>
+        <div><div class="big"><span class="hl">{{ cur }}{{ total|money }}</span></div><div class="cap">in tips this shift</div></div>
         <div class="side">
-          <div><b>{{ tip_count }}</b><span class="small muted">guests tipped</span></div>
-          <div><b>{% if average %}{{ cur }}{{ average }}{% else %}–{% endif %}</b><span class="small muted">average tip</span></div>
+          <div><b>{{ tip_count }}</b><span class="small muted">{% if tip_count == 1 %}guest tipped{% else %}guests tipped{% endif %}</span></div>
+          <div><b>{% if average %}{{ cur }}{{ average|money }}{% else %}–{% endif %}</b><span class="small muted">average tip</span></div>
         </div>
       </div>
     </section>
@@ -46,7 +46,7 @@
     {% if not setup_done and not is_lead %}
     <section class="panel">
       <div class="panel-head"><h2>Before your first close-out</h2>
-        {% if can_load_sample %}<form method="post" action="{% url 'load_sample' %}" data-confirm="Fill this business with a sample team, rules and three weeks of shifts? Good for looking around before your real team starts.">{% csrf_token %}<button class="btn btn-secondary small">Load sample data</button></form>{% endif %}</div>
+        {% if can_load_sample %}<form method="post" action="{% url 'load_sample' %}" data-confirm="Fill this location with a sample restaurant team (it switches the roles to restaurant ones), tip rules and three weeks of shifts? Good for looking around before your real team starts.">{% csrf_token %}<button class="btn btn-secondary small">Load sample data</button></form>{% endif %}</div>
       <ul class="checklist">
         {% for item in setup %}
         <li class="{% if item.done %}is-done{% endif %}">
@@ -62,9 +62,9 @@
     <section class="panel">
       <div class="panel-head"><h2>Tips, last {{ recent|length }} shift{{ recent|length|pluralize }}</h2><a class="small" href="{% url 'reports' %}">Reports</a></div>
       <div class="panel-body">
-        <div class="bars" role="img" aria-label="Tips per shift: {% for r in recent %}{{ r.night.date|date:'M j' }} {{ cur }}{{ r.total }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+        <div class="bars" role="img" aria-label="Tips per shift: {% for r in recent %}{{ r.night.date|date:'M j' }} {{ cur }}{{ r.total|money }}{% if not forloop.last %}, {% endif %}{% endfor %}">
           {% for r in recent %}
-          <div class="bar-col" tabindex="0" data-tip="{{ r.night.date|date:'D M j' }} · {{ cur }}{{ r.total }}">
+          <div class="bar-col" tabindex="0" data-tip="{{ r.night.date|date:'D M j' }} · {{ cur }}{{ r.total|money }}">
             <span class="bar-val">{% if r.label %}{{ cur }}{{ r.total|floatformat:"0" }}{% endif %}</span>
             <span class="bar" style="--h:{{ r.height }}"></span>
             <span class="bar-day">{{ r.night.date|date:"D" }}</span>
@@ -81,7 +81,7 @@
       <ul class="rows todo">
         {% for n in waiting %}
         <li><span class="todo-tag {% if n.hold %}stop{% endif %}">{% if n.hold %}On hold{% elif n.status == "closed" %}Who worked{% elif n.status == "review" %}Approve{% else %}Paying{% endif %}</span>
-          <div style="flex:1;min-width:0"><strong>{{ n }}</strong><div class="small muted">{% if n.hold %}{{ n.hold }}{% else %}{{ cur }}{{ n.tip_total }} in tips{% endif %}</div></div>
+          <div style="flex:1;min-width:0"><strong>{{ n }}</strong><div class="small muted">{% if n.hold %}{{ n.hold }}{% else %}{{ cur }}{{ n.tip_total|money }} in tips{% endif %}</div></div>
           <a class="small" href="{% if n.status == 'closed' %}{% url 'close_night_pk' n.pk %}{% elif n.status == 'review' %}{% url 'review' n.pk %}{% else %}{% url 'payout_status' n.pk %}{% endif %}">Open</a></li>
         {% endfor %}
         {% if alert_count %}<li><span class="todo-tag stop">Alert</span><div style="flex:1"><strong>{{ alert_count }} alert{{ alert_count|pluralize }}</strong><div class="small muted">Payouts, refunds or disputes</div></div><a class="small" href="{% url 'messages_page' %}">Open</a></li>{% endif %}
@@ -112,12 +112,12 @@
           <div class="line">
             <span class="what">{{ tip.created_at|time:"g:i A" }}  {% if tip.source != "paypal" %}{{ tip.get_source_display }}{% elif tip.table %}Table {{ tip.table }}{% else %}Walk-up{% endif %}
               {% if tip.staff %}<small>for {{ tip.staff.name }}</small>{% elif tip.payer_name %}<small>{{ tip.payer_name }}</small>{% endif %}</span>
-            <span class="amt">{{ cur }}{{ tip.amount }}</span>
+            <span class="amt">{{ cur }}{{ tip.amount|money }}</span>
           </div>
           {% endfor %}
         </div>
         <hr>
-        <div class="line total"><span>Total</span><span class="amt-hl">{{ cur }}{{ total }}</span></div>
+        <div class="line total"><span>Total</span><span class="amt-hl">{{ cur }}{{ total|money }}</span></div>
         {% else %}
         <p style="text-align:center;margin:18px 0">No tips yet this shift.</p>
         <p class="foot">Each tip prints here the moment a guest pays with PayPal or Venmo.</p>

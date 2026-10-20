@@ -1,0 +1,8 @@
+{% extends "app.html" %}
+{% block title %}Your sign-in{% endblock %}
+{% block content %}
+<header class="page-head"><div><h1>Your sign-in</h1><p>Your password and two-step sign-in for {{ business.name }}.</p></div></header>
+<div class="settings-single">
+{% include "tips/_signin_section.html" %}
+</div>
+{% endblock %}

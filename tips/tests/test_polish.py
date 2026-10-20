@@ -12,6 +12,7 @@ class GuestLanguageTests(TestCase):
     def setUp(self):
         self.location = Location.default()
         self.url = reverse("tip_page") + "?at=" + self.location.slug
+        hire("Sam", "server", self.location)  # a location with nobody on the team can't take tips
 
     def test_every_language_has_every_string(self):
         for code in guest_i18n.LANGS:

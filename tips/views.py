@@ -27,7 +27,7 @@ from . import ai, autoclose, guest_i18n, hours as hours_from, roles as role_pres
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, two_step_setup_context
-from .check import blocking as check_blocking
+from .check import blocking as check_blocking, live as check_live
 from .middleware import public_location
 from .ratelimit import hit, limited
 from .paypal import PayPalError, checkout_config, get_client, webhook_id_for
@@ -49,6 +49,7 @@ def dashboard(request):
     night = Night.current(location)
     _sync_tips(night)
     tips = list(night.tips.filter(status=Tip.Status.COMPLETED).select_related("staff"))
+    guest_tips = [t for t in tips if t.source == Tip.Source.PAYPAL]
     total = night.tip_total
     staff_count = Membership.objects.filter(location=location, active=True).count()
     rule_set = TipRuleSet.active(location)
@@ -56,9 +57,10 @@ def dashboard(request):
     return render(request, "tips/dashboard.html", {
         "night": night,
         "tips": tips[:40],
-        "tip_count": len(tips),
+        "tip_count": len(guest_tips),
         "total": total,
-        "average": (total / len(tips)).quantize(Decimal("0.01")) if tips else None,
+        "average": (sum((t.amount for t in guest_tips), Decimal("0")) / len(guest_tips)).quantize(Decimal("0.01"))
+                   if guest_tips else None,
         "unfinished": Night.objects.filter(location=location, status__in=[
             Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).first(),
         "next_close": autoclose.next_close(location),
@@ -145,9 +147,12 @@ def tip_page(request):
         members = [m for m in Membership.objects.filter(location=location, active=True).select_related("staff")
                    if m.default_role not in no_tips]
         people = sorted(members, key=lambda m: (m.staff_id not in working, m.staff.name))
+    has_team = Membership.objects.filter(location=location, active=True).exists()
     to = request.GET.get("to", "")
     style, values = location.tip_buttons
     lang = guest_i18n.pick(request)
+    for m in people:
+        m.guest_role = guest_i18n.role(m.role_name, lang)
     with translation.override(lang):  # month names in the guest's language too
         response = render(request, "tips/tip_page.html", {
             **_guest_language(request, lang),
@@ -157,7 +162,7 @@ def tip_page(request):
             "at": location.slug,
             "tip_style": style,
             # personal tips only, and nobody to pick: tipping can't work right now
-            "nobody": location.tip_mode == Location.TipMode.PERSONAL and not people,
+            "nobody": not has_team or (location.tip_mode == Location.TipMode.PERSONAL and not people),
             "presets": values,
             "default_pick": values[1] if len(values) > 1 else values[0],
             "tip_message": location.tip_message,
@@ -369,7 +374,8 @@ def qr_print(request):
         items = [shared] * copies
     per_page = QR_LAYOUTS[layout][1]
     pages = [items[i:i + per_page] for i in range(0, len(items), per_page)]
-    note = footer or ("Shared with the whole team" if location.tip_mode == Location.TipMode.POOL else
+    note = footer or ("Goes to this person in full" if which == "people" else
+                      "Shared with the whole team" if location.tip_mode == Location.TipMode.POOL else
                       "Goes to the person you choose")
     return render(request, "tips/qr_print.html", {
         "layouts": QR_LAYOUTS, "layout": layout, "paper": paper, "copies": copies, "which": which,
@@ -433,6 +439,8 @@ def staff_role(request, pk):
         member.save(update_fields=["default_role"])
         Change.log(request, f"Changed {member.staff.name}'s usual role to {member.role_name}")
         messages.success(request, f"{member.staff.name} is now {member.role_name.lower()}.")
+    else:
+        messages.error(request, "Pick one of this location's roles.")
     return redirect("staff_list")
 
 
@@ -477,6 +485,8 @@ def staff_edit(request, pk):
         person.paypal_email = email
         person.payout_method = StaffMember.PayoutMethod.PAYPAL
         person.payout_confirmed_at = None  # they confirm the new address themselves
+    if not name:
+        messages.warning(request, "The name can't be empty, so it wasn't changed.")
     if changes:
         person.save()
         Change.log(request, f"Edited {person.name}: " + "; ".join(changes))
@@ -816,7 +826,7 @@ def review(request, pk):
         "fee_mode": business.fee_mode, "balance": balance,
         "balance_short": balance is not None and balance < paid_total,
         "unconfirmed": services.unconfirmed(shares),
-        "check": night.review_check, "stops": check_blocking(night) if night.status == Night.Status.REVIEW else [],
+        "check": check_live(night), "stops": check_blocking(night) if night.status == Night.Status.REVIEW else [],
         "paid_total": paid_total,
         "paying_count": sum(1 for s in shares if s.amount > 0),
         "flags": night.messages.filter(resolved_at__isnull=True).select_related("staff"),
@@ -966,6 +976,11 @@ def settings_page(request):
     from datetime import time as dtime
     restaurant = request.location
     if request.method == "POST":
+        business_name = " ".join(request.POST.get("business_name", "").split())[:80]
+        if business_name and request.user.manager.is_owner and business_name != request.business.name:
+            Change.log(request, f"Renamed the business from {request.business.name} to {business_name}")
+            request.business.name = business_name
+            request.business.save(update_fields=["name"])
         restaurant.name = request.POST.get("name", "").strip()[:80]
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
         restaurant.use_usual_schedule = bool(request.POST.get("use_usual_schedule"))
@@ -1239,8 +1254,8 @@ def location_add(request):
     if business_type not in role_presets.PRESETS:
         business_type = "restaurant"
     location = Location.objects.create(business=request.business, name=name, slug=Location.new_slug(name),
-                                       business_type=business_type,
-                                       timezone=request.location.timezone)
+                                       business_type=business_type, timezone=request.location.timezone,
+                                       tip_mode=role_presets.default_tip_mode(business_type))
     role_presets.apply_preset(location, business_type)
     Change.log(request, f"Added the location {name}", location=location)
     request.session["location_id"] = location.pk

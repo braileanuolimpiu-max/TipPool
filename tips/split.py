@@ -155,6 +155,11 @@ def calculate_split(total, shifts, rules, never_in_pool=frozenset(), role_names=
     for pool in rules.get("pools", []):
         pool_amount = total * Decimal(str(pool["percent"])) / 100
         members = members_of(pool["roles"])
+        barred = [p for p in people.values() if p.role in {_norm(r) for r in pool["roles"]} and p.role in excluded]
+        if not members and barred:
+            notes.append(f"The {pool['percent']}% for {pool['name']} goes to the rest of the team: "
+                         f"{', '.join(sorted({label(p.role) for p in barred}))} can't share in the tip pool.")
+            continue
         if not members:
             notes.append(f"Nobody worked as {', '.join(label(_norm(r)) for r in pool['roles'])} this shift, so the "
                          f"{pool['percent']}% for {pool['name']} goes to the rest of the team.")

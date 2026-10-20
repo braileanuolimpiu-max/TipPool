@@ -31,8 +31,12 @@
         <div class="setting-intro"><span class="setting-no">01</span><h2>Your business</h2>
           <p>The name guests see on the tip page and on your printed codes, and the time zone for closing times.</p></div>
         <div class="setting-body form-grid">
-          <div><label for="name">Name</label>
-            <input type="text" id="name" name="name" value="{{ restaurant.name }}" maxlength="80" placeholder="e.g. Luna Trattoria, Studio 9 Salon"></div>
+          {% if is_owner %}<div><label for="business_name">Business name</label>
+            <input type="text" id="business_name" name="business_name" value="{{ business.name }}" maxlength="80" required>
+            <p class="hint">Your account, emails and reports. Owner only.</p></div>{% endif %}
+          <div><label for="name">Location name</label>
+            <input type="text" id="name" name="name" value="{{ restaurant.name }}" maxlength="80" placeholder="e.g. Luna Trattoria, Studio 9 Salon">
+            <p class="hint">What guests see on this location's tip page and printed codes.</p></div>
           <div><label for="timezone">Time zone</label>
             <select id="timezone" name="timezone">
               {% for value, label in timezones %}<option value="{{ value }}" {% if restaurant.timezone == value %}selected{% endif %}>{{ label }} ({{ value }})</option>{% endfor %}
@@ -48,7 +52,7 @@
           <div class="choice-grid three">
             <label class="choice"><input type="radio" name="tip_style" value="" {% if not restaurant.tip_style %}checked{% endif %}>
               <span><strong>The usual for a {{ type_label }}</strong>
-                <span class="small muted">{% if usual_tips.0 == "percent" %}{% for v in usual_tips.1 %}{{ v }}%{% if not forloop.last %}, {% endif %}{% endfor %} of the bill{% else %}{% for v in usual_tips.1 %}{{ cur }}{{ v }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></span></label>
+                <span class="small muted">{% if usual_tips.0 == "percent" %}{% for v in usual_tips.1 %}{{ v }}%{% if not forloop.last %}, {% endif %}{% endfor %} of the bill{% else %}{% for v in usual_tips.1 %}{{ cur }}{{ v|money }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span></span></label>
             {% for value, label in tip_styles %}
             <label class="choice"><input type="radio" name="tip_style" value="{{ value }}" {% if restaurant.tip_style == value %}checked{% endif %}>
               <span><strong>{% if value == "amounts" %}Fixed amounts{% else %}Percent of the bill{% endif %}</strong>
@@ -207,7 +211,7 @@
           <div><label for="loc_name">Add a location</label>
             <input type="text" id="loc_name" name="name" maxlength="80" required placeholder="e.g. Luna Café, Downtown"></div>
           <div><label for="loc_type">Type of business</label>
-            <select id="loc_type" name="business_type">{% for value, label in presets %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+            <select id="loc_type" name="business_type">{% for value, label in presets %}<option value="{{ value }}"{% if value == restaurant.business_type %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
           <button class="btn btn-secondary">Add location</button>
         </form>
       </div>
@@ -215,7 +219,7 @@
 
     <section class="panel setting" id="managers">
       <div class="setting-intro"><span class="setting-no">08</span><h2>Managers</h2>
-        <p>Who can sign in to {{ business.name }}. <strong>Managers</strong> do everything except payments settings. <strong>Shift leads</strong> run the shift (who worked, card and cash tips, codes) but can't pay, change rules or see reports. Staff don't need a login.</p></div>
+        <p>Who can sign in to {{ business.name }}. <strong>Managers</strong> run everything except payment settings and managing other managers (owner only). <strong>Shift leads</strong> run the shift (who worked, card and cash tips, codes) but can't pay, change rules or see reports. Staff don't need a login.</p></div>
       <div class="setting-body stack">
         <ul class="rows boxed">
           {% for m in managers %}
@@ -252,41 +256,6 @@
       </div>
     </section>
 
-    <section class="panel setting" id="signin">
-      <div class="setting-intro"><span class="setting-no">10</span><h2>Your sign-in</h2>
-        <p>Two-step sign-in asks for a code from your phone after your password, so a stolen password alone isn't enough.{% if profile.is_owner %} Recommended for owners: you control payouts.{% endif %}</p></div>
-      <div class="setting-body stack">
-        {% if two_step_qr %}
-        <div class="two-step-setup">
-          <img src="{{ two_step_qr }}" alt="Code to scan with your authenticator app" width="168" height="168">
-          <div class="stack" style="gap:10px">
-            <p style="margin:0"><strong>1.</strong> Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…).</p>
-            <p class="small muted" style="margin:0">Can't scan? Type this key: <code>{{ two_step_secret }}</code></p>
-            <form method="post" action="{% url 'two_step' %}" class="inline-form">{% csrf_token %}
-              <div><label for="code_new"><strong>2.</strong> Type the 6-digit code it shows</label>
-                <input type="text" id="code_new" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required placeholder="123 456"></div>
-              <button class="btn btn-primary" name="action" value="confirm">Turn on</button>
-              <button class="btn btn-quiet" name="action" value="cancel" formnovalidate>Cancel</button>
-            </form>
-          </div>
-        </div>
-        {% elif profile.totp_enabled %}
-        <p style="margin:0"><span class="pill ok">On</span> Two-step sign-in is on for {{ user.email|default:user.username }}.</p>
-        <form method="post" action="{% url 'two_step' %}" class="inline-form">{% csrf_token %}
-          <div><label for="code_off">To turn it off, type a current code</label>
-            <input type="text" id="code_off" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required placeholder="123 456"></div>
-          <button class="btn btn-secondary" name="action" value="disable">Turn off</button>
-        </form>
-        {% else %}
-        <form method="post" action="{% url 'two_step' %}" class="actions">{% csrf_token %}
-          <span class="pill wait">Off</span>
-          <button class="btn btn-primary" name="action" value="start">Turn on two-step sign-in</button>
-        </form>
-        {% endif %}
-        <p class="hint tight"><a href="{% url 'password_change' %}">Change your password</a></p>
-      </div>
-    </section>
-
     <section class="panel setting wide" id="changes">
       <div class="setting-intro"><span class="setting-no">09</span><h2>Recent changes</h2>
         <p>Who changed rules, hours, tips, the team, settings or payouts at {{ restaurant.display_name }}, including automatic close-outs.</p></div>
@@ -305,6 +274,8 @@
         {% endif %}
       </div>
     </section>
+
+    {% include "tips/_signin_section.html" with number="10" %}
   </div>
 </div>
 {% endblock %}

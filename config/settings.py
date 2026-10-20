@@ -85,6 +85,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'tips.context.app_context',
             ],
+            'builtins': ['tips.templatetags.money'],
         },
     },
 ]

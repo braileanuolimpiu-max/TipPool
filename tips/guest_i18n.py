@@ -35,7 +35,7 @@ STRINGS = {
         "done_personal": "Thank you. It goes in full to {name}, paid straight to their PayPal at the end of the shift.",
         "confirming": "Your {amount} tip is being confirmed by PayPal. You can close this page.",
         "not_found": "We couldn't find this tip. If you were charged, your receipt from PayPal is on its way.",
-        "another": "Leave another tip", "close_page": "You can close this page.",
+        "another": "Leave another tip", "too_much": 'The most you can tip here is {max}.', "close_page": "You can close this page.",
     },
     "es": {
         "title": "Dejar una propina", "thanks": "Gracias", "table": "Mesa",
@@ -64,7 +64,7 @@ STRINGS = {
         "done_personal": "Gracias. Va íntegra a {name}, pagada directamente a su PayPal al final del turno.",
         "confirming": "PayPal está confirmando tu propina de {amount}. Puedes cerrar esta página.",
         "not_found": "No encontramos esta propina. Si se te cobró, tu recibo de PayPal está en camino.",
-        "another": "Dejar otra propina", "close_page": "Puedes cerrar esta página.",
+        "another": "Dejar otra propina", "too_much": 'Lo máximo que puedes dejar aquí es {max}.', "close_page": "Puedes cerrar esta página.",
     },
     "fr": {
         "title": "Laisser un pourboire", "thanks": "Merci", "table": "Table",
@@ -94,7 +94,7 @@ STRINGS = {
         "done_personal": "Merci. Il revient en entier à {name}, versé directement sur son PayPal à la fin du service.",
         "confirming": "PayPal confirme votre pourboire de {amount}. Vous pouvez fermer cette page.",
         "not_found": "Nous n'avons pas trouvé ce pourboire. Si vous avez été débité, votre reçu PayPal arrive.",
-        "another": "Laisser un autre pourboire", "close_page": "Vous pouvez fermer cette page.",
+        "another": "Laisser un autre pourboire", "too_much": 'Le maximum ici est de {max}.', "close_page": "Vous pouvez fermer cette page.",
     },
     "de": {
         "title": "Trinkgeld geben", "thanks": "Danke", "table": "Tisch",
@@ -125,7 +125,7 @@ STRINGS = {
                          "gezahlt.",
         "confirming": "PayPal bestätigt Ihr Trinkgeld von {amount}. Sie können diese Seite schließen.",
         "not_found": "Wir konnten dieses Trinkgeld nicht finden. Falls Sie belastet wurden, kommt Ihre PayPal-Quittung.",
-        "another": "Noch ein Trinkgeld geben", "close_page": "Sie können diese Seite schließen.",
+        "another": "Noch ein Trinkgeld geben", "too_much": 'Hier sind höchstens {max} möglich.', "close_page": "Sie können diese Seite schließen.",
     },
     "it": {
         "title": "Lascia una mancia", "thanks": "Grazie", "table": "Tavolo",
@@ -153,7 +153,7 @@ STRINGS = {
         "done_personal": "Grazie. Va tutta a {name}, pagata direttamente sul suo PayPal a fine turno.",
         "confirming": "PayPal sta confermando la tua mancia di {amount}. Puoi chiudere questa pagina.",
         "not_found": "Non troviamo questa mancia. Se ti è stato addebitato, la ricevuta PayPal è in arrivo.",
-        "another": "Lascia un'altra mancia", "close_page": "Puoi chiudere questa pagina.",
+        "another": "Lascia un'altra mancia", "too_much": 'Il massimo qui è {max}.', "close_page": "Puoi chiudere questa pagina.",
     },
     "pt": {
         "title": "Deixar uma gorjeta", "thanks": "Obrigado", "table": "Mesa",
@@ -182,7 +182,7 @@ STRINGS = {
         "done_personal": "Obrigado. Vai inteira para {name}, paga diretamente no PayPal no fim do turno.",
         "confirming": "O PayPal está a confirmar a sua gorjeta de {amount}. Pode fechar esta página.",
         "not_found": "Não encontrámos esta gorjeta. Se foi cobrado, o recibo do PayPal está a caminho.",
-        "another": "Deixar outra gorjeta", "close_page": "Pode fechar esta página.",
+        "another": "Deixar outra gorjeta", "too_much": 'O máximo aqui é {max}.', "close_page": "Pode fechar esta página.",
     },
     "ro": {
         "title": "Lasă un bacșiș", "thanks": "Mulțumim", "table": "Masa",
@@ -209,12 +209,12 @@ STRINGS = {
         "done_personal": "Mulțumim. Merge integral la {name}, plătit direct în PayPal la finalul turei.",
         "confirming": "PayPal confirmă bacșișul tău de {amount}. Poți închide pagina.",
         "not_found": "Nu am găsit acest bacșiș. Dacă ai fost taxat, chitanța PayPal e pe drum.",
-        "another": "Mai lasă un bacșiș", "close_page": "Poți închide pagina.",
+        "another": "Mai lasă un bacșiș", "too_much": 'Maximul aici este {max}.', "close_page": "Poți închide pagina.",
     },
 }
 
 # strings the page's script needs
-JS_KEYS = ("err_bill", "err_amount", "err_who", "err_start", "completing", "err_generic", "pay_cancelled",
+JS_KEYS = ("too_much", "err_bill", "err_amount", "err_who", "err_start", "completing", "err_generic", "pay_cancelled",
            "err_paypal", "err_load")
 
 
@@ -242,3 +242,37 @@ def remember(response, request, lang):
     if request.GET.get("lang", "")[:5].lower() == lang:
         response.set_cookie(COOKIE, lang, max_age=180 * 24 * 3600, samesite="Lax", secure=request.is_secure())
     return response
+
+
+# the usual role names in each language (custom names are shown as the business wrote them)
+ROLE_NAMES = {
+    'assistant': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Asistente', 'Assistant(e)', 'Assistenz', 'Assistente', 'Assistente', 'Asistent'))),
+    'baker': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Panadero/a', 'Boulanger/ère', 'Bäcker/in', 'Panettiere', 'Padeiro/a', 'Brutar'))),
+    'barback': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Ayudante de barra', 'Commis de bar', 'Barhilfe', 'Aiuto barman', 'Ajudante de bar', 'Ajutor de barman'))),
+    'barista': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Barista', 'Barista', 'Barista', 'Barista', 'Barista', 'Barista'))),
+    'bartender': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Bartender', 'Barman', 'Barkeeper', 'Barman', 'Barman', 'Barman'))),
+    'bellhop': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Botones', 'Bagagiste', 'Page', 'Facchino', 'Bagageiro', 'Bagajist'))),
+    'busser': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Ayudante de sala', 'Commis de salle', 'Servicehilfe', 'Commis di sala', 'Ajudante de sala', 'Ajutor de ospătar'))),
+    'cashier': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Cajero/a', 'Caissier/ère', 'Kassierer/in', 'Cassiere/a', 'Caixa', 'Casier'))),
+    'concierge': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Conserje', 'Concierge', 'Concierge', 'Concierge', 'Concierge', 'Concierge'))),
+    'cook': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Cocinero/a', 'Cuisinier/ère', 'Koch/Köchin', 'Cuoco/a', 'Cozinheiro/a', 'Bucătar'))),
+    'dishwasher': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Lavaplatos', 'Plongeur/euse', 'Spüler/in', 'Lavapiatti', 'Copeiro/a', 'Spălător de vase'))),
+    'dispatcher': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Despachador/a', 'Répartiteur/trice', 'Disponent/in', 'Dispatcher', 'Despachante', 'Dispecer'))),
+    'door staff': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Portero/a', 'Portier', 'Türsteher/in', 'Buttafuori', 'Porteiro/a', 'Portar'))),
+    'driver': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Repartidor/a', 'Livreur/euse', 'Fahrer/in', 'Fattorino', 'Estafeta', 'Curier'))),
+    'food runner': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Runner', 'Runner', 'Läufer/in', 'Runner', 'Runner', 'Runner'))),
+    'front desk agent': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Recepcionista', 'Réceptionniste', 'Rezeption', 'Receptionist', 'Rececionista', 'Recepționer'))),
+    'helper': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Ayudante', 'Aide', 'Helfer/in', 'Aiutante', 'Ajudante', 'Ajutor'))),
+    'host': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Anfitrión/a', 'Accueil', 'Empfang', 'Accoglienza', 'Anfitrião/ã', 'Hostess'))),
+    'housekeeper': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Camarero/a de piso', 'Femme/valet de chambre', 'Housekeeping', 'Cameriere/a ai piani', 'Empregado/a de andares', 'Cameristă'))),
+    'massage therapist': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Masajista', 'Masseur/euse', 'Masseur/in', 'Massaggiatore/trice', 'Massagista', 'Maseur'))),
+    'nail tech': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Manicurista', 'Prothésiste ongulaire', 'Nageldesigner/in', 'Onicotecnica', 'Manicura', 'Manichiuristă'))),
+    'receptionist': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Recepcionista', 'Réceptionniste', 'Rezeption', 'Receptionist', 'Rececionista', 'Recepționer'))),
+    'server': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Camarero/a', 'Serveur/euse', 'Kellner/in', 'Cameriere/a', 'Empregado/a de mesa', 'Ospătar'))),
+    'stylist': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Estilista', 'Coiffeur/euse', 'Friseur/in', 'Parrucchiere/a', 'Cabeleireiro/a', 'Coafor'))),
+    'valet': dict(zip(("es", "fr", "de", "it", "pt", "ro"), ('Aparcacoches', 'Voiturier', 'Parkservice', 'Parcheggiatore', 'Arrumador', 'Valet'))),
+}
+
+
+def role(name, lang):
+    return ROLE_NAMES.get(name.lower(), {}).get(lang, name)

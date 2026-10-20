@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}My tips{% endblock %}
+{% block site %}{{ business_name }}{% endblock %}
 {% block head %}{% load static %}
   <link rel="manifest" href="{% url 'staff_manifest' member.access_token %}">
   <meta name="theme-color" content="#141414">
@@ -16,7 +17,7 @@
   </div>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status" style="width:100%;max-width:460px">{{ message }}</div>{% endfor %}
   <section class="my-totals" aria-label="Your tips">
-    {% for label, amount in totals %}<div><b>{{ cur }}{{ amount }}</b><span>{{ label }}</span></div>{% endfor %}
+    {% for label, amount in totals %}<div><b>{{ cur }}{{ amount|money }}</b><span>{{ label }}</span></div>{% endfor %}
   </section>
   <div class="install-hint" id="install-hint" hidden>
     <span>Keep this page on your phone like an app.</span>
@@ -77,14 +78,14 @@
       <div class="head"><h2>Tips receipt</h2><p>{% if several %}{{ s.night.location.display_name }} · {% endif %}{{ s.night.date|date:"l, M j, Y" }}</p></div>
       <hr>
       <div class="line"><span class="what">{{ s.role_name }}<small>{% if s.hours %}{{ s.hours|floatformat:"-2" }} hours worked{% else %}personal tips{% endif %}</small></span>
-        <span class="amt">{{ cur }}{{ s.amount }}
+        <span class="amt">{{ cur }}{{ s.amount|money }}
           {% with item=s.payout_item %}{% if item and item.status == "SUCCESS" %}<span class="stamp ok">PAID</span>{% elif item %}<span class="stamp wait">SENDING</span>{% else %}<span class="stamp wait">PENDING</span>{% endif %}{% endwith %}
         </span></div>
       {% if s.breakdown %}
       <hr>
       <div class="lines">
         {% for b in s.breakdown %}
-        <div class="line"><span class="what">{% if b.personal %}Tips left for you<small>by name, all yours</small>{% else %}{{ b.group }} pool {{ cur }}{{ b.pool }}<small>your part: {{ b.basis }}</small>{% endif %}</span><span class="amt">{{ cur }}{{ b.amount }}</span></div>
+        <div class="line"><span class="what">{% if b.personal %}Tips left for you<small>by name, all yours</small>{% else %}{{ b.group }} pool {{ cur }}{{ b.pool|money }}<small>your part: {{ b.basis }}</small>{% endif %}</span><span class="amt">{{ cur }}{{ b.amount|money }}</span></div>
         {% endfor %}
       </div>
       {% endif %}

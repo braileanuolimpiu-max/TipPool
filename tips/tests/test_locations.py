@@ -35,6 +35,7 @@ class LocationTests(TestCase):
         self.assertNotContains(self.client.get(reverse("staff_list")), "Nail tech")
 
     def test_tip_goes_to_the_location_in_the_link(self):
+        Location.objects.filter(pk=self.salon.pk).update(tip_mode="pool")  # salons start with personal tips
         res = self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5", "at": "luna-salon"}),
                                content_type="application/json")
         tip = Tip.objects.get(paypal_order_id=res.json()["orderId"])

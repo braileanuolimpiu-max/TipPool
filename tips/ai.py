@@ -205,7 +205,8 @@ def _mock_parse_rules(text, roles):
     """Very small offline parser for sentences like
     'Bartenders get 20%, bussers 10% split equally, the rest goes to servers by hours'.
     Works with whatever roles the business has."""
-    pools, warnings = [], ["Parsed offline (AI_MODE=mock). Turn on Claude for smarter rule reading."]
+    pools, warnings = [], ["Read by the built-in rule reader. With Claude turned on, rules are read more smartly."]
+    unmatched = []
     eligible = [r for r in roles if not r.no_tips]
     parts = []
     for part in re.split(r"[,;:\n]|\.(?=\s|$)", text):  # keep "12.5%" intact
@@ -224,6 +225,8 @@ def _mock_parse_rules(text, roles):
         if percent and found:
             pools.append({"name": _group_name(found), "percent": float(percent.group(1)),
                           "roles": [r.key for r in found], "split": split})
+        elif percent and not found:
+            unmatched.append(part)
         elif found and re.search(REST, part, re.I):
             remainder = {"name": _group_name(found), "roles": [r.key for r in found], "split": split}
         elif not percent and re.search(EVERYONE, part, re.I):
@@ -242,7 +245,10 @@ def _mock_parse_rules(text, roles):
                      "split": "hours"}
         warnings.append(f"No group for the rest of the money was mentioned, so I assumed: "
                         f"{remainder['name'].lower()}, by hours.")
-    if not pools:
+    for part in unmatched:
+        warnings.append(f"\"{part[:60]}\" has a percent but no role this location has, so it was left out. "
+                        "Use the role names from the Team page.")
+    if not pools and not unmatched:
         warnings.append("No percentages found, so all tips go to one group.")
     bits = [f"{p['name']} get {p['percent']:g}% ({'by hours' if p['split'] == 'hours' else 'split equally'})"
             for p in pools]

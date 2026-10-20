@@ -14,6 +14,7 @@ from tips.tests.helpers import hire, make_manager
 class TipButtonTests(TestCase):
     def setUp(self):
         self.location = Location.default()
+        hire("Sam", "server", self.location)
         self.client.force_login(make_manager("m"))
 
     def test_defaults_follow_the_kind_of_business(self):
@@ -87,7 +88,7 @@ class AskTests(TestCase):
                          "John and Maria earned the most in August: $10.00 each.")
 
     def test_unknown_question_lists_examples(self):
-        self.assertIn("Offline I can answer", self.ask("what's the weather"))
+        self.assertIn("The built-in assistant can answer", self.ask("what's the weather"))
 
     def test_page_shows_answer(self):
         page = self.client.get(reverse("reports") + "?q=Who+earned+the+most+this+year%3F")

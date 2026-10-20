@@ -161,6 +161,14 @@ def add_role(location, name, aliases="", no_tips=False):
     return role, True
 
 
+# kinds of business where a tip usually belongs to the person who served you
+PERSONAL_TIPS = {"salon", "delivery"}
+
+
+def default_tip_mode(business_type):
+    return "personal" if business_type in PERSONAL_TIPS else "pool"
+
+
 def apply_preset(location, business_type):
     """Switch a location to a preset's roles. Roles someone on the team still has are kept.
 

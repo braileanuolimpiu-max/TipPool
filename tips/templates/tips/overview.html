@@ -6,9 +6,9 @@
 </header>
 
 <section class="kpis" aria-label="Totals">
-  <div><b>{{ cur }}{{ total_now }}</b><span>in tips in the open shifts</span></div>
-  <div><b>{{ cur }}{{ total_week }}</b><span>this week</span></div>
-  <div><b>{{ rows|length }}</b><span>locations</span></div>
+  <div><b>{{ cur }}{{ total_now|money }}</b><span>in tips in the open shifts</span></div>
+  <div><b>{{ cur }}{{ total_week|money }}</b><span>this week</span></div>
+  <div><b>{{ rows|length }}</b><span>location{{ rows|length|pluralize }}</span></div>
   <div{% if attention %} class="needs"{% endif %}><b>{{ attention }}</b><span>waiting for you</span></div>
 </section>
 
@@ -20,7 +20,7 @@
         <input type="hidden" name="location" value="{{ r.location.pk }}"><input type="hidden" name="next" value="{% url 'dashboard' %}">
         <button class="btn btn-secondary small">Open</button></form></div>
     <div class="panel-body stack" style="gap:10px">
-      <div class="loc-now"><b>{{ cur }}{{ r.now }}</b><span class="small muted">{{ r.tips_now }} tip{{ r.tips_now|pluralize }} this shift · {{ r.on_clock }} on the clock · {{ cur }}{{ r.week }} this week</span></div>
+      <div class="loc-now"><b>{{ cur }}{{ r.now|money }}</b><span class="small muted">{{ r.tips_now }} tip{{ r.tips_now|pluralize }} this shift · {{ r.on_clock }} on the clock · {{ cur }}{{ r.week|money }} this week</span></div>
       {% if r.waiting or r.messages or r.alerts %}
       <ul class="loc-todo">
         {% for n in r.waiting %}<li>{% if n.hold %}<strong>On hold:</strong> {{ n }}: {{ n.hold }}{% elif n.status == "closed" %}{{ n }} needs who worked{% elif n.status == "review" %}{{ n }} is ready to approve{% else %}{{ n }} is being paid{% endif %}</li>{% endfor %}

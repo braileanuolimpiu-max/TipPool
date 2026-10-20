@@ -1,5 +1,6 @@
 {% extends "app.html" %}
 {% block title %}Payout{% endblock %}
+{% block eyebrow_date %}{% if night %}Shift of {{ night.date|date:"l, M j" }}{% else %}{% now "l, M j" %}{% endif %}{% endblock %}
 {% block content %}
 <a class="back" href="{% url 'history' %}">← Past shifts</a>
 <header class="page-head">
@@ -28,19 +29,19 @@
         <div class="line">
           <span class="what">{{ item.share.staff.name }}
             {% if item.status == "SUCCESS" %}<span class="stamp ok" data-item="{{ item.pk }}">PAID</span>
-            {% elif item.failed %}<span class="stamp bad" data-item="{{ item.pk }}">{{ item.status }}</span>
-            {% elif item.status == "UNCLAIMED" %}<span class="stamp wait" data-item="{{ item.pk }}">UNCLAIMED</span>
+            {% elif item.failed %}<span class="stamp bad" data-item="{{ item.pk }}">{{ item.status_label|upper }}</span>
+            {% elif item.status == "UNCLAIMED" %}<span class="stamp wait" data-item="{{ item.pk }}">NOT ACCEPTED</span>
             {% else %}<span class="stamp wait" data-item="{{ item.pk }}">SENDING</span>{% endif %}
             <small>{{ item.receiver|default:item.share.staff.paypal_email }}{% if item.batch.is_retry %} · sent again{% endif %}</small>
             {% if item.error %}<small style="color:#b8342a">{{ item.error }}</small>{% endif %}
           </span>
-          <span class="amt">{{ cur }}{{ item.share.amount }}</span>
+          <span class="amt">{{ cur }}{{ item.share.amount|money }}</span>
         </div>
         {% endif %}{% endfor %}
       </div>
       <hr>
-      <div class="line total"><span>Delivered</span><span class="amt-hl">{{ cur }}{{ paid }}</span></div>
-      {% if payout_fees %}<p class="foot">PayPal payout fees: {{ cur }}{{ payout_fees }} (paid by the business)</p>{% endif %}
+      <div class="line total"><span>Delivered</span><span class="amt-hl">{{ cur }}{{ paid|money }}</span></div>
+      {% if payout_fees %}<p class="foot">PayPal payout fees: {{ cur }}{{ payout_fees|money }} (paid by the business)</p>{% endif %}
       <p class="foot">Sent with PayPal Payouts</p>
     </div>
   </div></div>
@@ -50,7 +51,7 @@
     <section class="panel">
       <div class="panel-head"><h2>{{ item.share.staff.name }}: {% if item.status == "UNCLAIMED" %}not accepted yet{% else %}didn't arrive{% endif %}</h2></div>
       <div class="panel-body stack">
-        <p style="margin:0">{% if item.status == "UNCLAIMED" %}{{ cur }}{{ item.share.amount }} went to {{ item.receiver }}, which has no PayPal account yet. PayPal holds it for 30 days, then sends it back.{% else %}PayPal couldn't deliver {{ cur }}{{ item.share.amount }} to {{ item.receiver }}. The money is back in your PayPal account.{% endif %}</p>
+        <p style="margin:0">{% if item.status == "UNCLAIMED" %}{{ cur }}{{ item.share.amount|money }} went to {{ item.receiver }}, which has no PayPal account yet. PayPal holds it for 30 days, then sends it back.{% else %}PayPal couldn't deliver {{ cur }}{{ item.share.amount|money }} to {{ item.receiver }}. The money is back in your PayPal account.{% endif %}</p>
         <p class="small muted" style="margin:0">They're paid with <strong>{{ item.share.staff.payout_to }}</strong> now.{% if item.share.staff.payout_to == item.receiver %} If that's wrong, ask them to change it on their tips page (you'll approve it in Messages).{% endif %}</p>
         <div class="actions">
           {% if item.status == "UNCLAIMED" %}
@@ -77,7 +78,7 @@
     </section>
 
     {% if items|length > 1 %}{% for item in items %}{% if item.superseded %}
-    <p class="small muted" style="margin:0">Earlier: {{ item.share.staff.name }}, {{ cur }}{{ item.share.amount }} to {{ item.receiver }}: {{ item.status|lower }}</p>
+    <p class="small muted" style="margin:0">Earlier: {{ item.share.staff.name }}, {{ cur }}{{ item.share.amount|money }} to {{ item.receiver }}: {{ item.status_label|lower }}</p>
     {% endif %}{% endfor %}{% endif %}
   </div>
 </div>
