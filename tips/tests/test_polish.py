@@ -70,3 +70,16 @@ class PublicPagesTests(TestCase):
         page = self.client.get("/no-such-page/")
         self.assertContains(page, "doesn't exist", status_code=404)
         self.assertNotContains(page, "Resolver404", status_code=404)
+
+
+class UnfinishedPaymentTests(TestCase):
+    def test_thanks_page_says_no_tip_was_taken(self):
+        from unittest import mock
+        from tips.paypal import PayPalError
+        location = Location.default()
+        hire("Sam", "server", location)
+        Tip.objects.create(night=Night.current(location), amount=Decimal("5"), paypal_order_id="UNPAID-1")
+        error = PayPalError("not approved", 422, details={"details": [{"issue": "ORDER_NOT_APPROVED"}]})
+        with mock.patch("tips.services.capture_tip", side_effect=error):
+            page = self.client.get(reverse("tip_thanks") + "?order=UNPAID-1&lang=en")
+        self.assertContains(page, "No tip was taken")

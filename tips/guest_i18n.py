@@ -35,7 +35,7 @@ STRINGS = {
         "done_personal": "Thank you. It goes in full to {name}, paid straight to their PayPal at the end of the shift.",
         "confirming": "Your {amount} tip is being confirmed by PayPal. You can close this page.",
         "not_found": "We couldn't find this tip. If you were charged, your receipt from PayPal is on its way.",
-        "another": "Leave another tip", "too_much": 'The most you can tip here is {max}.', "close_page": "You can close this page.",
+        "another": "Leave another tip", "too_much": 'The most you can tip here is {max}.', "not_paid": "No tip was taken: the payment wasn't finished in PayPal. You can try again below.", "close_page": "You can close this page.",
     },
     "es": {
         "title": "Dejar una propina", "thanks": "Gracias", "table": "Mesa",
@@ -64,7 +64,7 @@ STRINGS = {
         "done_personal": "Gracias. Va íntegra a {name}, pagada directamente a su PayPal al final del turno.",
         "confirming": "PayPal está confirmando tu propina de {amount}. Puedes cerrar esta página.",
         "not_found": "No encontramos esta propina. Si se te cobró, tu recibo de PayPal está en camino.",
-        "another": "Dejar otra propina", "too_much": 'Lo máximo que puedes dejar aquí es {max}.', "close_page": "Puedes cerrar esta página.",
+        "another": "Dejar otra propina", "too_much": 'Lo máximo que puedes dejar aquí es {max}.', "not_paid": 'No se cobró ninguna propina: el pago no se completó en PayPal. Puedes intentarlo de nuevo abajo.', "close_page": "Puedes cerrar esta página.",
     },
     "fr": {
         "title": "Laisser un pourboire", "thanks": "Merci", "table": "Table",
@@ -94,7 +94,7 @@ STRINGS = {
         "done_personal": "Merci. Il revient en entier à {name}, versé directement sur son PayPal à la fin du service.",
         "confirming": "PayPal confirme votre pourboire de {amount}. Vous pouvez fermer cette page.",
         "not_found": "Nous n'avons pas trouvé ce pourboire. Si vous avez été débité, votre reçu PayPal arrive.",
-        "another": "Laisser un autre pourboire", "too_much": 'Le maximum ici est de {max}.', "close_page": "Vous pouvez fermer cette page.",
+        "another": "Laisser un autre pourboire", "too_much": 'Le maximum ici est de {max}.', "not_paid": "Aucun pourboire n'a été pris : le paiement n'a pas été finalisé dans PayPal. Vous pouvez réessayer ci-dessous.", "close_page": "Vous pouvez fermer cette page.",
     },
     "de": {
         "title": "Trinkgeld geben", "thanks": "Danke", "table": "Tisch",
@@ -125,7 +125,7 @@ STRINGS = {
                          "gezahlt.",
         "confirming": "PayPal bestätigt Ihr Trinkgeld von {amount}. Sie können diese Seite schließen.",
         "not_found": "Wir konnten dieses Trinkgeld nicht finden. Falls Sie belastet wurden, kommt Ihre PayPal-Quittung.",
-        "another": "Noch ein Trinkgeld geben", "too_much": 'Hier sind höchstens {max} möglich.', "close_page": "Sie können diese Seite schließen.",
+        "another": "Noch ein Trinkgeld geben", "too_much": 'Hier sind höchstens {max} möglich.', "not_paid": 'Es wurde kein Trinkgeld abgebucht: Die Zahlung wurde in PayPal nicht abgeschlossen. Sie können es unten erneut versuchen.', "close_page": "Sie können diese Seite schließen.",
     },
     "it": {
         "title": "Lascia una mancia", "thanks": "Grazie", "table": "Tavolo",
@@ -153,7 +153,7 @@ STRINGS = {
         "done_personal": "Grazie. Va tutta a {name}, pagata direttamente sul suo PayPal a fine turno.",
         "confirming": "PayPal sta confermando la tua mancia di {amount}. Puoi chiudere questa pagina.",
         "not_found": "Non troviamo questa mancia. Se ti è stato addebitato, la ricevuta PayPal è in arrivo.",
-        "another": "Lascia un'altra mancia", "too_much": 'Il massimo qui è {max}.', "close_page": "Puoi chiudere questa pagina.",
+        "another": "Lascia un'altra mancia", "too_much": 'Il massimo qui è {max}.', "not_paid": 'Nessuna mancia addebitata: il pagamento non è stato completato su PayPal. Puoi riprovare qui sotto.', "close_page": "Puoi chiudere questa pagina.",
     },
     "pt": {
         "title": "Deixar uma gorjeta", "thanks": "Obrigado", "table": "Mesa",
@@ -182,7 +182,7 @@ STRINGS = {
         "done_personal": "Obrigado. Vai inteira para {name}, paga diretamente no PayPal no fim do turno.",
         "confirming": "O PayPal está a confirmar a sua gorjeta de {amount}. Pode fechar esta página.",
         "not_found": "Não encontrámos esta gorjeta. Se foi cobrado, o recibo do PayPal está a caminho.",
-        "another": "Deixar outra gorjeta", "too_much": 'O máximo aqui é {max}.', "close_page": "Pode fechar esta página.",
+        "another": "Deixar outra gorjeta", "too_much": 'O máximo aqui é {max}.', "not_paid": 'Nenhuma gorjeta foi cobrada: o pagamento não foi concluído no PayPal. Pode tentar de novo abaixo.', "close_page": "Pode fechar esta página.",
     },
     "ro": {
         "title": "Lasă un bacșiș", "thanks": "Mulțumim", "table": "Masa",
@@ -209,7 +209,7 @@ STRINGS = {
         "done_personal": "Mulțumim. Merge integral la {name}, plătit direct în PayPal la finalul turei.",
         "confirming": "PayPal confirmă bacșișul tău de {amount}. Poți închide pagina.",
         "not_found": "Nu am găsit acest bacșiș. Dacă ai fost taxat, chitanța PayPal e pe drum.",
-        "another": "Mai lasă un bacșiș", "too_much": 'Maximul aici este {max}.', "close_page": "Poți închide pagina.",
+        "another": "Mai lasă un bacșiș", "too_much": 'Maximul aici este {max}.', "not_paid": 'Nu s-a încasat niciun bacșiș: plata nu a fost finalizată în PayPal. Poți încerca din nou mai jos.', "close_page": "Poți închide pagina.",
     },
 }
 

@@ -96,6 +96,15 @@ def propose(kind, params, location, user):
         stops = blocking(night)
         if stops:
             raise ActionError(f"The {night} isn't ready to pay: {stops[0]['text']} Open it to check.")
+        business = location.business
+        if business.payouts_frozen:
+            raise ActionError(f"Payouts are frozen by {business.payouts_frozen_by or 'the owner'}, so I can't pay the "
+                              f"{night} now.")
+        limit = business.approval_limit
+        is_owner = getattr(getattr(user, "manager", None), "is_owner", False)
+        if limit is not None and total > limit and not is_owner:
+            raise ActionError(f"The {night} is {cur}{total}, over the owner's {cur}{limit} limit, so the owner has to "
+                              "pay it. Open it to ask them.")
         text = f"Pay the {night}: {cur}{total} to {people} {'person' if people == 1 else 'people'} through PayPal."
         params = {"night": night.pk}
     elif kind == "set_week":

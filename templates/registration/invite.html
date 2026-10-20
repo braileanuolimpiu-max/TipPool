@@ -14,7 +14,7 @@
     {% else %}
     <form method="post" class="stack">{% csrf_token %}
       <h2>Join {{ invite.business.name }}</h2>
-      <p class="muted" style="margin:0">{{ invite.invited_by }} invited <strong>{{ invite.email }}</strong> to manage tips on TipPool.</p>
+      <p class="muted" style="margin:0">{{ invite.invited_by }} invited <strong>{{ invite.email }}</strong> to {% if invite.level == "lead" %}run shifts as a shift lead{% else %}manage tips{% endif %} on TipPool{% with where=invite.locations.all %}{% if where %}, for {% for loc in where %}{{ loc.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}{% endwith %}.</p>
       {% if errors %}<div class="flash error"><ul style="margin:0;padding-left:18px">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
       {% if user.is_authenticated %}
       <p style="margin:0">You're signed in as {{ user.get_username }}.</p>

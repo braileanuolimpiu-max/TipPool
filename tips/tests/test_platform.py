@@ -183,3 +183,49 @@ class LimitedManagerMessageTests(TestCase):
         self.assertEqual(self.client.post(reverse("messages_page"), {"message": self.flag.pk, "reply": "ok"}).status_code, 404)
         self.night.refresh_from_db()
         self.assertTrue(self.night.hold)
+
+
+class PolishRoundTests(TestCase):
+    def test_a_failed_platform_save_keeps_what_was_typed(self):
+        op = make_manager("op")
+        op.is_superuser = True
+        op.save()
+        self.client.force_login(op)
+        page = self.client.post(reverse("platform_settings"), {"section": "contact", "contact_email": "not an email"},
+                                follow=True)
+        self.assertContains(page, 'value="not an email"')
+
+    def test_invite_email_names_the_locations(self):
+        from django.core import mail
+        from tips.models import Location
+        owner = make_manager("owner")
+        self.client.force_login(owner)
+        uptown = Location.objects.create(business=owner.manager.business, name="Uptown", slug="uptown")
+        self.client.post(reverse("invite_manager"), {"email": "new@example.com", "level": "lead",
+                                                     "locations": [uptown.pk]})
+        self.assertIn("a shift lead", mail.outbox[-1].body)
+        self.assertIn("for Uptown", mail.outbox[-1].body)
+
+    def test_clock_out_says_minutes(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from tips.models import ClockEntry, Location, Night
+        from tips.tests.helpers import hire
+        location = Location.default()
+        maria = hire("Maria", "server", location)
+        ClockEntry.objects.create(staff=maria, night=Night.current(location),
+                                  started_at=timezone.now() - timedelta(minutes=4))
+        page = self.client.post(reverse("my_tips", args=[maria.access_token]), {"clock": "out"}, follow=True)
+        self.assertContains(page, "You worked 4 minutes")
+
+    def test_ask_does_not_offer_to_pay_while_frozen(self):
+        from tips import actions
+        from tips.models import Location, Night
+        owner = make_manager("owner")
+        business = owner.manager.business
+        business.payouts_frozen_at, business.payouts_frozen_by = "2026-10-20T10:00Z", "Owner"
+        business.save()
+        location = Location.default()
+        Night.objects.create(location=location, status=Night.Status.REVIEW)
+        with self.assertRaisesMessage(actions.ActionError, "frozen"):
+            actions.propose("pay_shift", {}, location, owner)

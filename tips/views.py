@@ -203,10 +203,13 @@ def tip_thanks(request):
     # "order" comes from our page; "token" is what PayPal adds when it redirects back here
     order_id = request.GET.get("order") or request.GET.get("token") or ""
     tip = Tip.objects.filter(paypal_order_id=order_id).first()
+    not_paid = False
     if tip and tip.status != Tip.Status.COMPLETED:
         try:
             tip = services.capture_tip(order_id)
-        except PayPalError:
+        except PayPalError as exc:
+            issues = [d.get("issue") for d in (exc.details or {}).get("details") or [] if isinstance(d, dict)]
+            not_paid = "ORDER_NOT_APPROVED" in issues  # the guest never finished paying in PayPal
             log.warning("Capture on return page failed for %s", order_id)
     if tip:  # show the business the tip went to, even without ?at= in the return link
         request.location = tip.night.location
@@ -221,7 +224,7 @@ def tip_thanks(request):
     with translation.override(lang):
         return render(request, "tips/tip_thanks.html", {
             **_guest_language(request, lang),
-            "tip": tip, "table": tip.table if tip else "", "location": request.location, "cur": cur,
+            "tip": tip, "table": tip.table if tip else "", "location": request.location, "cur": cur, "not_paid": not_paid,
             "done_text": t["done_personal"].format(name=tip.staff.name) if tip and tip.staff_id else t["done_note"],
             "confirming_text": t["confirming"].format(amount=f"{cur}{tip.amount}") if tip else "",
             "restaurant_name": request.location.display_name, "restaurant_named": bool(request.location.name),
@@ -1137,7 +1140,7 @@ def settings_page(request):
         if new_name and Location.objects.filter(business=request.business, name__iexact=new_name, archived=False) \
                 .exclude(pk=restaurant.pk).exists():
             messages.error(request, f"Another location is already called {new_name}. Pick a name that tells them apart.")
-            return redirect("settings")
+            return redirect(f"{reverse('settings')}#locations")
         restaurant.name = new_name
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
         restaurant.use_usual_schedule = bool(request.POST.get("use_usual_schedule"))
@@ -1435,7 +1438,7 @@ def location_add(request):
     if Location.objects.filter(business=request.business, name__iexact=name, archived=False).exists():
         messages.error(request, f"You already have a location called {name}. Pick a name that tells them apart "
                                 "(e.g. the street or neighborhood).")
-        return redirect("settings")
+        return redirect(f"{reverse('settings')}#locations")
     business_type = request.POST.get("business_type", "restaurant")
     if business_type not in role_presets.PRESETS:
         business_type = "restaurant"
@@ -1471,7 +1474,10 @@ def my_tips(request, token):
                 messages.success(request, f"Clocked in at {location.display_name}. Have a good shift!")
             elif request.POST.get("clock") == "out":
                 entry = hours_from.clock_out(member)
-                messages.success(request, f"Clocked out. {entry.hours().normalize():f} hours this time.")
+                minutes = int(round(float(entry.hours()) * 60))
+                spent = (f"{minutes // 60}h {minutes % 60:02d}m" if minutes >= 60 else
+                         f"{minutes} minute{'s' if minutes != 1 else ''}" if minutes else "less than a minute")
+                messages.success(request, f"Clocked out. You worked {spent} this time.")
         except hours_from.ClockError as exc:
             messages.error(request, str(exc))
         return redirect("my_tips", token=token)

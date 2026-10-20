@@ -248,9 +248,12 @@ def invite_manager(request):
     invite.locations.set(Location.objects.filter(business=request.business, archived=False,
                                                  pk__in=[p for p in request.POST.getlist("locations") if p.isdigit()]))
     link = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
+    where = ", ".join(loc.display_name for loc in invite.locations.all())
+    role = "a shift lead" if level == Manager.Level.LEAD else "a manager"
     send_mail(f"Join {request.business.name} on TipPool",
-              f"{request.user.get_full_name() or request.user.get_username()} invited you to manage "
-              f"{request.business.name} on TipPool.\n\nAccept here (valid for {Invite.VALID_DAYS} days):\n{link}\n",
+              f"{request.user.get_full_name() or request.user.get_username()} invited you to be {role} at "
+              f"{request.business.name} on TipPool" + (f", for {where}" if where else "") + ".\n\n"
+              f"Accept here (valid for {Invite.VALID_DAYS} days):\n{link}\n",
               settings.DEFAULT_FROM_EMAIL, [email], fail_silently=True)
     Change.log(request, f"Invited {email} as a manager")
     messages.success(request, f"Invite sent to {email}. You can also copy the link below and send it yourself.")
@@ -552,7 +555,8 @@ def load_sample(request):
     from . import demo
     from .models import Tip
     if request.business.paypal_live or Tip.objects.filter(night__location__business=request.business).exists():
-        messages.error(request, "Sample data can only go into a new, empty sandbox business.")
+        messages.error(request, "Sample data is only for a brand-new business: this business already has tips (at "
+                                "any of its locations) or is connected to real PayPal. Try the demo instead.")
         return redirect("dashboard")
     demo.fill(request.location)
     Change.log(request, "Loaded sample data")

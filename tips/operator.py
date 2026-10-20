@@ -15,6 +15,7 @@ from .models import Change, PlatformConfig
 from .vault import encrypt
 
 DEMO_STAFF = ["Maria", "John", "Lea", "Alex", "Sam"]
+TYPED_FIELDS = ['email_provider', 'email_host', 'email_port', 'email_user', 'email_from', 'claude_model', 'paypal_client_id', 'demo_buyer_email', 'demo_buyer_password', 'contact_email']
 
 
 def _operator_only(request):
@@ -49,19 +50,25 @@ def platform_settings(request):
         return stop
     cfg = PlatformConfig.load()
     if request.method == "POST":
+        # what was typed comes back if the save fails (never passwords, keys or secrets)
+        request.session["platform_typed"] = {k: v for k, v in request.POST.items()
+                                             if k in TYPED_FIELDS or k.startswith("staff_")}
         section = request.POST.get("section", "")
         handler = {"email": _save_email, "email_test": _test_email, "ai": _save_ai, "paypal": _save_paypal,
                    "paypal_disconnect": _disconnect_paypal, "demo": _save_demo, "cron_new": _new_cron,
                    "contact": _save_contact}.get(section)
         if handler:
             return handler(request, cfg)
+    typed = request.session.pop("platform_typed", {})
+    form = {field: typed.get(field, getattr(cfg, field)) for field in TYPED_FIELDS}
     tick = request.build_absolute_uri(reverse("cron_tick")) + f"?key={cfg.cron_secret}"
     minutes_since_tick = int((timezone.now() - cfg.last_tick_at).total_seconds() // 60) if cfg.last_tick_at else None
     return render(request, "tips/platform.html", {
         "cfg": cfg, "providers": PlatformConfig.EmailProvider.choices, "models": platform.CLAUDE_MODELS,
         "email_on": platform.email_settings() is not None, "ai_on": platform.ai_mode() == "claude",
         "paypal_on": bool(cfg.paypal_client_id), "tick_url": tick, "minutes_since_tick": minutes_since_tick,
-        "demo_staff": [(name, (cfg.demo_staff or {}).get(name, "")) for name in DEMO_STAFF],
+        "demo_staff": [(name, typed.get(f"staff_{name}", (cfg.demo_staff or {}).get(name, ""))) for name in DEMO_STAFF],
+        "form": form,
         "https": request.is_secure(),
     })
 

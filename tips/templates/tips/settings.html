@@ -286,11 +286,12 @@
             {% else %}<span class="small muted">{{ m.level_label }}</span>{% endif %}
             {% if not m.is_owner %}
             <details class="manager-locs">
-              <summary>{% with picked=m.locations.all %}{% if picked %}{% for loc in picked %}{{ loc.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}All locations{% endif %}{% endwith %}</summary>
+              <summary>{% with picked=m.locations.all %}{% if picked %}{% for loc in picked %}{{ loc.display_name }}{% if loc.archived %} (archived){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}All locations{% endif %}{% endwith %}</summary>
               {% if is_owner %}
               <form method="post" action="{% url 'manager_locations' m.pk %}" class="stack" style="gap:8px">{% csrf_token %}
                 <p class="small muted" style="margin:0">Tick the locations they run. None ticked = all locations.</p>
                 {% for loc in active_locations %}<label class="choice compact"><input type="checkbox" name="locations" value="{{ loc.pk }}" {% if loc in m.locations.all %}checked{% endif %}><span>{{ loc.display_name }}</span></label>{% endfor %}
+                {% for loc in m.locations.all %}{% if loc.archived %}<p class="small muted" style="margin:0">Also had {{ loc.display_name }} (archived). {% if forloop.last %}Tick an open location above, or they can't sign in to any.{% endif %}</p>{% endif %}{% endfor %}
                 <button class="btn btn-secondary small">Save locations</button>
               </form>
               {% endif %}

@@ -18,6 +18,8 @@
         <div class="line total" style="justify-content:space-between"><span>{{ t.tip }}</span><span>{{ cur }}{{ tip.amount|money }}</span></div>
         <hr>
         <p style="margin:0">{{ done_text }}</p>
+      {% elif tip and not_paid %}
+        <p style="margin:8px 0">{{ t.not_paid }}</p>
       {% elif tip %}
         <p style="margin:8px 0">{{ confirming_text }}</p>
       {% else %}
