@@ -37,6 +37,14 @@ card in the corner ticks off each step as you go:
 6. **Change the rules in plain words.** AI reads them into structured rules and warns about anything that
    breaks tip law (e.g. managers taking from the pool, which the US FLSA doesn't allow).
 
+### Testing notes for judges
+- No sign-up and no credentials are needed: **Try the demo** signs you in to a fresh sample business.
+- Everything runs on the **PayPal sandbox** (test money). Demo tip pages show a sandbox buyer login to pay
+  a test tip with; demo payouts go to sandbox accounts.
+- To run it yourself instead, see [Run it locally](#run-it-locally-sandbox): it works without any keys
+  (the demo uses a built-in AI fallback), and with your own sandbox keys for real PayPal calls.
+- Hosted on **Render** (blueprint in `render.yaml`) with a Neon Postgres database.
+
 ## The problem
 
 Tipped teams split money by hand at the end of every shift: a spreadsheet, a calculator, cash envelopes,
