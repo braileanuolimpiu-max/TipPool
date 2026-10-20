@@ -94,6 +94,26 @@
     scrim.addEventListener("click", () => set(false));
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
   })();
+  // the tab rail always fits: without icons if needed, scrolling (with a fade) as a last resort
+  (() => {
+    const nav = document.querySelector(".rail nav");
+    if (!nav) return;
+    const fit = () => {
+      nav.classList.remove("no-icons", "scrolls");
+      if (window.innerWidth <= 760) return;  // phones use the menu sheet
+      if (nav.scrollWidth > nav.clientWidth + 1) nav.classList.add("no-icons");
+      if (nav.scrollWidth > nav.clientWidth + 1) {
+        nav.classList.add("scrolls");
+        const current = nav.querySelector('[aria-current="page"]');
+        if (current) current.scrollIntoView({block: "nearest", inline: "nearest"});
+      }
+      nav.classList.toggle("at-end", nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 2);
+    };
+    nav.addEventListener("scroll", () => nav.classList.toggle("at-end", nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 2));
+    window.addEventListener("resize", fit);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    fit();
+  })();
   (() => {
     const btn = document.getElementById("theme-btn");
     if (!btn) return;
