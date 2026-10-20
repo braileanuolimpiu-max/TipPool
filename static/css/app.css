@@ -1154,3 +1154,7 @@ select.pick-open { border-color: var(--ink); box-shadow: 0 0 0 3px var(--marker)
 .role-pick select { max-width: 190px; }
 .role-preset select { max-width: 230px; }
 .page-head .report-filter select, .activity-filter select { max-width: 240px; }
+
+.theme-btn .icon-dark { display: none; }
+:root[data-theme="dark"] .theme-btn .icon-dark { display: block; }
+:root[data-theme="dark"] .theme-btn .icon-light { display: none; }
