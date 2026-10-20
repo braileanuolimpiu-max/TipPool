@@ -74,6 +74,57 @@ class SettingsFromTheWebsiteTests(TestCase):
         self.assertContains(page, "app password")
         self.assertIsNone(platform.email_settings())
 
+    def brevo_api(self, senders=({"email": "hello@tippool.app", "active": True},), key_ok=True):
+        """Brevo's API, faked: the account check, the senders list, and sending."""
+        def get(url, **kwargs):
+            if url.endswith("/account"):
+                return mock.Mock(status_code=200 if key_ok else 401)
+            if url.endswith("/senders"):
+                return mock.Mock(status_code=200, json=lambda: {"senders": list(senders)})
+            return mock.Mock(status_code=200, json=lambda: {"domains": []})
+        return mock.patch("tips.mailer.requests.get", side_effect=get)
+
+    def test_brevo_sends_through_its_web_api(self):
+        with self.brevo_api(), mock.patch("tips.operator.smtplib.SMTP") as smtp:
+            self.client.post(self.url, {"section": "email", "email_provider": "brevo", "email_user": "hello@tippool.app",
+                                        "email_password": "xkeysib-abc"})
+        smtp.assert_not_called()  # no email ports needed
+        self.assertEqual(platform.email_settings()[2:4], ("hello@tippool.app", "xkeysib-abc"))
+        from tips.mailer import PlatformBackend
+        with mock.patch("tips.mailer.requests.post", return_value=mock.Mock(status_code=201)) as post:
+            sent = PlatformBackend().send_messages([EmailMessage("Hi", "Body", to=["Ana <x@example.com>"])])
+        self.assertEqual(sent, 1)
+        body = post.call_args.kwargs["json"]
+        self.assertEqual(post.call_args.kwargs["headers"]["api-key"], "xkeysib-abc")
+        self.assertEqual(body["sender"], {"email": "hello@tippool.app", "name": "TipPool"})
+        self.assertEqual(body["to"], [{"email": "x@example.com", "name": "Ana"}])
+        self.assertEqual((body["subject"], body["textContent"]), ("Hi", "Body"))
+
+    def test_brevo_explains_what_to_fix(self):
+        cases = [({"key_ok": False}, "xkeysib-bad", "didn&#x27;t accept that API key"),
+                 ({"senders": ()}, "xkeysib-abc", "Add a sender"),
+                 ({"senders": ({"email": "hello@tippool.app", "active": False},)}, "xkeysib-abc", "not confirmed"),
+                 ({}, "xsmtpsib-abc", "SMTP key")]
+        for fake, key, says in cases:
+            with self.brevo_api(**fake):
+                page = self.client.post(self.url, {"section": "email", "email_provider": "brevo",
+                                                   "email_user": "hello@tippool.app", "email_password": key},
+                                        follow=True)
+            self.assertContains(page, says)
+            self.assertIsNone(platform.email_settings())
+
+    def test_brevo_refusing_a_send_shows_why(self):
+        with self.brevo_api():
+            self.client.post(self.url, {"section": "email", "email_provider": "brevo", "email_user": "hello@tippool.app",
+                                        "email_password": "xkeysib-abc"})
+        from tips.mailer import BrevoError, PlatformBackend
+        refused = mock.Mock(status_code=400, json=lambda: {"message": "sender not valid"})
+        with mock.patch("tips.mailer.requests.post", return_value=refused):
+            with self.assertRaisesMessage(BrevoError, "sender not valid"):
+                PlatformBackend().send_messages([EmailMessage("Hi", "Body", to=["x@example.com"])])
+            self.assertEqual(PlatformBackend(fail_silently=True).send_messages(
+                [EmailMessage("Hi", "Body", to=["x@example.com"])]), 0)
+
     def test_claude_key_from_the_website(self):
         with mock.patch("anthropic.Anthropic") as client:
             self.client.post(self.url, {"section": "ai", "ai_enabled": "on", "anthropic_key": "sk-ant-test",

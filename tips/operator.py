@@ -108,7 +108,7 @@ GUIDE = {
              "Verification → App passwords → create one named TipPool, and paste the 16 letters here.",
     "outlook": "Use your Outlook / Microsoft 365 email and password. If your account has two-step sign-in, "
                "create an app password in your Microsoft account's security settings.",
-    "brevo": "In Brevo: SMTP & API → SMTP → copy your login (looks like an email) and generate an SMTP key. "
+    "brevo": "In Brevo: SMTP & API → API Keys → Generate a new API key, and paste it here. "
              "Free for up to 300 emails a day.",
 }
 
@@ -124,6 +124,8 @@ def _save_email(request, cfg):
         host = request.POST.get("email_host", "").strip()[:120]
         port = int(request.POST.get("email_port") or 587) if str(request.POST.get("email_port", "587")).isdigit() else 587
     user = request.POST.get("email_user", "").strip()[:200]
+    if provider == "brevo":
+        return _save_brevo(request, cfg, host, port, user)
     password = request.POST.get("email_password", "").replace(" ", "") if provider == "gmail" else \
         request.POST.get("email_password", "").strip()
     if not password and (host != cfg.email_host or user != cfg.email_user):
@@ -156,6 +158,36 @@ def _save_email(request, cfg):
     return _done(request, f"email connected: TipPool sends from {cfg.email_from or user}", "email")
 
 
+def _save_brevo(request, cfg, host, port, sender):
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    from .mailer import brevo_check
+    key = request.POST.get("email_password", "").strip()
+    if key.startswith("xsmtpsib-"):
+        messages.error(request, "That's a Brevo SMTP key. TipPool needs an API key instead: in Brevo, SMTP & API → "
+                                "API Keys → Generate a new API key (it starts with xkeysib-).")
+        return redirect(f"{reverse('platform_settings')}#email")
+    try:
+        validate_email(sender)
+    except ValidationError:
+        messages.error(request, "Type the address emails are sent from (a sender confirmed in Brevo).")
+        return redirect(f"{reverse('platform_settings')}#email")
+    if not key and (cfg.email_provider != "brevo" or sender != cfg.email_user):
+        messages.error(request, "Paste your Brevo API key.")
+        return redirect(f"{reverse('platform_settings')}#email")
+    key = key or cfg.email_password
+    problem = brevo_check(key, sender)
+    if problem:
+        messages.error(request, problem)
+        return redirect(f"{reverse('platform_settings')}#email")
+    cfg.email_provider, cfg.email_host, cfg.email_port, cfg.email_user = "brevo", host, port, sender
+    cfg.email_password_encrypted = encrypt(key)
+    cfg.email_from = request.POST.get("email_from", "").strip()[:200]
+    cfg.save()
+    return _done(request, f"email connected through Brevo: TipPool sends from {cfg.email_from or sender}", "email")
+
+
 def _test_email(request, cfg):
     if platform.email_settings() is None:
         messages.error(request, "Connect an email account first.")
@@ -165,7 +197,9 @@ def _test_email(request, cfg):
         EmailMessage("TipPool test email", "It works: TipPool can send email (invites, codes, alerts, summaries).",
                      to=[to]).send(fail_silently=False)
     except Exception as exc:  # show the reason, in a sentence
-        messages.error(request, f"The test email didn't go out: {exc.__class__.__name__}. Check the email settings.")
+        from .mailer import BrevoError
+        reason = str(exc) if isinstance(exc, BrevoError) else exc.__class__.__name__
+        messages.error(request, f"The test email didn't go out: {reason}. Check the email settings.")
         return redirect(f"{reverse('platform_settings')}#email")
     messages.success(request, f"Test email sent to {to}. Check the inbox (and spam).")
     return redirect(f"{reverse('platform_settings')}#email")

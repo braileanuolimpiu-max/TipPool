@@ -27,14 +27,20 @@
       </select></div>
     <div class="provider-help" data-for="gmail"><p class="hint tight">Gmail needs an <strong>app password</strong>: Google Account → Security → turn on 2-Step Verification → App passwords → create one named TipPool. Paste the 16 letters below.</p></div>
     <div class="provider-help" data-for="outlook"><p class="hint tight">Your Outlook / Microsoft 365 email and password (or an app password if your account has two-step sign-in).</p></div>
-    <div class="provider-help" data-for="brevo"><p class="hint tight">In Brevo: SMTP &amp; API → SMTP. Use the login shown there and generate an SMTP key. Free for 300 emails a day.</p></div>
+    <div class="provider-help" data-for="brevo">
+      <ol class="guide-steps">
+        <li><span>Make a free account on <a href="https://www.brevo.com" target="_blank" rel="noopener">brevo.com</a> (300 emails a day).</span></li>
+        <li><span>In Brevo: <strong>Senders, Domains &amp; Dedicated IPs → Senders → Add a sender</strong> with the address TipPool sends from, and click the link Brevo emails you.</span></li>
+        <li><span><strong>SMTP &amp; API → API Keys → Generate a new API key</strong>, name it TipPool, and paste it below.</span></li>
+      </ol></div>
+    <p class="hint tight provider-help" data-for="gmail outlook other">Free hosting plans often block these email services (Render's free plan does). Brevo works everywhere.</p>
     <div class="form-grid provider-help" data-for="other">
       <div><label for="email_host">Server</label><input type="text" id="email_host" name="email_host" value="{{ form.email_host }}" placeholder="smtp.example.com"></div>
       <div><label for="email_port">Port</label><input type="number" id="email_port" name="email_port" value="{{ form.email_port }}" min="1" max="65535"></div>
     </div>
     <div class="form-grid">
-      <div><label for="email_user">Email address (login)</label><input type="text" id="email_user" name="email_user" value="{{ form.email_user }}" autocomplete="off" placeholder="you@gmail.com"></div>
-      <div><label for="email_password">Password</label><input type="password" id="email_password" name="email_password" autocomplete="new-password" placeholder="{% if cfg.email_password_encrypted %}Saved and hidden{% endif %}"></div>
+      <div><label for="email_user" data-brevo="Send from (a sender in Brevo)">Email address (login)</label><input type="text" id="email_user" name="email_user" value="{{ form.email_user }}" autocomplete="off" placeholder="you@gmail.com"></div>
+      <div><label for="email_password" data-brevo="Brevo API key">Password</label><input type="password" id="email_password" name="email_password" autocomplete="new-password" placeholder="{% if cfg.email_password_encrypted %}Saved and hidden{% endif %}"></div>
     </div>
     <div><label for="email_from">Send as <span class="muted">(optional)</span></label>
       <input type="text" id="email_from" name="email_from" value="{{ form.email_from }}" placeholder="TipPool &lt;hello@yourbusiness.com&gt;">
@@ -132,7 +138,12 @@
   // show the help that fits the chosen email service
   const provider = document.getElementById("email_provider");
   const helps = document.querySelectorAll(".provider-help");
-  const showHelp = () => helps.forEach((h) => { h.hidden = h.dataset.for !== provider.value; });
+  const labels = document.querySelectorAll("label[data-brevo]");
+  labels.forEach((l) => { l.dataset.normal = l.textContent; });
+  const showHelp = () => {
+    helps.forEach((h) => { h.hidden = !h.dataset.for.split(" ").includes(provider.value); });
+    labels.forEach((l) => { l.textContent = provider.value === "brevo" ? l.dataset.brevo : l.dataset.normal; });
+  };
   provider.addEventListener("change", showHelp);
   showHelp();
   document.querySelectorAll("[data-copy]").forEach((btn) => btn.addEventListener("click", async () => {

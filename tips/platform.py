@@ -8,7 +8,7 @@ CACHE_KEY = "tippool-platform-config"
 EMAIL_PRESETS = {  # provider: (host, port)
     "gmail": ("smtp.gmail.com", 587),
     "outlook": ("smtp.office365.com", 587),
-    "brevo": ("smtp-relay.brevo.com", 587),
+    "brevo": ("api.brevo.com", 443),  # its web API, not SMTP: works where email ports are blocked
 }
 CLAUDE_MODELS = [("claude-opus-5-5", "Claude Opus 5.5 (best)"), ("claude-sonnet-5-5", "Claude Sonnet 5.5 (faster, cheaper)"),
                  ("claude-haiku-4-5-20251001", "Claude Haiku 4.5 (cheapest)")]

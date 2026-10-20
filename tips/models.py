@@ -743,7 +743,7 @@ class PlatformConfig(models.Model):
     class EmailProvider(models.TextChoices):
         GMAIL = "gmail", "Gmail"
         OUTLOOK = "outlook", "Outlook / Microsoft 365"
-        BREVO = "brevo", "Brevo (free, made for sending)"
+        BREVO = "brevo", "Brevo (free, works on any host)"
         OTHER = "other", "Another email service"
 
     # email: invites, password codes, alerts, summaries

@@ -165,7 +165,7 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 298 tests and a lint check, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 301 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -207,7 +207,9 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
    That's the only value you type: Render generates the two secret keys itself.
 3. Open the site and **create your account**. The first account on a new site runs it, and gets
    **Platform** at the top. There, with step-by-step help on each part:
-   - **Email:** pick Gmail, Outlook, Brevo or another service and log in, then "Send me a test email".
+   - **Email:** pick **Brevo** (free, 300 a day), add your sender address there and paste an API key, then
+     "Send me a test email". Brevo is used through its web API, because Render's free plan blocks email
+     ports (SMTP). Gmail, Outlook and other SMTP services work locally or on a paid plan.
    - **AI:** paste a Claude API key and choose the model.
    - **TipPool's PayPal:** two codes from PayPal, for the demo and for businesses not connected yet.
      PayPal's update address (webhook) is registered automatically.
@@ -225,7 +227,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-298 tests cover:
+301 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes
