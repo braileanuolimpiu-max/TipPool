@@ -20,7 +20,7 @@
     <p>Sends invites, password codes and reset links, alerts and summary emails for every business.</p>
     {% if email_on %}<span class="pill ok">Connected</span>{% else %}<span class="pill wait">Not connected</span>{% endif %}</div>
   <div class="setting-body stack">
-    <div><label for="email_provider">Send from</label>
+    <div><label for="email_provider">Email service</label>
       <select id="email_provider" name="email_provider">
         <option value="">Choose…</option>
         {% for value, label in providers %}<option value="{{ value }}" {% if form.email_provider == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
