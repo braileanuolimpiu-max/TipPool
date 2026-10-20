@@ -575,3 +575,115 @@ def manager_locations(request, pk):
     Change.log(request, f"{name} now runs: {where}")
     messages.success(request, f"{name} now runs {where}.")
     return redirect(f"{reverse('settings')}#managers")
+
+
+# --- Change your password: prove it's you with a code sent to your email -----------------
+CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I to mix up
+CODE_MINUTES = 10
+CODE_TRIES = 5
+
+
+def _code_hash(user, code):
+    import hashlib
+    import hmac
+    return hmac.new(settings.SECRET_KEY.encode(), f"pw-change:{user.pk}:{code}".encode(), hashlib.sha256).hexdigest()
+
+
+def _masked(email):
+    name, _, domain = email.partition("@")
+    return f"{name[:1]}{'*' * max(len(name) - 1, 2)}@{domain}"
+
+
+def change_password(request):
+    """Three steps: we email a 6-character code, you type it, then you choose the new password.
+    Without email on the server, the current password is asked instead (nobody gets locked out)."""
+    import secrets
+    import time
+
+    from django.contrib.auth import update_session_auth_hash
+    from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
+    from django.contrib.auth.views import redirect_to_login
+
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    user, session, now = request.user, request.session, int(time.time())
+    profile = getattr(user, "manager", None)
+    if profile is not None and profile.business.is_demo:
+        return render(request, "registration/password_change_form.html", {"step": "demo"})
+
+    def finish(form):
+        form.save()
+        update_session_auth_hash(request, form.user)  # stay signed in here; other devices are signed out
+        for key in ("pw_code", "pw_ok_at"):
+            session.pop(key, None)
+        Change.log(request, "Changed their password")
+        if user.email:
+            send_mail("Your TipPool password was changed",
+                      f"Hi {user.get_full_name() or user.get_username()},\n\nThe password for your TipPool account was "
+                      "just changed. If this wasn't you, reset it right away from the sign-in page "
+                      "(\"Forgot your password?\") and tell the owner of your business.\n",
+                      settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+        return redirect("password_change_done")
+
+    # no way to send a code: the classic form with the current password
+    if not (settings.EMAIL_ENABLED and user.email):
+        form = PasswordChangeForm(user, request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            return finish(form)
+        return render(request, "registration/password_change_form.html", {"step": "fallback", "form": form})
+
+    pending = session.get("pw_code")
+    if pending and now - pending["at"] > CODE_MINUTES * 60:
+        session.pop("pw_code", None)
+        pending = None
+    verified = now - session.get("pw_ok_at", 0) <= CODE_MINUTES * 60
+    action = request.POST.get("action") if request.method == "POST" else None
+    ctx = {"email": _masked(user.email), "minutes": CODE_MINUTES}
+
+    if action == "send":
+        if not hit(f"pw-code:{user.pk}", 3, 15 * 60):
+            messages.error(request, "Too many codes asked for. Wait 15 minutes, then try again.")
+            return redirect("password_change")
+        code = "".join(secrets.choice(CODE_CHARS) for _ in range(6))
+        session["pw_code"] = {"hash": _code_hash(user, code), "at": now, "tries": 0}
+        session.pop("pw_ok_at", None)
+        send_mail(f"Your TipPool code: {code}",
+                  f"Hi {user.get_full_name() or user.get_username()},\n\nYour code to change your TipPool password is:\n\n"
+                  f"    {code}\n\nIt works for {CODE_MINUTES} minutes. If you didn't ask to change your password, "
+                  "ignore this email: nothing changes without the code.\n",
+                  settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+        messages.success(request, f"We sent a 6-character code to {_masked(user.email)}.")
+        return redirect("password_change")
+
+    if action == "verify":
+        if not pending:
+            messages.error(request, "That code has expired. Send a new one.")
+            return redirect("password_change")
+        typed = "".join(ch for ch in request.POST.get("code", "").upper() if ch.isalnum())[:6]
+        pending["tries"] += 1
+        session["pw_code"] = pending
+        import hmac
+        if len(typed) == 6 and hmac.compare_digest(_code_hash(user, typed), pending["hash"]):
+            session.pop("pw_code", None)
+            session["pw_ok_at"] = now
+            return redirect("password_change")
+        if pending["tries"] >= CODE_TRIES:
+            session.pop("pw_code", None)
+            messages.error(request, "Too many wrong codes. Send a new one.")
+        else:
+            left = CODE_TRIES - pending["tries"]
+            messages.error(request, f"That code isn't right. {left} {'try' if left == 1 else 'tries'} left.")
+        return redirect("password_change")
+
+    if verified:
+        form = SetPasswordForm(user, request.POST if action == "set" else None)
+        if action == "set" and form.is_valid():
+            return finish(form)
+        return render(request, "registration/password_change_form.html", {**ctx, "step": "new", "form": form})
+    if action == "set":
+        messages.error(request, "Confirm it's you with a code first.")
+        return redirect("password_change")
+    if action == "cancel":
+        session.pop("pw_code", None)
+        return redirect("password_change")
+    return render(request, "registration/password_change_form.html", {**ctx, "step": "code" if pending else "start"})

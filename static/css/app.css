@@ -1242,3 +1242,14 @@ input[type=time]::-webkit-calendar-picker-indicator { display: none !important; 
 .date-wrap > input { display: block; width: 100%; }
 .page-head .report-filter select, .page-head .report-filter input, .activity-filter select, .activity-filter input:not([type=checkbox]) { height: 40px; }
 .page-head .report-filter input[type=date], .activity-filter input[type=date] { min-height: 40px; }
+
+/* ---------- change password steps ---------- */
+.pw-steps { list-style: none; margin: 0 0 18px; padding: 0; display: flex; gap: 8px 22px; flex-wrap: wrap; }
+.pw-steps li { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--graphite); }
+.pw-steps li span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--hair); font: 700 .8rem var(--mono); }
+.pw-steps li.now { color: var(--ink); }
+.pw-steps li.now span { background: var(--marker); border-color: var(--marker); color: #141414; }
+.pw-steps li.done span { background: var(--go); border-color: var(--go); color: var(--paper); }
+.code-input { font: 700 1.4rem var(--mono); letter-spacing: .35em; text-transform: uppercase; max-width: 240px; }
+.code-input::placeholder { letter-spacing: .35em; }
+.resend { border-top: 1px dashed var(--hair); padding-top: 12px; }
