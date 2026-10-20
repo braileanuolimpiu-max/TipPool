@@ -8,7 +8,7 @@
   {% if locations|length > 1 %}
   <form method="post" action="{% url 'location_switch' %}" class="loc-switch">{% csrf_token %}
     <input type="hidden" name="next" value="{{ request.path }}">
-    <select name="location" aria-label="Location" onchange="this.form.submit()">
+    <select name="location" aria-label="Location" onchange="this.form.requestSubmit()">
       {% for loc in locations %}<option value="{{ loc.pk }}" {% if loc.pk == location.pk %}selected{% endif %}>{{ loc.switch_label }}</option>{% endfor %}
     </select><noscript><button>Go</button></noscript>
   </form>

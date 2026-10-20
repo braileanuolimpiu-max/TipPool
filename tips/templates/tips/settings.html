@@ -206,7 +206,7 @@
             <p class="hint">Totals per location, what needs you and what the close-out checks noticed. <a href="{% url 'digest_preview' %}">See this week's</a>.{% if not email_enabled %} Emails start once email sending is set up on the server.{% endif %}</p></div>
           <div class="actions"><button class="btn btn-primary">Save owner controls</button></div>
         </form>
-        <form method="post" action="{% url 'freeze_payouts' %}" class="freeze-box" data-confirm="{% if business.payouts_frozen %}Turn payouts back on? Shifts waiting for an automatic payout go out on the next check.{% else %}Freeze every payout in every location now? Tips still come in. Nothing is paid until you turn payouts back on.{% endif %}">{% csrf_token %}
+        <form method="post" action="{% url 'freeze_payouts' %}" class="freeze-box" data-confirm="{% if business.payouts_frozen %}Turn payouts back on? Shifts waiting for an automatic payout go out on the next check.{% else %}Freeze every payout in every location now? Tips still come in. Nothing is paid until you turn payouts back on.{% endif %}" data-confirm-yes="{% if business.payouts_frozen %}Turn payouts back on{% else %}Freeze all payouts{% endif %}"{% if not business.payouts_frozen %} data-confirm-danger{% endif %}>{% csrf_token %}
           <div><strong>{% if business.payouts_frozen %}Payouts are frozen{% else %}Emergency stop{% endif %}</strong>
             <span class="small muted">{% if business.payouts_frozen %}Turn them back on when you're ready.{% else %}Stops every payout in every location at once (suspected fraud, a mistake in the rules). Tips keep coming in.{% endif %}</span></div>
           {% if business.payouts_frozen %}<button class="btn btn-secondary" name="frozen" value="0">Turn payouts back on</button>
@@ -238,7 +238,7 @@
             {% else %}<form method="post" action="{% url 'location_switch' %}">{% csrf_token %}
               <input type="hidden" name="location" value="{{ loc.pk }}"><input type="hidden" name="next" value="{% url 'settings' %}">
               <button class="btn btn-quiet small">Switch to it</button></form>{% endif %}
-            {% if not loc.archived and all_locations|length > 1 %}<form method="post" action="{% url 'location_archive' loc.pk %}" data-confirm="Archive {{ loc.display_name }}? Its tip codes stop working. You can restore it later.">{% csrf_token %}
+            {% if not loc.archived and all_locations|length > 1 %}<form method="post" action="{% url 'location_archive' loc.pk %}" data-confirm="Archive {{ loc.display_name }}? Its tip codes stop working. You can restore it later." data-confirm-yes="Archive">{% csrf_token %}
               <button class="btn btn-quiet small">Archive</button></form>{% endif %}
           </li>
           {% endfor %}
@@ -265,7 +265,7 @@
             {% if m.is_owner %}<span class="pill live">Owner</span>
             {% elif is_owner %}
             <form method="post" action="{% url 'manager_level' m.pk %}" class="role-pick">{% csrf_token %}
-              <select name="level" aria-label="Level for {{ m.user.get_full_name|default:m.user.username }}" onchange="this.form.submit()">
+              <select name="level" aria-label="Level for {{ m.user.get_full_name|default:m.user.username }}" onchange="this.form.requestSubmit()">
                 <option value="manager" {% if m.level == "manager" %}selected{% endif %}>Manager</option>
                 <option value="lead" {% if m.level == "lead" %}selected{% endif %}>Shift lead</option>
               </select></form>
@@ -347,7 +347,28 @@
     form.addEventListener("input", mark);
     form.addEventListener("change", mark);
     form.addEventListener("submit", () => { dirty = false; });
-    window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+    const leave = {yes: "Leave without saving", no: "Stay", danger: true};
+    const question = "You changed settings for this location but didn't save them. Leave without saving?";
+    // links that leave the page
+    document.addEventListener("click", async (e) => {
+      const link = e.target.closest("a[href]");
+      if (!dirty || !link || link.target === "_blank" || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const url = new URL(link.href, location.href);
+      if (url.origin !== location.origin || (url.pathname === location.pathname && url.hash)) return;
+      e.preventDefault();
+      if (await window.tpConfirm(question, leave)) { dirty = false; location.href = link.href; }
+    }, true);
+    // other forms on the page (switching location, payments, ...) also leave it
+    document.addEventListener("submit", async (e) => {
+      const other = e.target;
+      if (!dirty || other === form || other.method === "dialog" || other.dataset.leaveOk) return;
+      e.preventDefault();
+      if (await window.tpConfirm(question, leave)) {
+        dirty = false;
+        other.dataset.leaveOk = "1";
+        if (e.submitter) other.requestSubmit(e.submitter); else other.requestSubmit();
+      }
+    }, true);
   })();
   const week = document.getElementById("week");
   week.addEventListener("change", (e) => {

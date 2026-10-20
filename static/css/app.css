@@ -1158,3 +1158,87 @@ select.pick-open { border-color: var(--ink); box-shadow: 0 0 0 3px var(--marker)
 .theme-btn .icon-dark { display: none; }
 :root[data-theme="dark"] .theme-btn .icon-dark { display: block; }
 :root[data-theme="dark"] .theme-btn .icon-light { display: none; }
+
+/* ---------- "are you sure?" dialog (replaces the browser's confirm box) ---------- */
+.confirm-dialog { width: min(440px, calc(100vw - 32px)); padding: 0; border: 1.5px solid var(--ink); border-radius: 6px;
+  background: var(--paper); color: var(--ink); box-shadow: 0 24px 60px -20px rgba(0,0,0,.5); }
+.confirm-dialog::backdrop { background: rgba(20, 20, 20, .45); }
+.confirm-dialog[open] { animation: pick-in .14s ease-out; }
+.confirm-dialog form { padding: 22px 22px 18px; border-top: 5px solid var(--marker); }
+.confirm-dialog p { margin: 0 0 20px; font-size: 1.02rem; line-height: 1.5; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 420px) { .confirm-actions { flex-direction: column-reverse; } .confirm-actions .btn { width: 100%; } }
+
+/* ---------- browser-drawn bits, redrawn in our style ---------- */
+::selection { background: var(--marker); color: #141414; }
+* { scrollbar-width: thin; scrollbar-color: var(--steel-2) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--steel-2); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--graphite); background-clip: padding-box; border: 2px solid transparent; }
+input:-webkit-autofill, input:-webkit-autofill:hover, select:-webkit-autofill, textarea:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 60px var(--paper) inset; -webkit-text-fill-color: var(--ink); caret-color: var(--ink); }
+input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 60px var(--paper) inset, 0 0 0 3px var(--marker); }
+input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; cursor: pointer;
+  background: var(--graphite); clip-path: polygon(20% 8%, 50% 38%, 80% 8%, 92% 20%, 62% 50%, 92% 80%, 80% 92%, 50% 62%, 20% 92%, 8% 80%, 38% 50%, 8% 20%); }
+input[type=search]::-webkit-search-cancel-button:hover { background: var(--ink); }
+
+/* expandable sections: our chevron instead of the browser's triangle */
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.week-edit > summary, .flag > summary, .manager-locs > summary { display: inline-flex; align-items: center; gap: 8px; }
+.week-edit > summary::before, .flag > summary::before, .manager-locs > summary::after, .older-receipts > summary::after {
+  content: ""; width: 6px; height: 6px; flex: none; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s; }
+.week-edit[open] > summary::before, .flag[open] > summary::before, .manager-locs[open] > summary::after,
+.older-receipts[open] > summary::after { transform: rotate(45deg); }
+.older-receipts > summary { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+/* form errors */
+.field-error { margin: 6px 0 0; color: var(--void); font-size: .85rem; font-weight: 600; display: flex; gap: 6px; align-items: baseline; }
+.field-error::before { content: "!"; flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--void); color: var(--paper); font: 800 .7rem/1 var(--body); }
+[aria-invalid="true"] { border-color: var(--void) !important; }
+
+/* file picker */
+.file-pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.file-pick input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.file-pick .file-name { font-size: .88rem; color: var(--graphite); overflow-wrap: anywhere; min-width: 0; }
+.file-pick.has-file .file-name { color: var(--ink); font-weight: 600; }
+
+/* date picker */
+.date-wrap { position: relative; display: block; }
+.date-wrap input[type=date] { padding-right: 40px; }
+.date-wrap input[type=date]::-webkit-calendar-picker-indicator { display: none; }
+.date-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; display: grid; place-items: center;
+  border: 0; border-radius: 3px; background: none; color: var(--graphite); cursor: pointer; }
+.date-btn:hover { background: var(--steel-1); color: var(--ink); }
+.date-btn svg { width: 17px; height: 17px; }
+.cal-pop { position: fixed; z-index: 1000; width: 288px; padding: 12px; background: var(--paper); color: var(--ink);
+  border: 1.5px solid var(--ink); border-radius: 6px; box-shadow: 0 18px 40px -16px rgba(0,0,0,.45); animation: pick-in .12s ease-out; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-head strong { font: 800 1.05rem var(--display); font-stretch: 80%; }
+.cal-nav { width: 32px; height: 32px; border: 1px solid var(--hair); border-radius: 4px; background: var(--paper); color: var(--ink);
+  font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.cal-nav:hover { background: var(--marker-soft); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-dow { text-align: center; font: 700 .68rem var(--mono); text-transform: uppercase; color: var(--graphite); padding: 4px 0; }
+.cal-day { height: 34px; border: 0; border-radius: 4px; background: none; color: var(--ink); font: 600 .88rem var(--mono); cursor: pointer; }
+.cal-day:hover, .cal-day.focus { background: var(--marker-soft); }
+.cal-day.out { color: var(--steel-2); }
+.cal-day.today { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.cal-day.chosen { background: var(--marker); color: #141414; }
+.cal-foot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--hair); }
+
+/* tooltips */
+.ui-tip { position: fixed; z-index: 1100; max-width: 280px; padding: 6px 9px; border-radius: 4px; background: var(--ink); color: var(--paper);
+  font: 600 .78rem/1.35 var(--body); pointer-events: none; box-shadow: 0 8px 20px -10px rgba(0,0,0,.5); animation: pick-in .1s ease-out; }
+.ui-tip::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; margin-left: -4px; background: var(--ink);
+  transform: rotate(45deg); }
+.ui-tip.below::after { bottom: auto; top: -4px; }
+input[type=time]::-webkit-calendar-picker-indicator { display: none !important; }  /* the hours and minutes are typed, no browser pop-up */
+.page-head .report-filter .date-wrap input[type=date], .activity-filter .date-wrap input[type=date] { padding-right: 36px; min-width: 158px; }
+.page-head .report-filter .date-btn { width: 28px; height: 28px; right: 3px; }
+.date-wrap > input { display: block; width: 100%; }
+.page-head .report-filter select, .page-head .report-filter input, .activity-filter select, .activity-filter input:not([type=checkbox]) { height: 40px; }
+.page-head .report-filter input[type=date], .activity-filter input[type=date] { min-height: 40px; }

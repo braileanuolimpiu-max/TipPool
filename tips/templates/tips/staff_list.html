@@ -18,7 +18,7 @@
           <div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ m.staff.payout_to }}">{{ m.staff.payout_to }}</div>
         </div>
         {% if m.active %}<form method="post" action="{% url 'staff_role' m.pk %}" class="role-pick">{% csrf_token %}
-          <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" onchange="this.form.submit()">
+          <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" onchange="this.form.requestSubmit()">
             {% for r in roles %}<option value="{{ r.key }}" {% if r.key == m.default_role %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
           </select><noscript><button class="btn btn-quiet small">Save</button></noscript></form>{% endif %}
         {% if m.active %}
@@ -27,7 +27,7 @@
           <input class="copy-link" type="text" readonly value="{{ base_url }}{% url 'my_tips' m.staff.access_token %}" aria-label="{{ m.staff.name }}'s private tips link" onclick="this.select()">
           <button type="button" class="icon-btn" data-copy aria-label="Copy {{ m.staff.name }}'s link" title="Copy link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
-          <form method="post" action="{% url 'staff_new_link' m.pk %}" data-confirm="Make a new link for {{ m.staff.name }}? The old link stops working right away.">{% csrf_token %}
+          <form method="post" action="{% url 'staff_new_link' m.pk %}" data-confirm="Make a new link for {{ m.staff.name }}? The old link stops working right away." data-confirm-yes="Make a new link">{% csrf_token %}
             <button class="icon-btn" aria-label="Make a new link for {{ m.staff.name }}" title="Make a new link (the old one stops working)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.7-4.3L3 9"/><path d="M3 4v5h5"/><path d="M4 13a8 8 0 0 0 14.7 4.3L21 15"/><path d="M21 20v-5h-5"/></svg></button>
           </form>
@@ -43,7 +43,7 @@
             <div><label for="e{{ m.pk }}">PayPal email</label><input type="email" id="e{{ m.pk }}" name="paypal_email" value="{{ m.staff.paypal_email }}" required></div>
             <button class="btn btn-secondary small">Save</button>
           </form>
-          <form method="post" action="{% url 'staff_erase' m.pk %}" class="erase-form" data-confirm="Erase {{ m.staff.name }}'s name, email and tips link for good? Their amounts stay in your reports. This can't be undone.">{% csrf_token %}
+          <form method="post" action="{% url 'staff_erase' m.pk %}" class="erase-form" data-confirm="Erase {{ m.staff.name }}'s name, email and tips link for good? Their amounts stay in your reports. This can't be undone." data-confirm-yes="Erase for good" data-confirm-danger>{% csrf_token %}
             <button class="btn btn-quiet small danger">Erase their personal data</button>
             <span class="hint tight">For privacy requests. Removing someone from the team keeps their data.</span>
           </form>

@@ -12,15 +12,44 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script src="{% static 'js/pick.js' %}" defer></script>
+  <script src="{% static 'js/ui.js' %}" defer></script>
   <script>try { var t = localStorage.getItem("tp-theme"); if (t === "dark") document.documentElement.dataset.theme = "dark"; } catch (e) {}</script>
   {% block head %}{% endblock %}
 </head>
 <body{% block body_class %}{% endblock %}>
 {% block body %}{% endblock %}
+<dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-text">
+  <form method="dialog">
+    <p id="confirm-text"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-quiet" value="no" id="confirm-no">Cancel</button>
+      <button class="btn btn-primary" value="yes" id="confirm-yes">Yes, continue</button>
+    </div>
+  </form>
+</dialog>
 <script>
+  // "Are you sure?" in TipPool's own style. tpConfirm(text, {yes, no, danger}) resolves to true or false.
+  window.tpConfirm = (text, opts = {}) => new Promise((resolve) => {
+    const dialog = document.getElementById("confirm-dialog");
+    const yes = document.getElementById("confirm-yes"), no = document.getElementById("confirm-no");
+    document.getElementById("confirm-text").textContent = text;
+    yes.textContent = opts.yes || "Yes, continue";
+    no.textContent = opts.no || "Cancel";
+    yes.className = "btn " + (opts.danger ? "btn-danger" : "btn-primary");
+    dialog.returnValue = "";
+    dialog.onclose = () => resolve(dialog.returnValue === "yes");
+    dialog.onclick = (e) => { if (e.target === dialog) dialog.close("no"); };  // a click outside cancels
+    dialog.showModal();
+    (opts.danger ? no : yes).focus();  // the safe choice is the default for things that can't be undone
+  });
   // forms that undo something big ask first
-  document.querySelectorAll("form[data-confirm]").forEach((f) => f.addEventListener("submit", (e) => {
-    if (!window.confirm(f.dataset.confirm)) e.preventDefault();
+  document.querySelectorAll("form[data-confirm]").forEach((f) => f.addEventListener("submit", async (e) => {
+    if (f.dataset.confirmed) { delete f.dataset.confirmed; return; }
+    e.preventDefault();
+    const ok = await window.tpConfirm(f.dataset.confirm, {yes: f.dataset.confirmYes, danger: "confirmDanger" in f.dataset});
+    if (!ok) return;
+    f.dataset.confirmed = "1";
+    if (e.submitter) f.requestSubmit(e.submitter); else f.requestSubmit();  // keeps the clicked button's value
   }));
   // copyable links show their end, the part that differs between people
   document.querySelectorAll("input.copy-link").forEach((input) => { input.scrollLeft = input.scrollWidth; });
