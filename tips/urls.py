@@ -15,6 +15,7 @@ urlpatterns = [
     path("my-link/", accounts.email_my_link, name="email_my_link"),
     path("managers/invite/", accounts.invite_manager, name="invite_manager"),
     path("settings/payments/", accounts.payment_settings, name="payment_settings"),
+    path("settings/payments/live-updates/", accounts.paypal_live_updates, name="paypal_live_updates"),
     path("settings/two-step/", accounts.two_step, name="two_step"),
     path("managers/<int:pk>/remove/", accounts.remove_manager, name="remove_manager"),
     path("managers/<int:pk>/level/", accounts.manager_level, name="manager_level"),

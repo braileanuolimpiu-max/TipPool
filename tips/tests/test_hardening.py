@@ -233,3 +233,20 @@ class GapFixTests(CleanCache):
         res = self.client.get("/admin/", follow=True)
         self.assertLess(len(res.redirect_chain), 4)
         self.assertEqual(res.status_code, 200)
+
+
+class LiveUpdatesTests(CleanCache):
+    def test_on_a_computer_it_explains_instead_of_failing_silently(self):
+        from tips.models import Business
+        Business.objects.filter(pk=Location.default().business_id).update(paypal_client_id="CID", paypal_secret_encrypted=encrypt("S"))
+        self.client.force_login(make_manager("owner"))
+        with mock.patch("tips.paypal.PayPalClient.ensure_webhook") as hook:
+            page = self.client.post(reverse("paypal_live_updates"), follow=True)
+        hook.assert_not_called()
+        self.assertContains(page, "need your live site")
+
+    def test_alert_links_open_the_right_location(self):
+        uptown = Location.objects.create(business=Location.default().business, name="Uptown", slug="uptown")
+        self.client.force_login(make_manager("owner"))
+        self.client.get(reverse("messages_page") + "?at=uptown")
+        self.assertEqual(self.client.get(reverse("dashboard")).context["location"], uptown)

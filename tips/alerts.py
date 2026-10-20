@@ -44,7 +44,8 @@ def email_managers(business, subject, body, location=None, owners_only=False, le
     try:
         outgoing = [emails.build(m.user.email, f"[TipPool] {subject}", eyebrow=where, heading=heading or subject,
                                  paragraphs=body.split("\n\n"), quote=quote,
-                                 button=(button, emails.absolute(reverse(page))),
+                                 button=(button, emails.absolute(reverse(page))
+                                         + (f"?at={location.slug}" if location is not None and emails.site_url() else "")),
                                  footer=f"You get this because you manage {business.name} on TipPool.")
                     for m in people]
         get_connection(fail_silently=False).send_messages(outgoing)

@@ -56,7 +56,7 @@ def platform_settings(request):
         section = request.POST.get("section", "")
         handler = {"email": _save_email, "email_test": _test_email, "ai": _save_ai, "paypal": _save_paypal,
                    "paypal_disconnect": _disconnect_paypal, "demo": _save_demo, "cron_new": _new_cron,
-                   "contact": _save_contact}.get(section)
+                   "contact": _save_contact, "paypal_webhook": _retry_webhook}.get(section)
         if handler:
             return handler(request, cfg)
     typed = request.session.pop("platform_typed", {})
@@ -253,14 +253,39 @@ def _save_paypal(request, cfg):
         return redirect(f"{reverse('platform_settings')}#paypal")
     cfg.paypal_client_id, cfg.paypal_live = client_id, live
     cfg.paypal_secret_encrypted = encrypt(secret)
-    cfg.paypal_webhook_id = ""
-    try:
-        cfg.paypal_webhook_id = PayPalClient(client_id, secret, LIVE_API if live else SANDBOX_API) \
-            .ensure_webhook(request.build_absolute_uri(reverse("paypal_webhook")))[:60]
-    except Exception:
-        pass
+    cfg.paypal_webhook_id = _register_webhook(request, PayPalClient(client_id, secret,
+                                                                     LIVE_API if live else SANDBOX_API))
     cfg.save()
     return _done(request, "TipPool's PayPal is connected" + (" (real money)" if live else " (test money)"), "paypal")
+
+
+def _retry_webhook(request, cfg):
+    from .paypal import LIVE_API, SANDBOX_API, PayPalClient
+    if not cfg.paypal_client_id:
+        return redirect(f"{reverse('platform_settings')}#paypal")
+    hook = _register_webhook(request, PayPalClient(cfg.paypal_client_id, cfg.paypal_secret,
+                                                   LIVE_API if cfg.paypal_live else SANDBOX_API))
+    if hook:
+        cfg.paypal_webhook_id = hook
+        cfg.save(update_fields=["paypal_webhook_id"])
+        return _done(request, "PayPal's live updates are on", "paypal")
+    return redirect(f"{reverse('platform_settings')}#paypal")
+
+
+def _register_webhook(request, client):
+    """Ask PayPal to tell this site about payments and payouts. Returns the webhook id, or "" with a message
+    saying why not (PayPal only sends to an https address, so not to a computer)."""
+    url = request.build_absolute_uri(reverse("paypal_webhook"))
+    if not url.startswith("https://"):
+        messages.warning(request, "PayPal's live updates need your live site (an https address). On your computer, "
+                                  "TipPool asks PayPal itself instead: it works, just a little slower.")
+        return ""
+    try:
+        return client.ensure_webhook(url)[:60]
+    except Exception:
+        messages.warning(request, "PayPal didn't turn on live updates just now. TipPool asks PayPal itself meanwhile; "
+                                  "try \"Turn on live updates\" again later.")
+        return ""
 
 
 def _disconnect_paypal(request, cfg):

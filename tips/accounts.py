@@ -300,6 +300,23 @@ def manager_level(request, pk):
 
 @require_POST
 @owner_required
+def paypal_live_updates(request):
+    """Turn on PayPal's live updates (webhook) for the business's own PayPal account."""
+    from .operator import _register_webhook
+    from .paypal import LIVE_API, SANDBOX_API, PayPalClient
+    business = request.business
+    if business.paypal_connected and not business.is_demo:
+        hook = _register_webhook(request, PayPalClient(business.paypal_client_id, business.paypal_secret,
+                                                       LIVE_API if business.paypal_live else SANDBOX_API))
+        if hook:
+            business.paypal_webhook_id = hook
+            business.save(update_fields=["paypal_webhook_id"])
+            messages.success(request, "PayPal's live updates are on.")
+    return redirect(f"{reverse('settings')}#payments")
+
+
+@require_POST
+@owner_required
 def manager_two_step_off(request, pk):
     """A manager lost their phone: the owner turns their two-step sign-in off, so they can sign in and set it
     up again."""
@@ -454,12 +471,9 @@ def payment_settings(request):
         business.paypal_client_id, business.paypal_live = client_id, live
         business.set_paypal_secret(secret)
         # PayPal tells TipPool about payments and payouts as they happen (needs the site's https address)
-        business.paypal_webhook_id = ""
-        try:
-            business.paypal_webhook_id = PayPalClient(client_id, secret, LIVE_API if live else SANDBOX_API) \
-                .ensure_webhook(request.build_absolute_uri(reverse("paypal_webhook")))[:60]
-        except Exception:
-            pass  # e.g. on a computer without https: TipPool asks PayPal itself instead
+        from .operator import _register_webhook
+        business.paypal_webhook_id = _register_webhook(request, PayPalClient(client_id, secret,
+                                                                          LIVE_API if live else SANDBOX_API))
         connected_now = True
         Change.log(request, f"Connected a {'real-money' if live else 'test (sandbox)'} PayPal account")
     business.save()

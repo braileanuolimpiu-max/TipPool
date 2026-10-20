@@ -167,7 +167,8 @@
         <div class="connect-box">
           {% if business.paypal_connected %}
           <p style="margin:0"><span class="pill ok">Connected</span> Tips go straight into <strong>your</strong> PayPal account and payouts come from it{% if not business.paypal_live %}, in <strong>test mode</strong> (no real money yet){% endif %}.
-            {% if business.paypal_webhook_id %}PayPal updates TipPool the moment something happens.{% endif %}</p>
+            {% if business.paypal_webhook_id %}PayPal updates TipPool the moment something happens.{% else %}TipPool checks with PayPal itself; live updates turn on from your live site (https).{% endif %}</p>
+          {% if not business.paypal_webhook_id and is_owner %}<form method="post" action="{% url 'paypal_live_updates' %}" style="margin:8px 0 0">{% csrf_token %}<button class="btn btn-secondary small">Turn on live updates</button></form>{% endif %}
           <details class="connect-guide">
             <summary>Use different PayPal codes</summary>
           {% else %}

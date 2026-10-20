@@ -28,9 +28,12 @@ def pick_location(request):
     if business is not None:
         own = request.allowed_locations
         slug = request.GET.get("at")
+        named = own.filter(slug=slug).first() if slug else None
+        if named is not None:  # e.g. an alert email's link: stay at that location afterwards too
+            request.session["location_id"] = named.pk
+            return named
         location_id = request.session.get("location_id")
-        return ((own.filter(slug=slug).first() if slug else None)
-                or (own.filter(pk=location_id).first() if location_id else None) or own.first())
+        return (own.filter(pk=location_id).first() if location_id else None) or own.first()
     return public_location(request)
 
 

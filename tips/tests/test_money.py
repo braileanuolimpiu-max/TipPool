@@ -335,7 +335,7 @@ class PayPalConnectionTests(TestCase):
             return "tok"
         with mock.patch("tips.paypal.PayPalClient.access_token", autospec=True, side_effect=token),                 mock.patch("tips.paypal.PayPalClient.ensure_webhook", return_value="WH-9") as hook:
             page = self.client.post(reverse("payment_settings"), {"paypal_client_id": "CID", "paypal_secret": "S",
-                                                                  "currency": "USD", "fee_mode": "business"}, follow=True)
+                                                                  "currency": "USD", "fee_mode": "business"}, follow=True, secure=True)
         business = Business.objects.get(pk=self.business.pk)
         self.assertEqual((business.paypal_live, business.paypal_webhook_id), (False, "WH-9"))
         self.assertTrue(hook.call_args[0][0].endswith("/webhooks/paypal/"))

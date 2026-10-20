@@ -82,7 +82,9 @@
       <div><label for="paypal_client_id">Client ID</label><input type="text" id="paypal_client_id" name="paypal_client_id" value="{{ form.paypal_client_id }}" autocomplete="off" spellcheck="false"></div>
       <div><label for="paypal_secret">Secret</label><input type="password" id="paypal_secret" name="paypal_secret" autocomplete="new-password" placeholder="{% if cfg.paypal_secret_encrypted %}Saved and hidden{% endif %}"></div>
     </div>
+    {% if cfg.paypal_client_id %}<p class="hint tight">{% if cfg.paypal_webhook_id %}<span class="pill ok">Live updates on</span> PayPal tells TipPool the moment a payment or payout changes.{% else %}<span class="pill wait">Live updates off</span> TipPool asks PayPal itself instead (a little slower). They turn on from your live site (https).{% endif %}</p>{% endif %}
     <div class="actions"><button class="btn btn-primary">Save and check with PayPal</button>
+      {% if cfg.paypal_client_id and not cfg.paypal_webhook_id %}<button class="btn btn-secondary" name="section" value="paypal_webhook" formnovalidate>Turn on live updates</button>{% endif %}
       {% if paypal_on %}<button class="btn btn-quiet" name="section" value="paypal_disconnect" formnovalidate data-confirm-skip>Disconnect</button>{% endif %}</div>
   </div>
 </form>
