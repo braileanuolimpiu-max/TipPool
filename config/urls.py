@@ -1,13 +1,20 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.views import redirect_to_login
+from django.shortcuts import redirect
 from django.urls import include, path
 
 from tips.accounts import BrandedResetForm, ResetConfirmView, TwoStepLoginView, change_password, login_code
 from tips.ratelimit import limited
 
 # the admin has no sign-in of its own: it would skip the two-step code
-admin.site.login = lambda request, extra_context=None: redirect_to_login(request.GET.get("next") or "/admin/")
+def _admin_login(request, extra_context=None):
+    if request.user.is_authenticated:  # signed in but not allowed in the admin: back to TipPool, no loop
+        return redirect("dashboard")
+    return redirect_to_login(request.GET.get("next") or "/admin/")
+
+
+admin.site.login = _admin_login
 
 urlpatterns = [
     path("admin/", admin.site.urls),

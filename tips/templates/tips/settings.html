@@ -282,6 +282,7 @@
                 <option value="manager" {% if m.level == "manager" %}selected{% endif %}>Manager</option>
                 <option value="lead" {% if m.level == "lead" %}selected{% endif %}>Shift lead</option>
               </select></form>
+            {% if m.totp_enabled %}<form method="post" action="{% url 'manager_two_step_off' m.pk %}" data-confirm="Turn off two-step sign-in for {{ m.user.get_full_name|default:m.user.username }}? Only do this if they lost their phone." data-confirm-yes="Turn it off">{% csrf_token %}<button class="btn btn-quiet small">Turn off two-step</button></form>{% endif %}
             <form method="post" action="{% url 'remove_manager' m.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Remove</button></form>
             {% else %}<span class="small muted">{{ m.level_label }}</span>{% endif %}
             {% if not m.is_owner %}

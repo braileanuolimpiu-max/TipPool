@@ -189,3 +189,47 @@ class TipPageWithoutPayPalTests(CleanCache):
             page = self.client.get(reverse("tip_page") + f"?at={location.slug}")
         self.assertContains(page, "statusEl.textContent = T.not_ready")
         self.assertNotContains(page, "onPayPalWebSdkLoaded()\"></script>")
+
+
+class GapFixTests(CleanCache):
+    def test_empty_values_in_env_mean_not_set(self):
+        import os
+        import tempfile
+        from config.env import load_env
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, ".env")
+            with open(path, "w") as f:
+                f.write("TIPPOOL_TEST_EMPTY=\nTIPPOOL_TEST_SET=yes\n")
+            load_env(path)
+        self.addCleanup(os.environ.pop, "TIPPOOL_TEST_SET", None)
+        self.assertNotIn("TIPPOOL_TEST_EMPTY", os.environ)
+        self.assertEqual(os.environ["TIPPOOL_TEST_SET"], "yes")
+
+    def test_no_paypal_keys_is_a_clear_no(self):
+        from tips.paypal import PayPalClient, PayPalError
+        with self.assertRaises(PayPalError) as caught:
+            PayPalClient("", "", "https://api-m.sandbox.paypal.com").access_token()
+        self.assertEqual(caught.exception.status, 400)
+
+    def test_leaving_the_demo_to_sign_up(self):
+        from tips import demo
+        self.client.force_login(demo.create_demo())
+        page = self.client.get(reverse("signup"))
+        self.assertEqual(page.status_code, 200)
+        self.assertFalse(page.wsgi_request.user.is_authenticated)
+
+    def test_owner_turns_off_a_managers_two_step(self):
+        owner = make_manager("owner")
+        helper = make_manager("helper", owner=False)
+        helper.manager.totp_enabled, helper.manager.totp_secret_encrypted = True, encrypt(totp.new_secret())
+        helper.manager.save()
+        self.client.force_login(owner)
+        self.client.post(reverse("manager_two_step_off", args=[helper.manager.pk]))
+        helper.manager.refresh_from_db()
+        self.assertFalse(helper.manager.totp_enabled)
+
+    def test_admin_does_not_loop_for_a_manager(self):
+        self.client.force_login(make_manager("owner"))
+        res = self.client.get("/admin/", follow=True)
+        self.assertLess(len(res.redirect_chain), 4)
+        self.assertEqual(res.status_code, 200)

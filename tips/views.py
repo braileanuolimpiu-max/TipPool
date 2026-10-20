@@ -75,6 +75,8 @@ def dashboard(request):
             {"done": bool(location.name), "text": "Add your business name", "url": reverse("settings")},
             {"done": staff_count > 0, "text": "Add your team and their PayPal emails", "url": reverse("staff_list")},
             {"done": bool(rule_set), "text": "Describe how your house shares tips", "url": reverse("rules")},
+            {"done": location.business.paypal_connected or location.business.is_demo,
+             "text": "Connect your PayPal, so tips go to your account", "url": f"{reverse('settings')}#payments"},
             {"done": any_tip_ever, "text": "Print your QR code so guests can tip", "url": reverse("qr_page")},
         ],
         "ai_mode": ai.mode(),
@@ -1031,7 +1033,8 @@ def _payout_refusal(exc, night):
             person = paid[int(m.group(1))].staff
             return (f"PayPal didn't accept where {person.name} is paid ({person.payout_to}). Fix it on the Team page "
                     "(Edit), then pay again. Nobody was paid.")
-    return f"PayPal refused the payout: {exc} (debug id {exc.debug_id}). Nobody was paid."
+    debug = f" (PayPal debug id {exc.debug_id})" if getattr(exc, "debug_id", None) else ""
+    return f"PayPal refused the payout: {exc}{debug}. Nobody was paid."
 
 
 @manager_required
@@ -1598,6 +1601,8 @@ def _staff_payout(request, member, token):
         wanted = f"PayPal {email}"
     location = member.memberships.filter(active=True).select_related("location").first()
     if location is None:
+        messages.error(request, "You're not on an active team right now, so there's no manager to approve this. "
+                                "Ask your manager.")
         return redirect("my_tips", token=token)
     member.messages.filter(kind="payout", resolved_at__isnull=True).delete()  # only the latest request counts
     Message.objects.create(staff=member, location=location.location, kind=Message.Kind.PAYOUT_CHANGE,

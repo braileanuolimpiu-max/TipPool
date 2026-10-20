@@ -96,7 +96,7 @@
         {% if msg.reply %}<br><strong>Manager:</strong> {{ msg.reply }}{% endif %}
         <span class="small">{% if msg.is_open %}Waiting for the manager{% else %}Resolved{% endif %}</span></div>
       {% endfor %}
-      {% if not s.paid %}
+      {% if not s.paid and s.night.status != "paying" %}
       <details class="flag">
         <summary>Something wrong with this one?</summary>
         <form method="post">{% csrf_token %}<input type="hidden" name="flag_night" value="{{ s.night_id }}">

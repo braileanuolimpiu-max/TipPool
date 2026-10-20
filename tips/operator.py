@@ -176,7 +176,9 @@ def _save_brevo(request, cfg, host, port, sender):
         messages.error(request, "Paste your Brevo API key.")
         return redirect(f"{reverse('platform_settings')}#email")
     key = key or cfg.email_password
-    problem = brevo_check(key, sender)
+    from email.utils import parseaddr
+    send_as = parseaddr(request.POST.get("email_from", "").strip())[1] or sender
+    problem = brevo_check(key, send_as)
     if problem:
         messages.error(request, problem)
         return redirect(f"{reverse('platform_settings')}#email")

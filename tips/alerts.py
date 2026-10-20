@@ -41,12 +41,12 @@ def email_managers(business, subject, body, location=None, owners_only=False, le
         return
     where = f"{business.name} · {location.display_name}" if location and location.display_name != business.name \
         else business.name
-    outgoing = [emails.build(m.user.email, f"[TipPool] {subject}", eyebrow=where, heading=heading or subject,
-                             paragraphs=body.split("\n\n"), quote=quote,
-                             button=(button, emails.absolute(reverse(page))),
-                             footer=f"You get this because you manage {business.name} on TipPool.")
-                for m in people]
     try:
+        outgoing = [emails.build(m.user.email, f"[TipPool] {subject}", eyebrow=where, heading=heading or subject,
+                                 paragraphs=body.split("\n\n"), quote=quote,
+                                 button=(button, emails.absolute(reverse(page))),
+                                 footer=f"You get this because you manage {business.name} on TipPool.")
+                    for m in people]
         get_connection(fail_silently=False).send_messages(outgoing)
     except Exception:  # an email problem must never break a payout or a webhook
         log.exception("Could not email the managers of %s", business)

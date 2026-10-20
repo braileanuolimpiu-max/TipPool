@@ -42,7 +42,8 @@ class PayPalClient:
         if self._token and time.time() < self._token_expires_at - 60:
             return self._token
         if not self.client_id or not self.client_secret:
-            raise PayPalError("PayPal isn't connected yet. Connect it in Settings (or Platform settings for the demo).")
+            raise PayPalError("PayPal isn't connected yet. Connect it in Settings (or Platform settings for the demo).",
+                              status=400)
         try:
             response = requests.post(
                 f"{self.base_url}/v1/oauth2/token",
@@ -218,7 +219,7 @@ def get_client(business=None):
         return _clients[key]
     from . import platform
     if business is not None and not platform.paypal_platform_fallback():
-        raise PayPalError("Connect your business's PayPal account in Settings first.")
+        raise PayPalError("Connect your business's PayPal account in Settings first.", status=400)
     client_id, secret, base, _ = platform.paypal_platform()
     key = ("platform", client_id, base, secret)
     if key not in _clients:

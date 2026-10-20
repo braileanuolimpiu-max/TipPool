@@ -80,7 +80,8 @@ class LocationMiddleware:
         if request.location is not None:
             timezone.activate(autoclose.location_tz(request.location))
         try:  # the address the site is opened at (the host is already checked against ALLOWED_HOSTS)
-            cache.add("site-url", request.build_absolute_uri("/"), 24 * 3600)
+            if settings.DEBUG or request.get_host().split(":")[0] not in ("localhost", "127.0.0.1"):
+                cache.add("site-url", request.build_absolute_uri("/"), 24 * 3600)
         except Exception:
             pass
         if (settings.AUTOCLOSE_IN_REQUESTS and getattr(request, "user", None) and request.user.is_authenticated

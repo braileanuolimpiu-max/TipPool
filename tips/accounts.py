@@ -151,6 +151,10 @@ def _check_password(password, user=None):
 def signup(request):
     """New business: name, type, first location, and the owner's login.
     A login that exists but has no business (e.g. made in the admin) only fills in the business part."""
+    profile = getattr(request.user, "manager", None) if request.user.is_authenticated else None
+    if profile is not None and profile.business.is_demo:
+        from django.contrib.auth import logout
+        logout(request)  # leaving the demo to make a real account
     finishing = request.user.is_authenticated
     if finishing and getattr(request.user, "manager", None):
         return redirect("dashboard")
@@ -291,6 +295,20 @@ def manager_level(request, pk):
         manager.save(update_fields=["level"])
         name = manager.user.get_full_name() or manager.user.email or manager.user.get_username()
         Change.log(request, f"{name} is now a {manager.get_level_display().lower()}")
+    return redirect(f"{reverse('settings')}#managers")
+
+
+@require_POST
+@owner_required
+def manager_two_step_off(request, pk):
+    """A manager lost their phone: the owner turns their two-step sign-in off, so they can sign in and set it
+    up again."""
+    manager = get_object_or_404(Manager, pk=pk, business=request.business, is_owner=False)
+    manager.totp_enabled, manager.totp_secret_encrypted = False, ""
+    manager.save(update_fields=["totp_enabled", "totp_secret_encrypted"])
+    name = manager.user.get_full_name() or manager.user.email or manager.user.get_username()
+    Change.log(request, f"Turned off two-step sign-in for {name} (lost their phone)")
+    messages.success(request, f"Two-step sign-in is off for {name}. Ask them to turn it on again after signing in.")
     return redirect(f"{reverse('settings')}#managers")
 
 

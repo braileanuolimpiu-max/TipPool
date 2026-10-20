@@ -12,4 +12,5 @@ def load_env(path):
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip())
+        if value.strip():  # an empty value means "not set", so the default applies
+            os.environ.setdefault(key.strip(), value.strip())

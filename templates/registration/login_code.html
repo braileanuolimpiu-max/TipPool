@@ -8,6 +8,8 @@
   <div><label for="code">Code</label>
     <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required autofocus placeholder="123 456" class="code-input"></div>
   <button class="btn btn-primary btn-block">Sign in</button>
+  <details class="small muted"><summary>Lost your phone?</summary>
+    <p style="margin:6px 0 0">Ask your business's owner to turn off two-step sign-in for you (Settings → Managers). Owners: ask the person who runs this TipPool site.</p></details>
   <p class="auth-switch"><a href="{% url 'login' %}">Start over</a></p>
 </form>
 {% endblock %}

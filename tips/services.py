@@ -175,9 +175,11 @@ def _late_tip(tip):
     elif night.status in (Night.Status.PAYING, Night.Status.PAID):
         if night.location.archived:  # no shift will ever be shared there again: tell the business instead
             business = business_of(night)
-            raise_alert(business, f"A {business.symbol}{tip.amount} tip for {night.location.display_name} arrived "
-                                  "after its shift was paid, and the location is archived. Share it by hand.",
-                        location=night.location, night=night, key=f"late-archived:{tip.pk}")
+            text = (f"A {business.symbol}{tip.amount} tip for {night.location.display_name} arrived after its shift "
+                    "was paid, and the location is archived. Share it by hand.")
+            # after the shift's lock is released: the alert emails the managers
+            transaction.on_commit(lambda: raise_alert(business, text, location=night.location, night=night,
+                                                      key=f"late-archived:{tip.pk}"))
             return
         tip.night = Night.current(night.location)
         tip.save(update_fields=["night"])

@@ -18,6 +18,7 @@ urlpatterns = [
     path("settings/two-step/", accounts.two_step, name="two_step"),
     path("managers/<int:pk>/remove/", accounts.remove_manager, name="remove_manager"),
     path("managers/<int:pk>/level/", accounts.manager_level, name="manager_level"),
+    path("managers/<int:pk>/two-step-off/", accounts.manager_two_step_off, name="manager_two_step_off"),
     path("managers/<int:pk>/locations/", accounts.manager_locations, name="manager_locations"),
     path("settings/owner/", accounts.owner_controls, name="owner_controls"),
     path("settings/freeze/", accounts.freeze_payouts, name="freeze_payouts"),

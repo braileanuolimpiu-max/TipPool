@@ -165,7 +165,7 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 306 tests and a lint check, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 312 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -179,8 +179,9 @@ pip install -r requirements.txt
 copy .env.example .env          # macOS/Linux: cp .env.example .env
 ```
 
-`.env` is optional: everything in it can also be set on the website (**Platform** settings, see below).
-For a quick local start, fill:
+Copying `.env.example` to `.env` is required on your computer: it turns on development mode
+(`DJANGO_DEBUG=1`). Everything else in it is optional and can be set on the website instead (**Platform**
+settings, see below). For a quick local start, fill:
 - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`: developer.paypal.com → Apps & Credentials → **Sandbox**
   (make sure **Payouts** is enabled for the app).
 - `MARIA_EMAIL`, `JOHN_EMAIL`, ...: your sandbox **personal** account emails, so demo payouts really arrive.
@@ -227,7 +228,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-306 tests cover:
+312 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes
