@@ -78,6 +78,9 @@ def brevo_check(api_key, sender):
             if "ip" in said.lower().split() or "ip address" in said.lower():
                 return ("Brevo blocked this server's internet address. In Brevo: your name (top right) → Security → "
                         "Authorized IPs → turn off blocking of unknown IP addresses, then save here again.")
+            if account.status_code == 403:  # the key is real but wasn't given this permission
+                return ("Brevo knows that key, but it can't read your account. Make a key with these permissions: "
+                        "Transactional emails: send (write), and Account: read. Everything else can stay off.")
             return ("Brevo didn't accept that API key" + (f" (Brevo says: {said})" if said else "") + ". Use an API "
                     "key (it starts with xkeysib-) from SMTP & API → API Keys, not the SMTP key.")
         if account.status_code >= 400:

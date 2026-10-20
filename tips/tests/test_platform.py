@@ -75,11 +75,11 @@ class SettingsFromTheWebsiteTests(TestCase):
         self.assertIsNone(platform.email_settings())
 
     def brevo_api(self, senders=({"email": "hello@tippool.app", "active": True},), key_ok=True,
-                  refused="Key not found"):
+                  refused="Key not found", status=401):
         """Brevo's API, faked: the account check, the senders list, and sending."""
         def get(url, **kwargs):
             if url.endswith("/account"):
-                return mock.Mock(status_code=200 if key_ok else 401, json=lambda: {"message": refused})
+                return mock.Mock(status_code=200 if key_ok else status, json=lambda: {"message": refused})
             if url.endswith("/senders"):
                 return mock.Mock(status_code=200, json=lambda: {"senders": list(senders)})
             return mock.Mock(status_code=200, json=lambda: {"domains": []})
@@ -105,6 +105,7 @@ class SettingsFromTheWebsiteTests(TestCase):
         cases = [({"key_ok": False}, "xkeysib-bad", "didn&#x27;t accept that API key"),
                  ({"key_ok": False, "refused": "We have detected you are using an unrecognised IP address 1.2.3.4"},
                   "xkeysib-abc", "Authorized IPs"),
+                 ({"key_ok": False, "status": 403, "refused": "permission denied"}, "xkeysib-abc", "Account: read"),
                  ({"senders": ()}, "xkeysib-abc", "Add a sender"),
                  ({"senders": ({"email": "hello@tippool.app", "active": False},)}, "xkeysib-abc", "not confirmed"),
                  ({}, "xsmtpsib-abc", "SMTP key")]
