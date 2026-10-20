@@ -1133,3 +1133,19 @@ body.menu-open .tour { display: none; }
 .save-bar.dirty { border-color: var(--marker); box-shadow: 0 0 0 3px var(--marker-soft), 0 10px 24px -14px rgba(0,0,0,.4); }
 .save-bar.dirty .save-note { font-weight: 700; }
 .save-bar.dirty .save-note::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--wait); margin-right: 8px; vertical-align: 1px; }
+
+/* ---------- dropdown lists in our own style (static/js/pick.js) ---------- */
+.pick-list { position: fixed; z-index: 1000; margin: 0; padding: 5px; list-style: none; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 4px;
+  box-shadow: 0 16px 34px -14px rgba(0,0,0,.45), 0 2px 0 var(--hair-soft); font-family: var(--body);
+  animation: pick-in .12s ease-out; }
+@keyframes pick-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.pick-opt { position: relative; padding: 8px 14px 8px 32px; border-radius: 3px; cursor: pointer; line-height: 1.35; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.pick-opt.active { background: var(--marker-soft); }
+.pick-opt[aria-selected="true"] { font-weight: 700; }
+.pick-opt[aria-selected="true"]::before { content: ""; position: absolute; left: 11px; top: 50%; width: 12px; height: 12px; margin-top: -6px;
+  background: var(--ink); clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%); }
+.pick-opt[aria-disabled="true"] { opacity: .45; cursor: default; }
+.pick-group { padding: 8px 14px 4px; font: 700 .7rem var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--graphite); }
+select.pick-open { border-color: var(--ink); box-shadow: 0 0 0 3px var(--marker); }
