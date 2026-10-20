@@ -131,6 +131,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
+    {
+        'NAME': 'tips.passwords.NotTheCurrentPassword',
+    },
 ]
 
 
@@ -181,6 +184,9 @@ elif DEBUG:
 else:
     EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "TipPool <no-reply@tippool.local>")
+# the email account saved on the Platform settings page is used first; the one above is the fallback
+EMAIL_FALLBACK_BACKEND = EMAIL_BACKEND
+EMAIL_BACKEND = "tips.mailer.PlatformBackend"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 

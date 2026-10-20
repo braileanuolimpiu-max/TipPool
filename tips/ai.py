@@ -39,7 +39,8 @@ _local = threading.local()
 
 
 def mode():
-    return "mock" if getattr(_local, "offline", False) else settings.AI_MODE
+    from .platform import ai_mode
+    return "mock" if getattr(_local, "offline", False) else ai_mode()
 
 
 @contextmanager
@@ -273,7 +274,7 @@ Never guess numbers you cannot read: leave the person out and explain it in "not
 def read_schedule(image_bytes, media_type, staff_names, location):
     """Returns dict: shifts [{name, role, hours}], notes []."""
     if mode() != "claude":
-        raise AIError("Reading a photo needs the real AI (AI_MODE=claude). For now, enter the hours below.")
+        raise AIError("Reading a photo needs Claude, which isn't switched on. For now, enter the hours below.")
     content = [
         {"type": "image", "source": {"type": "base64", "media_type": media_type,
                                      "data": base64.standard_b64encode(image_bytes).decode("utf-8")}},
@@ -346,12 +347,14 @@ def _claude_parse(system, content, output_model, effort="medium"):
     except ImportError as exc:  # pragma: no cover
         raise AIError("The anthropic package is not installed.") from exc
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise AIError("The Claude API key is missing (ANTHROPIC_API_KEY).")
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
+    from .platform import anthropic_key, claude_model
+    key = anthropic_key()
+    if not key:
+        raise AIError("Claude isn't connected yet (Platform settings → AI).")
+    client = anthropic.Anthropic(api_key=key)
     try:
         response = client.messages.parse(
-            model=settings.CLAUDE_MODEL,
+            model=claude_model(),
             max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": content}],
@@ -359,7 +362,7 @@ def _claude_parse(system, content, output_model, effort="medium"):
             output_format=output_model,
         )
     except anthropic.AuthenticationError as exc:
-        raise AIError("The Claude API key is missing or invalid (ANTHROPIC_API_KEY).") from exc
+        raise AIError("Claude didn't accept the key. Check it in Platform settings → AI.") from exc
     except anthropic.RateLimitError as exc:
         raise AIError("Claude is rate-limited right now. Try again in a minute.") from exc
     except anthropic.APIStatusError as exc:

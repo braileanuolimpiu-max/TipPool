@@ -29,7 +29,8 @@ GUESTS = ["Pat G.", "Chris L.", "Dana M.", "Alex R.", "Jamie T.", "Morgan K.", "
 
 def _email(name):
     """Your PayPal sandbox personal accounts from .env (MARIA_EMAIL=...), so demo payouts really arrive."""
-    return os.environ.get(f"{name.upper()}_EMAIL") or f"{name.lower()}.demo@example.com"
+    from .platform import demo_staff_email
+    return demo_staff_email(name) or f"{name.lower()}.demo@example.com"
 
 
 def fill(location, seed=7):

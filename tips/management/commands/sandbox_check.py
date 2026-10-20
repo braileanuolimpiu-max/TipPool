@@ -32,8 +32,9 @@ class Command(BaseCommand):
         parser.add_argument("--amount", default="5.00", help="Tip amount for the guest step.")
 
     def handle(self, *args, **opts):
-        if settings.PAYPAL_BASE_URL.rstrip("/") != SANDBOX_API:
-            raise CommandError("Only for the PayPal sandbox (PAYPAL_BASE_URL is not the sandbox).")
+        from tips.platform import paypal_platform
+        if paypal_platform()[2].rstrip("/") != SANDBOX_API:
+            raise CommandError("Only for the PayPal sandbox: TipPool's own PayPal is connected with real-money codes.")
         self.failed = 0
         client = get_client(None)
 
@@ -50,7 +51,8 @@ class Command(BaseCommand):
                                           summary=parsed["summary"], warnings=parsed["warnings"])
         people = []
         for name, role, hours in TEAM:
-            email = os.environ.get(f"{name.upper()}_EMAIL")
+            from tips.platform import demo_staff_email
+            email = demo_staff_email(name)
             if not email:
                 continue
             person = StaffMember.objects.create(business=business, name=name, paypal_email=email,

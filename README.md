@@ -152,7 +152,7 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 252 tests, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 274 tests, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -183,19 +183,26 @@ Emails (invites, password resets, alerts) print in the terminal until you set `E
 Check the PayPal side for real: `python manage.py sandbox_check` (add `--wait 300` to also approve a tip
 in your browser as a sandbox buyer and have it captured).
 
-## Deploy (free)
+## Deploy (free), then set everything up on the website
 
-The repo includes a Render blueprint (`render.yaml`) and `build.sh`.
+The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or `.env` editing is needed.
 
-1. Create a free Postgres database on [Neon](https://neon.tech) and copy its connection string.
-2. On [Render](https://render.com): **New → Blueprint**, pick this repo. Fill in `DATABASE_URL`,
-   `TIPPOOL_ENCRYPTION_KEY` (see `.env.example`), the PayPal keys and, optionally, `ANTHROPIC_API_KEY`.
-   `DJANGO_SECRET_KEY` and `CRON_SECRET` are generated for you.
-3. A free Render server sleeps after 15 minutes. Add a free job on [cron-job.org](https://cron-job.org)
-   that opens `https://<your-app>.onrender.com/internal/tick/?key=<CRON_SECRET>` every 10 minutes: it runs
-   automatic close-outs and demo clean-up, and keeps the app awake.
-4. In the PayPal app, add a webhook to `https://<your-app>.onrender.com/webhooks/paypal/` and set
-   `PAYPAL_WEBHOOK_ID`.
+1. Create a free Postgres database on [Neon](https://neon.tech) and copy its connection link.
+2. On [Render](https://render.com): **New → Blueprint**, pick this repo, and paste the link as `DATABASE_URL`.
+   That's the only value you type: Render generates the two secret keys itself.
+3. Open the site and **create your account**. The first account on a new site runs it, and gets
+   **Platform** at the top. There, with step-by-step help on each part:
+   - **Email:** pick Gmail, Outlook, Brevo or another service and log in, then "Send me a test email".
+   - **AI:** paste a Claude API key and choose the model.
+   - **TipPool's PayPal:** two codes from PayPal, for the demo and for businesses not connected yet.
+     PayPal's update address (webhook) is registered automatically.
+   - **The demo:** a test buyer login and the demo team's test payout emails.
+   - **Scheduler:** copy the ready-made address into a free [cron-job.org](https://cron-job.org) job every
+     10 minutes. It runs automatic close-outs, smart alerts and summaries, and keeps the free server awake.
+     The page shows when it last checked in.
+4. Each business connects its own PayPal in **Settings → Payments** (4 plain steps, no technical fields).
+
+`.env` still works for local development (see `.env.example`); anything saved on the website comes first.
 
 ## Tests
 
@@ -203,7 +210,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`.
 python manage.py test tips
 ```
 
-252 tests cover:
+274 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes

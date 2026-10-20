@@ -23,7 +23,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, guest_i18n, hours as hours_from, insights, roles as role_presets, services
+from . import ai, autoclose, guest_i18n, hours as hours_from, insights, platform, roles as role_presets, services
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, two_step_setup_context
@@ -158,8 +158,7 @@ def tip_page(request):
         response = render(request, "tips/tip_page.html", {
             **_guest_language(request, lang),
             "location": location, "restaurant_name": location.display_name, "restaurant_named": bool(location.name),
-            "sandbox_buyer": (settings.DEMO_BUYER_EMAIL, settings.DEMO_BUYER_PASSWORD)
-                             if location.business.is_demo and settings.DEMO_BUYER_EMAIL else None,
+            "sandbox_buyer": platform.demo_buyer() if location.business.is_demo else None,
             "at": location.slug,
             "tip_style": style,
             # personal tips only, and nobody to pick: tipping can't work right now
@@ -185,7 +184,7 @@ LEGAL_UPDATED = "October 20, 2026"
 
 def legal_page(request, page):
     return render(request, f"legal/{page}.html", {"page": page, "updated": LEGAL_UPDATED,
-                                                  "contact_email": settings.CONTACT_EMAIL})
+                                                  "contact_email": platform.contact_email()})
 
 
 def _guest_language(request, lang):
@@ -507,7 +506,7 @@ def staff_bulk(request):
             continue
         person = _add_person(request, location, name, email, role)
         added.append(person)
-        if send_links and settings.EMAIL_ENABLED:
+        if send_links and platform.email_enabled():
             link = request.build_absolute_uri(reverse("my_tips", args=[person.access_token]))
             mailed += send_mail(f"Your tips at {location.display_name}",
                                 f"Hi {person.name},\n\n{location.display_name} pays your share of the tips with "
@@ -517,7 +516,7 @@ def staff_bulk(request):
                                 fail_silently=True)
     if added:
         note = f"Added {len(added)} {'person' if len(added) == 1 else 'people'} to the team."
-        if send_links and settings.EMAIL_ENABLED:
+        if send_links and platform.email_enabled():
             note += f" Emailed {mailed} private link{'s' if mailed != 1 else ''}."
         messages.success(request, note)
     if skipped:

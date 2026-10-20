@@ -1263,3 +1263,16 @@ input[type=time]::-webkit-calendar-picker-indicator { display: none !important; 
 .guide-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; line-height: 1.45; }
 .guide-steps li::before { content: counter(step); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
   background: var(--marker); color: #141414; font: 700 .8rem var(--mono); }
+
+/* ---------- platform settings ---------- */
+.setup-status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 22px; }
+.setup-status a { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--hair); border-left: 5px solid var(--wait); border-radius: 4px;
+  background: var(--paper); text-decoration: none; }
+.setup-status a.ok { border-left-color: var(--go); }
+.setup-status b { font-size: .95rem; }
+.setup-status span { font-size: .82rem; color: var(--graphite); }
+@media (max-width: 760px) { .setup-status { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.switch-row { display: flex; align-items: center; gap: 10px; font-weight: 700; cursor: pointer; }
+.provider-help[hidden] { display: none; }
+.platform-link { font-weight: 700; color: var(--ink); text-decoration: none; border: 1px solid var(--hair); border-radius: 4px; padding: 4px 9px; }
+.platform-link:hover { background: var(--marker-soft); }

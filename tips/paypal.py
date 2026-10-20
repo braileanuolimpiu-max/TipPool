@@ -26,8 +26,12 @@ class PayPalError(Exception):
 
 class PayPalClient:
     def __init__(self, client_id=None, client_secret=None, base_url=None):
-        self.client_id = client_id or settings.PAYPAL_CLIENT_ID
-        self.client_secret = client_secret or settings.PAYPAL_CLIENT_SECRET
+        if client_id is None:  # TipPool's own account, as saved on the Platform settings page
+            from .platform import paypal_platform
+            client_id, client_secret, platform_base, _ = paypal_platform()
+            base_url = base_url or platform_base
+        self.client_id = client_id
+        self.client_secret = client_secret
         self.base_url = (base_url or settings.PAYPAL_BASE_URL).rstrip("/")
         self._token = None
         self._token_expires_at = 0
@@ -38,7 +42,7 @@ class PayPalClient:
         if self._token and time.time() < self._token_expires_at - 60:
             return self._token
         if not self.client_id or not self.client_secret:
-            raise PayPalError("PayPal credentials are missing. Fill PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in .env")
+            raise PayPalError("PayPal isn't connected yet. Connect it in Settings (or Platform settings for the demo).")
         response = requests.post(
             f"{self.base_url}/v1/oauth2/token",
             auth=(self.client_id, self.client_secret),
@@ -209,24 +213,32 @@ def get_client(business=None):
             _clients[key] = PayPalClient(business.paypal_client_id, business.paypal_secret,
                                          LIVE_API if business.paypal_live else SANDBOX_API)
         return _clients[key]
-    if business is not None and not settings.PAYPAL_PLATFORM_FALLBACK:
+    from . import platform
+    if business is not None and not platform.paypal_platform_fallback():
         raise PayPalError("Connect your business's PayPal account in Settings first.")
-    if "platform" not in _clients:
-        _clients["platform"] = PayPalClient()
-    return _clients["platform"]
+    client_id, secret, base, _ = platform.paypal_platform()
+    key = ("platform", client_id, base, secret)
+    if key not in _clients:
+        _clients[key] = PayPalClient(client_id, secret, base)
+    return _clients[key]
 
 
 def checkout_config(business):
     """Client id + SDK URL for the guest tip page (the browser talks to the same PayPal account)."""
     if business is not None and business.paypal_connected:
         return business.paypal_client_id, (LIVE_SDK if business.paypal_live else SANDBOX_SDK)
+    from . import platform
+    client_id, _, base, live = platform.paypal_platform()
+    if client_id and platform.config().paypal_client_id:
+        return client_id, (LIVE_SDK if live else SANDBOX_SDK)
     return settings.PAYPAL_CLIENT_ID, settings.PAYPAL_SDK_URL
 
 
 def webhook_id_for(business):
     if business is not None and business.paypal_connected:
         return business.paypal_webhook_id
-    return settings.PAYPAL_WEBHOOK_ID
+    from .platform import paypal_platform_webhook
+    return paypal_platform_webhook()
 
 
 def detect_mode(client_id, secret):

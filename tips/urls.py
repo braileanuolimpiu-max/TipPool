@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import accounts, views
+from . import accounts, operator, views
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
@@ -23,6 +23,8 @@ urlpatterns = [
     path("settings/freeze/", accounts.freeze_payouts, name="freeze_payouts"),
     path("digest/", views.digest_preview, name="digest_preview"),
     path("activity/", views.activity, name="activity"),
+    path("platform/", operator.platform_settings, name="platform_settings"),
+    path("platform/claim/", operator.claim_platform, name="claim_platform"),
     path("managers/invites/<int:pk>/cancel/", accounts.cancel_invite, name="cancel_invite"),
     # customer (public)
     path("tip/", views.tip_page, name="tip_page"),

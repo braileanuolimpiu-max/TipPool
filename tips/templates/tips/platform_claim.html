@@ -1,0 +1,15 @@
+{% extends "app.html" %}
+{% block title %}Platform settings{% endblock %}
+{% block content %}
+<header class="page-head"><div><h1>Platform settings</h1>
+  <p>Email, AI, TipPool's own PayPal and the scheduler, for the whole site.</p></div></header>
+<div class="panel panel-body stack narrow-panel">
+{% if can_claim %}
+  <p style="margin:0"><strong>Nobody runs this TipPool site yet.</strong> If you set it up (you deployed it, or you're its administrator), take this role to connect email, AI and the rest from here.</p>
+  <form method="post" action="{% url 'claim_platform' %}" data-confirm="Become the person who runs this TipPool site? You'll manage email, AI and payments for every business on it." data-confirm-yes="Yes, I run this site">{% csrf_token %}
+    <button class="btn btn-primary">I run this site</button></form>
+{% else %}
+  <p style="margin:0">Only the person who runs this TipPool site can open Platform settings. Your own business's settings are in <a href="{% url 'settings' %}">Settings</a>.</p>
+{% endif %}
+</div>
+{% endblock %}

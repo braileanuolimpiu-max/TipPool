@@ -1,0 +1,143 @@
+{% extends "app.html" %}
+{% block title %}Platform settings{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Platform settings</h1>
+    <p>How this TipPool site runs, for every business on it. Only you, as the person running TipPool, see this page. Nothing here needs code.</p></div>
+</header>
+
+<section class="setup-status" aria-label="What's set up">
+  <a href="#email" class="{% if email_on %}ok{% endif %}"><b>Email</b><span>{% if email_on %}Connected{% else %}Not connected{% endif %}</span></a>
+  <a href="#ai" class="{% if ai_on %}ok{% endif %}"><b>AI (Claude)</b><span>{% if ai_on %}On{% else %}Built-in assistant{% endif %}</span></a>
+  <a href="#paypal" class="{% if paypal_on %}ok{% endif %}"><b>TipPool's PayPal</b><span>{% if paypal_on %}{% if cfg.paypal_live %}Real money{% else %}Test money{% endif %}{% else %}Not connected{% endif %}</span></a>
+  <a href="#scheduler" class="{% if minutes_since_tick is not None and minutes_since_tick < 30 %}ok{% endif %}"><b>Scheduler</b><span>{% if minutes_since_tick is None %}Never checked in{% elif minutes_since_tick < 2 %}Checked in just now{% else %}Last check-in {{ minutes_since_tick }} min ago{% endif %}</span></a>
+</section>
+
+<div class="stack" style="gap:18px">
+
+<form method="post" class="panel setting" id="email">{% csrf_token %}<input type="hidden" name="section" value="email">
+  <div class="setting-intro"><span class="setting-no">01</span><h2>Email</h2>
+    <p>Sends invites, password codes and reset links, alerts and summary emails for every business.</p>
+    {% if email_on %}<span class="pill ok">Connected</span>{% else %}<span class="pill wait">Not connected</span>{% endif %}</div>
+  <div class="setting-body stack">
+    <div><label for="email_provider">Send from</label>
+      <select id="email_provider" name="email_provider">
+        <option value="">Choose…</option>
+        {% for value, label in providers %}<option value="{{ value }}" {% if cfg.email_provider == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div class="provider-help" data-for="gmail"><p class="hint tight">Gmail needs an <strong>app password</strong>: Google Account → Security → turn on 2-Step Verification → App passwords → create one named TipPool. Paste the 16 letters below.</p></div>
+    <div class="provider-help" data-for="outlook"><p class="hint tight">Your Outlook / Microsoft 365 email and password (or an app password if your account has two-step sign-in).</p></div>
+    <div class="provider-help" data-for="brevo"><p class="hint tight">In Brevo: SMTP &amp; API → SMTP. Use the login shown there and generate an SMTP key. Free for 300 emails a day.</p></div>
+    <div class="form-grid provider-help" data-for="other">
+      <div><label for="email_host">Server</label><input type="text" id="email_host" name="email_host" value="{{ cfg.email_host }}" placeholder="smtp.example.com"></div>
+      <div><label for="email_port">Port</label><input type="number" id="email_port" name="email_port" value="{{ cfg.email_port }}" min="1" max="65535"></div>
+    </div>
+    <div class="form-grid">
+      <div><label for="email_user">Email address (login)</label><input type="text" id="email_user" name="email_user" value="{{ cfg.email_user }}" autocomplete="off" placeholder="you@gmail.com"></div>
+      <div><label for="email_password">Password</label><input type="password" id="email_password" name="email_password" autocomplete="new-password" placeholder="{% if cfg.email_password_encrypted %}Saved and hidden{% endif %}"></div>
+    </div>
+    <div><label for="email_from">Send as <span class="muted">(optional)</span></label>
+      <input type="text" id="email_from" name="email_from" value="{{ cfg.email_from }}" placeholder="TipPool &lt;hello@yourbusiness.com&gt;">
+      <p class="hint">What people see as the sender. Empty = the address above.</p></div>
+    <div class="actions">
+      <button class="btn btn-primary">Save and test the login</button>
+      {% if email_on %}<button class="btn btn-secondary" name="section" value="email_test" formnovalidate>Send me a test email</button>{% endif %}
+    </div>
+  </div>
+</form>
+
+<form method="post" class="panel setting" id="ai">{% csrf_token %}<input type="hidden" name="section" value="ai">
+  <div class="setting-intro"><span class="setting-no">02</span><h2>AI (Claude)</h2>
+    <p>Reads tip rules, explains shares, checks close-outs, answers questions and reads schedule photos. Without it, a free built-in assistant does the basics.</p>
+    {% if ai_on %}<span class="pill ok">On</span>{% else %}<span class="pill wait">Built-in assistant</span>{% endif %}</div>
+  <div class="setting-body stack">
+    <label class="switch-row"><span class="switch"><input type="checkbox" name="ai_enabled" {% if cfg.ai_enabled %}checked{% endif %}><span></span></span> Use Claude</label>
+    <div class="form-grid">
+      <div><label for="anthropic_key">Claude API key</label><input type="password" id="anthropic_key" name="anthropic_key" autocomplete="new-password" placeholder="{% if cfg.anthropic_key_encrypted %}Saved and hidden{% else %}sk-ant-…{% endif %}">
+        <p class="hint">From <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com → API keys</a>.</p></div>
+      <div><label for="claude_model">Model</label>
+        <select id="claude_model" name="claude_model">{% for value, label in models %}<option value="{{ value }}" {% if cfg.claude_model == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="actions"><button class="btn btn-primary">Save and test the key</button></div>
+  </div>
+</form>
+
+<form method="post" class="panel setting" id="paypal">{% csrf_token %}<input type="hidden" name="section" value="paypal">
+  <div class="setting-intro"><span class="setting-no">03</span><h2>TipPool's PayPal</h2>
+    <p>Used by "Try the demo" and by businesses that haven't connected their own PayPal yet (test money only). Each business connects its own in its Settings.</p>
+    {% if paypal_on %}<span class="pill ok">{% if cfg.paypal_live %}Real money{% else %}Test money{% endif %}</span>{% else %}<span class="pill wait">Not connected</span>{% endif %}</div>
+  <div class="setting-body stack">
+    <ol class="guide-steps">
+      <li><span>Open <a href="https://developer.paypal.com/dashboard/applications/sandbox" target="_blank" rel="noopener">PayPal's page for apps</a> (Sandbox tab for test money) and log in.</span></li>
+      <li><span>Click <strong>Create App</strong>, name it <strong>TipPool</strong>, and tick <strong>Payouts</strong> under Features.</span></li>
+      <li><span>Copy the two codes into the boxes below.</span></li>
+    </ol>
+    <div class="form-grid">
+      <div><label for="paypal_client_id">Client ID</label><input type="text" id="paypal_client_id" name="paypal_client_id" value="{{ cfg.paypal_client_id }}" autocomplete="off" spellcheck="false"></div>
+      <div><label for="paypal_secret">Secret</label><input type="password" id="paypal_secret" name="paypal_secret" autocomplete="new-password" placeholder="{% if cfg.paypal_secret_encrypted %}Saved and hidden{% endif %}"></div>
+    </div>
+    <div class="actions"><button class="btn btn-primary">Save and check with PayPal</button>
+      {% if paypal_on %}<button class="btn btn-quiet" name="section" value="paypal_disconnect" formnovalidate data-confirm-skip>Disconnect</button>{% endif %}</div>
+  </div>
+</form>
+
+<form method="post" class="panel setting" id="demo">{% csrf_token %}<input type="hidden" name="section" value="demo">
+  <div class="setting-intro"><span class="setting-no">04</span><h2>The demo</h2>
+    <p>Test (sandbox) accounts from PayPal's page for test accounts, so people trying the demo can pay a tip, and demo payouts really arrive.</p></div>
+  <div class="setting-body stack">
+    <div class="form-grid">
+      <div><label for="demo_buyer_email">Guest's test PayPal login</label><input type="text" id="demo_buyer_email" name="demo_buyer_email" value="{{ cfg.demo_buyer_email }}" autocomplete="off" placeholder="sb-buyer@personal.example.com"></div>
+      <div><label for="demo_buyer_password">Its password</label><input type="text" id="demo_buyer_password" name="demo_buyer_password" value="{{ cfg.demo_buyer_password }}" autocomplete="off">
+        <p class="hint">Shown on demo tip pages, so use a test account only.</p></div>
+    </div>
+    <p class="small muted" style="margin:0">Where the demo team's tips are paid (test PayPal emails). Empty = made-up addresses.</p>
+    <div class="form-grid">
+      {% for name, email in demo_staff %}<div><label for="staff_{{ name }}">{{ name }}</label><input type="text" id="staff_{{ name }}" name="staff_{{ name }}" value="{{ email }}" autocomplete="off"></div>{% endfor %}
+    </div>
+    <div class="actions"><button class="btn btn-primary">Save demo accounts</button></div>
+  </div>
+</form>
+
+<section class="panel setting" id="scheduler">
+  <div class="setting-intro"><span class="setting-no">05</span><h2>Scheduler</h2>
+    <p>Every few minutes, a free outside service opens this address. That runs automatic close-outs, smart alerts and summary emails, and keeps a free server awake.</p>
+    {% if minutes_since_tick is not None and minutes_since_tick < 30 %}<span class="pill ok">Working</span>{% else %}<span class="pill wait">Not running yet</span>{% endif %}</div>
+  <div class="setting-body stack">
+    <ol class="guide-steps">
+      <li><span>Make a free account on <a href="https://cron-job.org" target="_blank" rel="noopener">cron-job.org</a>.</span></li>
+      <li><span>Click <strong>Create cronjob</strong>, paste the address below, choose <strong>every 10 minutes</strong>, and save.</span></li>
+      <li><span>Come back here: within 10 minutes it says "Checked in".</span></li>
+    </ol>
+    <div class="link-tools"><input class="copy-link" type="text" readonly value="{{ tick_url }}" aria-label="Scheduler address" onclick="this.select()">
+      <button type="button" class="icon-btn" data-copy aria-label="Copy the address" title="Copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+    <p class="hint tight">Keep it private: it contains a key. {% if not https %}This only works on your live site (https), not on your computer.{% endif %}</p>
+    <form method="post" data-confirm="Make a new address? The old one stops working, so paste the new one into cron-job.org." data-confirm-yes="Make a new address">{% csrf_token %}
+      <input type="hidden" name="section" value="cron_new"><button class="btn btn-quiet small">Make a new address</button></form>
+  </div>
+</section>
+
+<form method="post" class="panel setting" id="contact">{% csrf_token %}<input type="hidden" name="section" value="contact">
+  <div class="setting-intro"><span class="setting-no">06</span><h2>Contact</h2>
+    <p>Shown on the privacy and terms pages, for people with questions.</p></div>
+  <div class="setting-body stack">
+    <div><label for="contact_email">Contact email</label><input type="email" id="contact_email" name="contact_email" value="{{ cfg.contact_email }}" placeholder="hello@yourdomain.com"></div>
+    <div class="actions"><button class="btn btn-primary">Save</button></div>
+  </div>
+</form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  // show the help that fits the chosen email service
+  const provider = document.getElementById("email_provider");
+  const helps = document.querySelectorAll(".provider-help");
+  const showHelp = () => helps.forEach((h) => { h.hidden = h.dataset.for !== provider.value; });
+  provider.addEventListener("change", showHelp);
+  showHelp();
+  document.querySelectorAll("[data-copy]").forEach((btn) => btn.addEventListener("click", async () => {
+    const input = btn.parentElement.querySelector("input");
+    try { await navigator.clipboard.writeText(input.value); btn.dataset.tooltip = "Copied"; } catch (e) { input.select(); }
+  }));
+</script>
+{% endblock %}

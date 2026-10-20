@@ -66,28 +66,68 @@ def owner_required(view):
     return wrapper
 
 
+WRONG_IN_A_ROW = 10
+PAUSE_SECONDS = 60
+
+
 class EmailBackend(ModelBackend):
     """Sign in with your email (or your username, for older logins).
-    Password guessing is limited per address and per IP."""
+    10 wrong passwords in a row for an account pause it for a minute and email its owner;
+    a network that keeps guessing (50 wrong tries) waits 15 minutes."""
 
     def authenticate(self, request, username=None, password=None, **kwargs):
+        from django.core.cache import cache
         if not username or not password:
             return None
         ip = client_ip(request) if request is not None else "local"
         name = username.strip().lower()
-        # only wrong passwords count, so nobody can lock a manager out who knows their own password...
-        if over(f"login-ip:{ip}", 50) or over(f"login-user:{name}", 10):
+        limits_on = getattr(settings, "RATELIMIT_ENABLED", True)
+        if over(f"login-ip:{ip}", 50):
             if request is not None:
-                request.login_limited = True
+                request.login_limited = "network"
+            return None
+        if limits_on and cache.get(f"login-pause:{name}"):
+            if request is not None:
+                request.login_limited = "pause"
             return None
         user = (User.objects.filter(email__iexact=username.strip()).order_by("pk").first()
                 or User.objects.filter(username__iexact=username.strip()).first())
         if user and user.check_password(password) and self.user_can_authenticate(user):
+            cache.delete(f"login-streak:{name}")  # only wrong tries *in a row* count
             return user
-        # ...and guessing stops after 10 wrong tries per address (50 per network) for 15 minutes
         hit(f"login-ip:{ip}", 50, 900)
-        hit(f"login-user:{name}", 10, 900)
+        if not limits_on:
+            return None
+        streak_key = f"login-streak:{name}"
+        if cache.add(streak_key, 1, 900):
+            streak = 1
+        else:
+            try:
+                streak = cache.incr(streak_key)
+            except ValueError:
+                cache.add(streak_key, 1, 900)
+                streak = 1
+        if streak >= WRONG_IN_A_ROW:
+            cache.set(f"login-pause:{name}", 1, PAUSE_SECONDS)
+            cache.delete(streak_key)
+            if request is not None:
+                request.login_limited = "pause"
+            if user is not None and user.email:
+                _warn_owner(user, ip)
         return None
+
+
+def _warn_owner(user, ip):
+    """Tell the account's owner someone kept typing the wrong password."""
+    when = timezone.localtime().strftime("%b %d, %I:%M %p")
+    send_mail("Someone kept trying to sign in to your TipPool account",
+              f"Hi {user.get_full_name() or user.get_username()},\n\n"
+              f"Someone typed the wrong password {WRONG_IN_A_ROW} times in a row for your TipPool account "
+              f"({user.email}) on {when}, from the internet address {ip}. Signing in to your account is paused "
+              "for a minute.\n\nIf it was you: wait a minute, or use \"Forgot your password?\" on the sign-in page.\n"
+              "If it wasn't you: your password is still safe, but change it to be sure, and turn on two-step "
+              "sign-in (Settings → Your sign-in) so a password alone is never enough.\n",
+              settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
 
 
 def _new_user(email, password, name):
@@ -140,6 +180,10 @@ def signup(request):
                 user = request.user if finishing else _new_user(data["email"], password, data["name"])
                 business = Business.objects.create(name=data["business"][:80])
                 Manager.objects.create(user=user, business=business, is_owner=True)
+                from .platform import has_operator
+                if not has_operator():
+                    user.is_superuser = user.is_staff = True
+                    user.save(update_fields=["is_superuser", "is_staff"])
                 location_name = data["location"] or data["business"]
                 location = Location.objects.create(
                     business=business, name=location_name[:80], slug=Location.new_slug(location_name),
@@ -514,9 +558,12 @@ def cron_tick(request):
     from django.http import Http404, JsonResponse
 
     from . import autoclose, demo, digest, watch
-    secret = settings.CRON_SECRET
+    from . import platform
+    from .models import PlatformConfig
+    secret = platform.cron_secret()
     if not secret or not hmac.compare_digest(request.GET.get("key", ""), secret):
         raise Http404()
+    PlatformConfig.objects.filter(pk=1).update(last_tick_at=timezone.now())  # shown on Platform settings
     done = autoclose.run()
     alerts = watch.run()
     sent = digest.run(base_url=request.build_absolute_uri("/"))
@@ -634,7 +681,8 @@ def change_password(request):
         return redirect("password_change_done")
 
     # no way to send a code: the classic form with the current password
-    if not (settings.EMAIL_ENABLED and user.email):
+    from . import platform
+    if not (platform.email_enabled() and user.email):
         form = PasswordChangeForm(user, request.POST or None)
         if request.method == "POST" and form.is_valid():
             return finish(form)

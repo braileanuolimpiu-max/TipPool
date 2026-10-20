@@ -23,6 +23,8 @@ def app_context(request):
                                                 resolved_at__isnull=True).count())
     owner = business or (location.business if location is not None else None)
     from django.conf import settings
+
+    from . import platform
     user = getattr(request, "user", None)
     profile = getattr(user, "manager", None) if user is not None and user.is_authenticated else None
     from . import tour
@@ -34,7 +36,10 @@ def app_context(request):
     return {
         "demo_tour": demo_tour,
         "is_lead": bool(profile and profile.is_lead),
-        "email_enabled": settings.EMAIL_ENABLED,
+        "email_enabled": platform.email_enabled(),
+        "email_to_terminal": settings.DEBUG and platform.email_settings() is None
+                             and settings.EMAIL_FALLBACK_BACKEND.endswith("console.EmailBackend"),
+        "is_operator": platform.is_operator(user),
         "cur": owner.symbol if owner else "$",
         "business": business,
         "open_messages": open_messages,

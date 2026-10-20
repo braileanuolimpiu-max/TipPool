@@ -727,3 +727,69 @@ class Alert(models.Model):
     @property
     def is_open(self):
         return self.resolved_at is None
+
+
+def new_cron_secret():
+    return secrets.token_urlsafe(24)
+
+
+class PlatformConfig(models.Model):
+    """Site-wide settings the person running TipPool fills in on the website (Platform settings),
+    instead of in code or .env. One row. Secrets are stored encrypted."""
+
+    class EmailProvider(models.TextChoices):
+        GMAIL = "gmail", "Gmail"
+        OUTLOOK = "outlook", "Outlook / Microsoft 365"
+        BREVO = "brevo", "Brevo (free, made for sending)"
+        OTHER = "other", "Another email service"
+
+    # email: invites, password codes, alerts, summaries
+    email_provider = models.CharField(max_length=10, choices=EmailProvider.choices, blank=True)
+    email_host = models.CharField(max_length=120, blank=True)
+    email_port = models.PositiveIntegerField(default=587)
+    email_user = models.CharField(max_length=200, blank=True)
+    email_password_encrypted = models.TextField(blank=True)
+    email_from = models.CharField(max_length=200, blank=True)
+    # AI
+    ai_enabled = models.BooleanField(default=False)
+    anthropic_key_encrypted = models.TextField(blank=True)
+    claude_model = models.CharField(max_length=60, blank=True)
+    # TipPool's own PayPal (the demo and businesses that haven't connected theirs yet)
+    paypal_client_id = models.CharField(max_length=200, blank=True)
+    paypal_secret_encrypted = models.TextField(blank=True)
+    paypal_live = models.BooleanField(default=False)
+    paypal_webhook_id = models.CharField(max_length=60, blank=True)
+    # the demo
+    demo_buyer_email = models.CharField(max_length=200, blank=True)
+    demo_buyer_password = models.CharField(max_length=100, blank=True)
+    demo_staff = models.JSONField(default=dict, blank=True)  # {"Maria": "sandbox email", ...}
+    # the outside scheduler (cron-job.org) and the privacy page
+    cron_secret = models.CharField(max_length=60, default=new_cron_secret)
+    last_tick_at = models.DateTimeField(null=True, blank=True)
+    contact_email = models.CharField(max_length=200, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+        from .platform import forget
+        forget()
+
+    @property
+    def email_password(self):
+        from .vault import decrypt
+        return decrypt(self.email_password_encrypted)
+
+    @property
+    def anthropic_key(self):
+        from .vault import decrypt
+        return decrypt(self.anthropic_key_encrypted)
+
+    @property
+    def paypal_secret(self):
+        from .vault import decrypt
+        return decrypt(self.paypal_secret_encrypted)
