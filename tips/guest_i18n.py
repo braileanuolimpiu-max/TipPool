@@ -28,6 +28,7 @@ STRINGS = {
         "err_start": "Could not start the payment.", "completing": "Completing your tip…",
         "err_generic": "Something went wrong.", "pay_cancelled": "Payment cancelled. You can try again.",
         "err_paypal": "PayPal error. Please try again.",
+        "not_ready": "This place isn't set up to take tips here yet. Please tip in person this time.",
         "err_load": "PayPal could not be loaded. Please refresh the page.",
         "tip": "Tip", "paid": "PAID",
         "done_note": "Thank you. At the end of the shift it's split between everyone who worked and paid straight to "
@@ -57,6 +58,7 @@ STRINGS = {
         "err_start": "No se pudo iniciar el pago.", "completing": "Completando tu propina…",
         "err_generic": "Algo salió mal.", "pay_cancelled": "Pago cancelado. Puedes intentarlo de nuevo.",
         "err_paypal": "Error de PayPal. Inténtalo de nuevo.",
+        "not_ready": 'Este lugar aún no está listo para recibir propinas aquí. Por esta vez, deja la propina en persona.',
         "err_load": "No se pudo cargar PayPal. Actualiza la página.",
         "tip": "Propina", "paid": "PAGADO",
         "done_note": "Gracias. Al final del turno se reparte entre todos los que trabajaron y se paga directamente a "
@@ -87,6 +89,7 @@ STRINGS = {
         "err_start": "Impossible de lancer le paiement.", "completing": "Finalisation de votre pourboire…",
         "err_generic": "Une erreur s'est produite.", "pay_cancelled": "Paiement annulé. Vous pouvez réessayer.",
         "err_paypal": "Erreur PayPal. Veuillez réessayer.",
+        "not_ready": "Cet établissement n'accepte pas encore les pourboires ici. Pour cette fois, laissez votre pourboire sur place.",
         "err_load": "PayPal n'a pas pu être chargé. Actualisez la page.",
         "tip": "Pourboire", "paid": "PAYÉ",
         "done_note": "Merci. À la fin du service, il est partagé entre toutes les personnes qui ont travaillé et "
@@ -117,6 +120,7 @@ STRINGS = {
         "err_generic": "Etwas ist schiefgelaufen.",
         "pay_cancelled": "Zahlung abgebrochen. Sie können es erneut versuchen.",
         "err_paypal": "PayPal-Fehler. Bitte versuchen Sie es erneut.",
+        "not_ready": 'Hier können noch keine Trinkgelder angenommen werden. Bitte geben Sie diesmal das Trinkgeld persönlich.',
         "err_load": "PayPal konnte nicht geladen werden. Bitte laden Sie die Seite neu.",
         "tip": "Trinkgeld", "paid": "BEZAHLT",
         "done_note": "Danke. Am Ende der Schicht wird es unter allen aufgeteilt, die gearbeitet haben, und direkt auf "
@@ -146,6 +150,7 @@ STRINGS = {
         "err_start": "Impossibile avviare il pagamento.", "completing": "Completamento della mancia…",
         "err_generic": "Qualcosa è andato storto.", "pay_cancelled": "Pagamento annullato. Puoi riprovare.",
         "err_paypal": "Errore PayPal. Riprova.",
+        "not_ready": 'Questo locale non è ancora pronto a ricevere mance qui. Per questa volta, lascia la mancia di persona.',
         "err_load": "Impossibile caricare PayPal. Aggiorna la pagina.",
         "tip": "Mancia", "paid": "PAGATO",
         "done_note": "Grazie. A fine turno viene divisa tra tutti quelli che hanno lavorato e pagata direttamente sul "
@@ -175,6 +180,7 @@ STRINGS = {
         "err_start": "Não foi possível iniciar o pagamento.", "completing": "A concluir a sua gorjeta…",
         "err_generic": "Algo correu mal.", "pay_cancelled": "Pagamento cancelado. Pode tentar de novo.",
         "err_paypal": "Erro do PayPal. Tente de novo.",
+        "not_ready": 'Este local ainda não está pronto para receber gorjetas aqui. Desta vez, deixe a gorjeta pessoalmente.',
         "err_load": "Não foi possível carregar o PayPal. Atualize a página.",
         "tip": "Gorjeta", "paid": "PAGO",
         "done_note": "Obrigado. No fim do turno é dividida entre todos os que trabalharam e paga diretamente no PayPal "
@@ -202,6 +208,7 @@ STRINGS = {
         "err_start": "Plata nu a putut porni.", "completing": "Se finalizează bacșișul…",
         "err_generic": "Ceva n-a mers bine.", "pay_cancelled": "Plată anulată. Poți încerca din nou.",
         "err_paypal": "Eroare PayPal. Încearcă din nou.",
+        "not_ready": 'Localul nu primește încă bacșiș aici. De data aceasta, te rugăm să lași bacșișul direct.',
         "err_load": "PayPal nu s-a putut încărca. Reîncarcă pagina.",
         "tip": "Bacșiș", "paid": "PLĂTIT",
         "done_note": "Mulțumim. La finalul turei se împarte între toți cei care au lucrat și se plătește direct în "
@@ -215,7 +222,7 @@ STRINGS = {
 
 # strings the page's script needs
 JS_KEYS = ("too_much", "err_bill", "err_amount", "err_who", "err_start", "completing", "err_generic", "pay_cancelled",
-           "err_paypal", "err_load")
+           "err_paypal", "err_load", "not_ready")
 
 
 def pick(request):

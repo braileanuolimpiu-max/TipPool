@@ -179,3 +179,13 @@ class LateTipTests(CleanCache):
         services._late_tip(stale)
         tip.refresh_from_db()
         self.assertNotEqual(tip.night_id, night.pk)
+
+
+class TipPageWithoutPayPalTests(CleanCache):
+    def test_guests_are_told_plainly_instead_of_refresh(self):
+        location = Location.default()
+        hire("Ana", "server", location)
+        with mock.patch("tips.views.checkout_config", return_value=("", "")):
+            page = self.client.get(reverse("tip_page") + f"?at={location.slug}")
+        self.assertContains(page, "statusEl.textContent = T.not_ready")
+        self.assertNotContains(page, "onPayPalWebSdkLoaded()\"></script>")

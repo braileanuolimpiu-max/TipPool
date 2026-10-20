@@ -208,6 +208,7 @@
       statusEl.textContent = T.err_load;
     }
   }
+  {% if not paypal_client_id %}statusEl.textContent = T.not_ready;  // no PayPal connected yet: refreshing won't help{% endif %}
 </script>
-<script async src="{{ paypal_sdk_url }}" onload="onPayPalWebSdkLoaded()"></script>
+{% if paypal_client_id %}<script async src="{{ paypal_sdk_url }}" onload="onPayPalWebSdkLoaded()"></script>{% endif %}
 {% endblock %}

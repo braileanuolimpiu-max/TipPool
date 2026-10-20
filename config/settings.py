@@ -35,7 +35,9 @@ TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     if not (DEBUG or TESTING):
-        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production (a long random value).")
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production (a long random value). "
+                                   "Running TipPool on your own computer? Copy .env.example to .env first "
+                                   "(it turns on DJANGO_DEBUG=1).")
     SECRET_KEY = "dev-only-insecure-key-change-me"
 
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
