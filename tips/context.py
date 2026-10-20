@@ -6,6 +6,11 @@ def app_context(request):
         locations = list(request.allowed_locations) if business else []
     except Exception:  # e.g. before the first migration
         locations = []
+    seen = {}
+    for loc in locations:
+        seen[loc.display_name.lower()] = seen.get(loc.display_name.lower(), 0) + 1
+    for loc in locations:  # two locations with one name: show their link names to tell them apart
+        loc.switch_label = loc.display_name + (f" ({loc.slug})" if seen[loc.display_name.lower()] > 1 else "")
     open_messages = 0
     if locations and location:
         from django.db.models import Q

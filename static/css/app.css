@@ -1150,3 +1150,7 @@ body.menu-open .tour { display: none; }
 .theme-btn svg { width: 15px; height: 15px; }
 .theme-btn:hover { background: var(--steel-1); }
 @media (max-width: 760px) { .theme-btn .theme-label { display: none; } }
+
+.save-bar.dirty { border-color: var(--marker); box-shadow: 0 0 0 3px var(--marker-soft), 0 10px 24px -14px rgba(0,0,0,.4); }
+.save-bar.dirty .save-note { font-weight: 700; }
+.save-bar.dirty .save-note::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--wait); margin-right: 8px; vertical-align: 1px; }

@@ -140,7 +140,7 @@
       </section>
 
       <div class="save-bar">
-        <span class="small">Sections 01–05 apply to <strong>{{ restaurant.display_name }}</strong>.</span>
+        <span class="small save-note" data-clean="Sections 01–05 apply to {{ restaurant.display_name }}.">Sections 01–05 apply to <strong>{{ restaurant.display_name }}</strong>.</span>
         <button class="btn btn-primary">Save settings</button>
       </div>
     </form>
@@ -333,6 +333,22 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  // the save bar lights up when something changed, and leaving the page asks first
+  (() => {
+    const form = document.getElementById("location-settings");
+    const bar = form.querySelector(".save-bar"), note = bar.querySelector(".save-note");
+    let dirty = false;
+    const mark = () => {
+      if (dirty) return;
+      dirty = true;
+      bar.classList.add("dirty");
+      note.textContent = "You have unsaved changes.";
+    };
+    form.addEventListener("input", mark);
+    form.addEventListener("change", mark);
+    form.addEventListener("submit", () => { dirty = false; });
+    window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+  })();
   const week = document.getElementById("week");
   week.addEventListener("change", (e) => {
     const box = e.target.closest("li")?.querySelector("input[type=checkbox]");

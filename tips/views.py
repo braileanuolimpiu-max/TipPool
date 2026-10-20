@@ -402,6 +402,10 @@ def staff_list(request):
         except ValidationError:
             messages.error(request, f"\"{email}\" isn't a valid email. Use the email of their PayPal account.")
             return redirect("staff_list")
+        clash = _name_taken(request.business, name, email)
+        if clash:
+            messages.error(request, clash)
+            return redirect("staff_list")
         person = _add_person(request, location, name, email, role)
         others = person.memberships.exclude(location=location).count()
         messages.success(request, f"{person.name} added." + (
@@ -418,6 +422,20 @@ def staff_list(request):
         "business_type": location.business_type,
         "base_url": request.build_absolute_uri("/").rstrip("/"),
     })
+
+
+def _name_taken(business, name, email, exclude=None):
+    """A message when another person in the business already has this name (same email = same person)."""
+    others = StaffMember.objects.filter(business=business, name__iexact=name).exclude(paypal_email__iexact=email)
+    if exclude is not None:
+        others = others.exclude(pk=exclude.pk)
+    if others.exists():
+        return SAME_NAME.format(name=name, first=name.split()[0])
+    return ""
+
+
+SAME_NAME = ("Someone on your team is already called {name}. Add a last initial or a nickname (like {first} L.) "
+             "so guests, reports and the team can tell them apart.")
 
 
 def _add_person(request, location, name, email, role):
@@ -483,6 +501,9 @@ def staff_bulk(request):
         role = found[0].key if len(found) == 1 else (fallback if not role_text else None)
         if role is None:
             skipped.append(f"line {n} ({name}): " + (f"no role called \"{role_text}\"" if role_text else "no role"))
+            continue
+        if _name_taken(request.business, name, email):
+            skipped.append(f"line {n} ({name}): someone on the team already has that name")
             continue
         person = _add_person(request, location, name, email, role)
         added.append(person)
@@ -553,6 +574,10 @@ def staff_edit(request, pk):
         messages.error(request, "Someone else on your team already uses that email.")
         return redirect("staff_list")
     changes = []
+    clash = _name_taken(request.business, name, "", exclude=person) if name and name != person.name else ""
+    if clash:
+        messages.error(request, clash)
+        return redirect("staff_list")
     if name and name != person.name:
         changes.append(f"name {person.name} → {name}")
         person.name = name
@@ -1059,7 +1084,12 @@ def settings_page(request):
             Change.log(request, f"Renamed the business from {request.business.name} to {business_name}")
             request.business.name = business_name
             request.business.save(update_fields=["name"])
-        restaurant.name = request.POST.get("name", "").strip()[:80]
+        new_name = request.POST.get("name", "").strip()[:80]
+        if new_name and Location.objects.filter(business=request.business, name__iexact=new_name, archived=False) \
+                .exclude(pk=restaurant.pk).exists():
+            messages.error(request, f"Another location is already called {new_name}. Pick a name that tells them apart.")
+            return redirect("settings")
+        restaurant.name = new_name
         restaurant.auto_close_enabled = bool(request.POST.get("auto_close_enabled"))
         restaurant.use_usual_schedule = bool(request.POST.get("use_usual_schedule"))
         if request.POST.get("review_minutes", "").isdigit() and int(request.POST["review_minutes"]) in dict(REVIEW_CHOICES):
@@ -1346,6 +1376,10 @@ def location_add(request):
     name = request.POST.get("name", "").strip()[:80]
     if not name:
         messages.error(request, "Give the new location a name.")
+        return redirect("settings")
+    if Location.objects.filter(business=request.business, name__iexact=name, archived=False).exists():
+        messages.error(request, f"You already have a location called {name}. Pick a name that tells them apart "
+                                "(e.g. the street or neighborhood).")
         return redirect("settings")
     business_type = request.POST.get("business_type", "restaurant")
     if business_type not in role_presets.PRESETS:

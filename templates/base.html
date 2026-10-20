@@ -21,6 +21,8 @@
   document.querySelectorAll("form[data-confirm]").forEach((f) => f.addEventListener("submit", (e) => {
     if (!window.confirm(f.dataset.confirm)) e.preventDefault();
   }));
+  // copyable links show their end, the part that differs between people
+  document.querySelectorAll("input.copy-link").forEach((input) => { input.scrollLeft = input.scrollWidth; });
   // tables become labelled cards on phones: each cell gets its column's name
   document.querySelectorAll("table.data").forEach((table) => {
     const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent.trim());

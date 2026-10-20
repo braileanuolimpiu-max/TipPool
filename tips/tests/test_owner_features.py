@@ -170,3 +170,28 @@ class ActivityAndBulkTests(TestCase):
         self.client.post(reverse("staff_bulk"), {"people": text, "default_role": "bartender"})
         roles = dict(Membership.objects.filter(location=self.location).values_list("staff__name", "default_role"))
         self.assertEqual(roles, {"Maria Lopez": "server", "John": "bartender"})
+
+
+class PolishTests(TestCase):
+    def setUp(self):
+        self.client.force_login(make_manager("owner"))
+        self.location = Location.default()
+        hire("Maria Lopez", "server", self.location, email="maria@example.com")
+
+    def test_two_people_cannot_share_a_name(self):
+        self.client.post(reverse("staff_list"), {"name": "maria lopez", "paypal_email": "other@example.com",
+                                                 "default_role": "server"})
+        self.assertEqual(StaffMember.objects.filter(name__iexact="maria lopez").count(), 1)
+        # the same person (same email) can still join another location
+        second = Location.objects.create(business=self.location.business, name="Uptown", slug="uptown")
+        from tips import roles
+        roles.apply_preset(second, "restaurant")
+        self.client.post(reverse("location_switch"), {"location": second.pk})
+        self.client.post(reverse("staff_list"), {"name": "Maria Lopez", "paypal_email": "maria@example.com",
+                                                 "default_role": "server"})
+        self.assertTrue(Membership.objects.filter(location=second, staff__name="Maria Lopez").exists())
+
+    def test_two_locations_cannot_share_a_name(self):
+        self.client.post(reverse("location_add"), {"name": "Uptown"})
+        self.client.post(reverse("location_add"), {"name": "uptown"})
+        self.assertEqual(Location.objects.filter(name__iexact="uptown").count(), 1)

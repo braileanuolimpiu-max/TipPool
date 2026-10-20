@@ -9,7 +9,7 @@
   <form method="post" action="{% url 'location_switch' %}" class="loc-switch">{% csrf_token %}
     <input type="hidden" name="next" value="{{ request.path }}">
     <select name="location" aria-label="Location" onchange="this.form.submit()">
-      {% for loc in locations %}<option value="{{ loc.pk }}" {% if loc.pk == location.pk %}selected{% endif %}>{{ loc.display_name }}</option>{% endfor %}
+      {% for loc in locations %}<option value="{{ loc.pk }}" {% if loc.pk == location.pk %}selected{% endif %}>{{ loc.switch_label }}</option>{% endfor %}
     </select><noscript><button>Go</button></noscript>
   </form>
   {% endif %}
