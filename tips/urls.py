@@ -6,6 +6,9 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     # business accounts
     path("signup/", accounts.signup, name="signup"),
+    path("demo/", accounts.demo_start, name="demo_start"),
+    path("sample-data/", accounts.load_sample, name="load_sample"),
+    path("internal/tick/", accounts.cron_tick, name="cron_tick"),
     path("invite/<str:token>/", accounts.accept_invite, name="accept_invite"),
     path("my-link/", accounts.email_my_link, name="email_my_link"),
     path("managers/invite/", accounts.invite_manager, name="invite_manager"),

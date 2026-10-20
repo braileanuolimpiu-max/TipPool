@@ -16,7 +16,7 @@
     <span>Menu</span>
   </button>
   <div class="who-am-i">
-    <span>Signed in as {{ user.username }}</span>
+    <span>Signed in as {{ user.get_full_name|default:user.username }}</span>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>
   </div>
 </header>
@@ -62,6 +62,7 @@
 </div>
 <div class="menu-scrim" id="menu-scrim" hidden></div>
 <main class="main">
+  {% if business.is_demo %}<div class="demo-banner no-print"><strong>Demo business.</strong> Sample data and PayPal sandbox money only. It's removed after a week. <a href="{% url 'signup' %}">Create your own account</a></div>{% endif %}
   <p class="eyebrow" aria-hidden="true"><span class="dot"></span>{{ restaurant_name }}<span class="sep">/</span>{% now "l, M j" %}</p>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}

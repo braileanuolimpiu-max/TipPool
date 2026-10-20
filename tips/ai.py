@@ -11,6 +11,8 @@ AI_MODE=claude -> real Claude API (needs ANTHROPIC_API_KEY)
 Important: the AI never decides amounts. It writes the rules; split.py does the math.
 """
 import base64
+import threading
+from contextlib import contextmanager
 import os
 import logging
 import re
@@ -33,8 +35,22 @@ class AIError(Exception):
     pass
 
 
+_local = threading.local()
+
+
 def mode():
-    return settings.AI_MODE
+    return "mock" if getattr(_local, "offline", False) else settings.AI_MODE
+
+
+@contextmanager
+def offline():
+    """Use the free built-in AI for a moment (e.g. while generating demo history)."""
+    before = getattr(_local, "offline", False)
+    _local.offline = True
+    try:
+        yield
+    finally:
+        _local.offline = before
 
 
 # ---------------------------------------------------------------------------

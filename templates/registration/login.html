@@ -16,6 +16,10 @@
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn btn-primary btn-block">Sign in</button>
       <p class="auth-switch">New to TipPool? <a href="{% url 'signup' %}">Create a business account</a></p>
+    </form>
+    <form method="post" action="{% url 'demo_start' %}" class="demo-box">{% csrf_token %}
+      <div><strong>Just looking?</strong><span class="small muted">Open a demo restaurant with three weeks of sample shifts. No sign-up, sandbox money only.</span></div>
+      <button class="btn btn-secondary">Try the demo</button>
       <p class="hint tight">Staff don't need to sign in: you have a private link to your tips. Lost it? <a href="{% url 'email_my_link' %}">Email me my link</a></p>
     </form>
   </div>

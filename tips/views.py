@@ -76,6 +76,8 @@ def dashboard(request):
             {"done": any_tip_ever, "text": "Print your QR code so guests can tip", "url": reverse("qr_page")},
         ],
         "ai_mode": ai.mode(),
+        "can_load_sample": not any_tip_ever and not request.business.paypal_live and not request.business.is_demo
+                           and not Tip.objects.filter(night__location__business=request.business).exists(),
         "setup_done": staff_count > 0 and bool(rule_set) and any_tip_ever and bool(location.name),
     })
 
@@ -137,6 +139,8 @@ def tip_page(request):
     style, values = location.tip_buttons
     return render(request, "tips/tip_page.html", {
         "location": location, "restaurant_name": location.display_name, "restaurant_named": bool(location.name),
+        "sandbox_buyer": (settings.DEMO_BUYER_EMAIL, settings.DEMO_BUYER_PASSWORD)
+                         if location.business.is_demo and settings.DEMO_BUYER_EMAIL else None,
         "at": location.slug,
         "tip_style": style,
         # personal tips only, and nobody to pick: tipping can't work right now

@@ -435,3 +435,49 @@ def two_step_setup_context(request):
     image.save(buffer)
     return {"two_step_secret": " ".join(secret[i:i + 4] for i in range(0, len(secret), 4)),
             "two_step_qr": "data:image/svg+xml;base64," + base64.b64encode(buffer.getvalue()).decode()}
+
+
+# --- Try the demo ---------------------------------------------------------------------
+@require_POST
+@limited("demo", 5, 3600)
+def demo_start(request):
+    """One click: a fresh demo business full of sample data, signed in. For judges and the curious."""
+    from . import demo
+    user = demo.create_demo()
+    login(request, user, backend="tips.accounts.EmailBackend")
+    request.session.pop("location_id", None)
+    messages.success(request, "Welcome to the demo: Luna Bistro, with three weeks of sample shifts. Yesterday's shift "
+                              "is waiting for you to check and pay. Nothing here is real money.")
+    return redirect("dashboard")
+
+
+@require_POST
+@managers_only
+def load_sample(request):
+    """An empty, new business can fill itself with sample data to look around (sandbox only)."""
+    from . import demo
+    from .models import Tip
+    if request.business.paypal_live or Tip.objects.filter(night__location__business=request.business).exists():
+        messages.error(request, "Sample data can only go into a new, empty sandbox business.")
+        return redirect("dashboard")
+    demo.fill(request.location)
+    Change.log(request, "Loaded sample data")
+    messages.success(request, "Sample data loaded: a team, tip rules and three weeks of shifts. Yesterday's shift is "
+                              "ready to check and pay.")
+    return redirect("dashboard")
+
+
+def cron_tick(request):
+    """Called every few minutes by an outside scheduler (and keeps a free server awake):
+    runs automatic close-outs and removes week-old demos. Needs ?key=CRON_SECRET."""
+    import hmac
+
+    from django.http import Http404, JsonResponse
+
+    from . import autoclose, demo
+    secret = settings.CRON_SECRET
+    if not secret or not hmac.compare_digest(request.GET.get("key", ""), secret):
+        raise Http404()
+    done = autoclose.run()
+    removed = demo.cleanup()
+    return JsonResponse({"closed": len(done), "demos_removed": removed})

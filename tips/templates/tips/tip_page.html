@@ -48,6 +48,10 @@
       <p id="status" class="status-line" role="status">Loading PayPal…</p>
     </div>
   </div>
+  {% if sandbox_buyer %}
+  <div class="sandbox-buyer"><strong>Trying the demo?</strong> Pay with this PayPal sandbox buyer (no real money):
+    <code>{{ sandbox_buyer.0 }}</code> / <code>{{ sandbox_buyer.1 }}</code></div>
+  {% endif %}
   <p class="guest-note">Payments are processed by PayPal. The business never sees your card details.</p>
 </div>
 {% endblock %}

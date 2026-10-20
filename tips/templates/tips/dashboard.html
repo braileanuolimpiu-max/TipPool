@@ -45,7 +45,8 @@
 
     {% if not setup_done and not is_lead %}
     <section class="panel">
-      <div class="panel-head"><h2>Before your first close-out</h2></div>
+      <div class="panel-head"><h2>Before your first close-out</h2>
+        {% if can_load_sample %}<form method="post" action="{% url 'load_sample' %}" data-confirm="Fill this business with a sample team, rules and three weeks of shifts? Good for looking around before your real team starts.">{% csrf_token %}<button class="btn btn-secondary small">Load sample data</button></form>{% endif %}</div>
       <ul class="checklist">
         {% for item in setup %}
         <li class="{% if item.done %}is-done{% endif %}">

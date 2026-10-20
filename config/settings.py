@@ -188,6 +188,11 @@ TIPPOOL_ENCRYPTION_KEY = os.environ.get("TIPPOOL_ENCRYPTION_KEY", "")
 if not TIPPOOL_ENCRYPTION_KEY and not (DEBUG or TESTING):
     raise ImproperlyConfigured("TIPPOOL_ENCRYPTION_KEY must be set in production. Make one with: "
                                "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"")
+# an outside scheduler calls /internal/tick/?key=CRON_SECRET every few minutes (close-outs, demo clean-up)
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
+# shown on demo tip pages so people trying TipPool can pay with a PayPal sandbox buyer account
+DEMO_BUYER_EMAIL = os.environ.get("DEMO_BUYER_EMAIL", "")
+DEMO_BUYER_PASSWORD = os.environ.get("DEMO_BUYER_PASSWORD", "")
 # Automatic close-outs: locally they run while a manager uses the app; in production from the
 # `python manage.py autoclose` cron job only, so several web workers never race each other.
 AUTOCLOSE_IN_REQUESTS = os.environ.get("AUTOCLOSE_IN_REQUESTS", "1" if DEBUG else "0") == "1"
