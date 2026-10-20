@@ -177,7 +177,7 @@ def tip_page(request):
     return guest_i18n.remember(response, request, lang)
 
 
-LEGAL_UPDATED = "October 20, 2026"
+LEGAL_UPDATED = "October 21, 2026"
 
 
 def legal_page(request, page):

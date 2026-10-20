@@ -23,12 +23,14 @@
   <li>We keep your name, email, password (hashed, never readable) and, if you turn it on, your two-step sign-in key.</li>
   <li>Your PayPal API secret is stored encrypted and is only used to take tips and send payouts for your business.</li>
   <li>A change history records who changed rules, team members and payouts, so every split can be checked later.</li>
+  <li>To protect accounts, sign-in attempts are counted for a short time, and a security email (for example after many wrong passwords) includes the internet address the attempts came from.</li>
 </ul>
 
 <h2>Who else sees data</h2>
 <ul>
   <li><strong>PayPal</strong> handles every payment and payout.</li>
   <li><strong>Anthropic (Claude)</strong> reads your tip rules, and for a shift the staff first names, roles, hours and amounts, to turn rules into a split, explain shares and check a close-out. Anthropic does not use API data to train its models.</li>
+  <li><strong>An email service</strong> (for example Brevo) delivers TipPool's emails: codes, reset links, invites, staff links, alerts and summaries. It receives the address and the email's content.</li>
   <li><strong>Our host and database provider</strong> store the data. <strong>Google Fonts</strong> serves the typefaces, so your browser contacts Google when a page loads.</li>
 </ul>
 
@@ -37,4 +39,5 @@
 
 <h2>Your choices</h2>
 <p>Ask the business you work for, or tipped, to see, correct or erase your details. A manager can close their business account and have its data removed.</p>
+<p>If you live in the EU or the UK, you also have the right to complain to your data protection authority.</p>
 {% endblock %}
