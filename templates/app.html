@@ -67,6 +67,7 @@
   <p class="eyebrow" aria-hidden="true"><span class="dot"></span>{{ restaurant_name }}<span class="sep">/</span>{% now "l, M j" %}</p>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}
+  {% if demo_tour %}{% include "_demo_tour.html" %}{% endif %}
   <footer class="app-foot no-print"><span>TipPool</span><a href="{% url 'privacy' %}">Privacy</a><a href="{% url 'terms' %}">Terms</a></footer>
 </main>
 {% endwith %}

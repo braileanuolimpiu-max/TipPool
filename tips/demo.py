@@ -20,7 +20,8 @@ from .models import (Business, ClockEntry, CloseTime, Location, Manager, Members
                      PayoutItem, Shift, StaffMember, Tip, TipRuleSet)
 
 DEMO_DAYS = 21
-RULES = "Bartenders get 20%, bussers get 10% split equally, the rest goes to servers by hours worked."
+RULES = ("Bartenders get 20%, bussers get 10% split equally, hosts get 5% split equally, the rest goes to servers "
+         "by hours worked.")
 TEAM = [("Maria", "server"), ("John", "server"), ("Lea", "server"), ("Alex", "bartender"), ("Sam", "busser"),
         ("Nina", "host")]
 GUESTS = ["Pat G.", "Chris L.", "Dana M.", "Alex R.", "Jamie T.", "Morgan K.", "Robin S.", "Taylor B."]
@@ -87,15 +88,16 @@ def _fill(location, seed):
                            text="I stayed an hour after close to help clean up. Can you add it?")
     # today: open, a few tips in, people on the clock
     tonight = Night.current(location)
-    _tips(tonight, rng, 0.4)
+    _tips(tonight, rng, 0.4, closed=False)
     start = timezone.now() - timedelta(hours=3)
     for person, role in people[:4]:
         ClockEntry.objects.create(staff=person, night=tonight, started_at=start + timedelta(minutes=rng.randint(0, 40)))
     return made + 2
 
 
-def _tips(night, rng, busy):
-    """Guest tips through the evening, plus the card-machine and cash totals added at close-out."""
+def _tips(night, rng, busy, closed=True):
+    """Guest tips through the evening, plus the card-machine and cash totals added at close-out.
+    Tonight (not closed yet): only guest tips, from the last few hours."""
     tz = location_tz(night.location)
     now = timezone.now()
     evening = datetime.combine(night.date, time(17, 30), tzinfo=tz)
@@ -105,13 +107,16 @@ def _tips(night, rng, busy):
         Tip.objects.create(night=night, amount=amount, status=Tip.Status.COMPLETED,
                            paypal_order_id=f"DEMO-{night.pk}-{n}-{secrets.token_hex(3)}",
                            payer_name=rng.choice(GUESTS), fee=(amount * Decimal("0.0349") + Decimal("0.49")).quantize(Decimal("0.01")))
-    Tip.objects.create(night=night, amount=Decimal(rng.randint(40, 120)), source=Tip.Source.CARD,
-                       status=Tip.Status.COMPLETED, note="Card machine total")
-    Tip.objects.create(night=night, amount=Decimal(rng.randint(15, 60)), source=Tip.Source.CASH,
-                       status=Tip.Status.COMPLETED, note="Cash jar")
+    if closed:
+        Tip.objects.create(night=night, amount=Decimal(rng.randint(40, 120)), source=Tip.Source.CARD,
+                           status=Tip.Status.COMPLETED, note="Card machine total")
+        Tip.objects.create(night=night, amount=Decimal(rng.randint(15, 60)), source=Tip.Source.CASH,
+                           status=Tip.Status.COMPLETED, note="Cash jar")
     # spread the guest tips over the evening (never in the future), card and cash at closing
     for i, tip in enumerate(Tip.objects.filter(night=night).order_by("pk")[first:]):
-        if tip.source == Tip.Source.PAYPAL:
+        if not closed:
+            at = now - timedelta(minutes=rng.randint(4, 170))
+        elif tip.source == Tip.Source.PAYPAL:
             at = evening + timedelta(minutes=rng.randint(0, 330))
         else:
             at = evening + timedelta(hours=5, minutes=30)

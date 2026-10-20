@@ -19,7 +19,14 @@ def app_context(request):
     from django.conf import settings
     user = getattr(request, "user", None)
     profile = getattr(user, "manager", None) if user is not None and user.is_authenticated else None
+    from . import tour
+    demo_tour = None
+    if profile is not None and profile.business.is_demo:
+        tour.record(request)
+        if business is not None:
+            demo_tour = tour.steps(request, business, location)
     return {
+        "demo_tour": demo_tour,
         "is_lead": bool(profile and profile.is_lead),
         "email_enabled": settings.EMAIL_ENABLED,
         "cur": owner.symbol if owner else "$",

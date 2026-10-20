@@ -58,3 +58,24 @@ class DemoTests(TestCase):
         self.assertFalse(Business.objects.filter(is_demo=True).exists())
         self.assertTrue(Business.objects.filter(pk=real.pk).exists())
         self.assertFalse(get_user_model().objects.filter(username__startswith="demo-").exists())
+
+
+class TourTests(TestCase):
+    def test_tour_ticks_off_what_was_seen(self):
+        self.client.post(reverse("demo_start"))
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "Demo tour")
+        self.assertEqual(page.context["demo_tour"]["done"], 0)
+        location = Business.objects.get(is_demo=True).locations.get()
+        self.client.get(reverse("rules"))
+        self.client.get(reverse("reports"))  # without a question it doesn't count
+        self.client.get(reverse("tip_page") + "?at=" + location.slug)
+        page = self.client.get(reverse("dashboard"))
+        done = [s["title"] for s in page.context["demo_tour"]["steps"] if s["done"]]
+        self.assertEqual(done, ["Tip as a guest", "Change the rules in plain words"])
+        self.assertTrue(page.context["demo_tour"]["steps"][0]["next"])
+
+    def test_no_tour_for_real_businesses(self):
+        self.client.force_login(make_manager("real"))
+        page = self.client.get(reverse("dashboard"))
+        self.assertNotContains(page, "Demo tour")

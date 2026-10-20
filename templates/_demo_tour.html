@@ -1,0 +1,23 @@
+<details class="tour no-print" id="demo-tour"{% if u == "dashboard" %} open{% endif %}>
+  <summary>
+    <span class="tour-title">Demo tour</span>
+    <span class="tour-count num">{{ demo_tour.done }}/{{ demo_tour.total }}</span>
+    <span class="tour-bar" aria-hidden="true"><i style="width:{% widthratio demo_tour.done demo_tour.total 100 %}%"></i></span>
+  </summary>
+  <ol class="tour-steps">
+    {% for s in demo_tour.steps %}
+    <li class="{% if s.done %}is-done{% elif s.next %}is-next{% endif %}">
+      <a href="{{ s.url }}"{% if s.new_tab %} target="_blank" rel="noopener"{% endif %}>
+        <span class="tour-mark" aria-hidden="true">{% if s.done %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
+        <span><strong>{{ s.title }}</strong>{% if s.done %}<span class="visually-hidden"> (done)</span>{% elif s.next %}<em class="tour-next">Next</em>{% endif %}
+          <small>{{ s.text }}</small></span>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+  {% if demo_tour.done == demo_tour.total %}<p class="tour-end">That's the whole loop. <a href="{% url 'signup' %}">Make your own business</a></p>{% endif %}
+</details>
+<script>
+  // on phones the tour starts folded, so it never covers the page
+  if (window.matchMedia("(max-width: 640px)").matches) document.getElementById("demo-tour").open = false;
+</script>
