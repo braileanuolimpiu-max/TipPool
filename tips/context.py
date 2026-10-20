@@ -3,7 +3,7 @@ def app_context(request):
     location = getattr(request, "location", None)
     business = getattr(request, "business", None)
     try:
-        locations = list(Location.objects.filter(business=business, archived=False)) if business else []
+        locations = list(request.allowed_locations) if business else []
     except Exception:  # e.g. before the first migration
         locations = []
     open_messages = 0
@@ -11,7 +11,8 @@ def app_context(request):
         from django.db.models import Q
 
         from .models import Alert, Message
-        open_messages = (Message.objects.filter(Q(location=location) | Q(kind="payout", staff__business=business),
+        open_messages = (Message.objects.filter(Q(location=location) | Q(kind="payout", staff__business=business,
+                                                  staff__memberships__location__in=request.allowed_locations),
                                                 resolved_at__isnull=True).distinct().count()
                          + Alert.objects.filter(Q(location=location) | Q(location__isnull=True), business=business,
                                                 resolved_at__isnull=True).count())

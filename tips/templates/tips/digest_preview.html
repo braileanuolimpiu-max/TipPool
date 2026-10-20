@@ -1,0 +1,9 @@
+{% extends "app.html" %}
+{% block title %}Summary email{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Summary email</h1><p>What the {% if kind == "daily" %}morning{% else %}Monday{% endif %} summary says right now. Choose how often it's sent in Settings → Owner controls.</p></div>
+  <div class="actions"><a class="btn {% if kind == 'weekly' %}btn-primary{% else %}btn-secondary{% endif %}" href="?kind=weekly">Weekly</a><a class="btn {% if kind == 'daily' %}btn-primary{% else %}btn-secondary{% endif %}" href="?kind=daily">Daily</a></div>
+</header>
+<section class="panel panel-body digest-frame">{% include "emails/digest.html" %}</section>
+{% endblock %}

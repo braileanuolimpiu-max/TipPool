@@ -1,0 +1,30 @@
+{% extends "app.html" %}
+{% block title %}Activity log{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Activity log</h1><p>Who changed rules, hours, tips, the team, settings or payouts, including automatic close-outs. {{ count }} entr{{ count|pluralize:"y,ies" }}{% if count > 300 %}, newest 300 shown{% endif %}.</p></div>
+  <a class="btn btn-secondary" href="?{{ query }}{% if query %}&{% endif %}export=csv">Download CSV</a>
+</header>
+<form method="get" class="panel panel-body activity-filter">
+  {% if locations|length > 1 %}<div><label for="location">Location</label>
+    <select id="location" name="location"><option value="">All mine</option>{% for loc in locations %}<option value="{{ loc.pk }}" {% if loc.pk == where %}selected{% endif %}>{{ loc.display_name }}</option>{% endfor %}</select></div>{% endif %}
+  <div><label for="who">Who</label>
+    <select id="who" name="who"><option value="">Anyone</option>{% for p in people %}<option value="{{ p }}" {% if p == who %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></div>
+  <div class="grow"><label for="q">Words</label><input type="search" id="q" name="q" value="{{ q }}" placeholder="e.g. paid, rules, Maria"></div>
+  <div><label for="from">From</label><input type="date" id="from" name="from" value="{{ first|date:'Y-m-d' }}"></div>
+  <div><label for="to">To</label><input type="date" id="to" name="to" value="{{ last|date:'Y-m-d' }}"></div>
+  <div class="actions"><button class="btn btn-primary">Filter</button>{% if query %}<a class="btn btn-quiet" href="{% url 'activity' %}">Clear</a>{% endif %}</div>
+</form>
+{% if changes %}
+<div class="table-wrap"><table class="data changes">
+  <thead><tr><th>When</th>{% if locations|length > 1 %}<th>Location</th>{% endif %}<th>Who</th><th>What</th></tr></thead>
+  <tbody>
+  {% for c in changes %}
+    <tr><td class="when">{{ c.at|date:"M j, g:i A" }}</td>{% if locations|length > 1 %}<td>{{ c.location.display_name }}</td>{% endif %}<td class="who">{{ c.who }}</td><td>{{ c.what }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<div class="panel panel-body"><p class="muted" style="margin:0">Nothing matches.</p></div>
+{% endif %}
+{% endblock %}

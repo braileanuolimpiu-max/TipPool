@@ -88,7 +88,7 @@ def _fill(location, seed):
                            text="I stayed an hour after close to help clean up. Can you add it?")
     # today: open, a few tips in, people on the clock
     tonight = Night.current(location)
-    _tips(tonight, rng, 0.4, closed=False)
+    _tips(tonight, rng, 0.55, closed=False)
     start = timezone.now() - timedelta(hours=3)
     for person, role in people[:4]:
         ClockEntry.objects.create(staff=person, night=tonight, started_at=start + timedelta(minutes=rng.randint(0, 40)))
@@ -100,7 +100,11 @@ def _tips(night, rng, busy, closed=True):
     Tonight (not closed yet): only guest tips, from the last few hours."""
     tz = location_tz(night.location)
     now = timezone.now()
-    evening = datetime.combine(night.date, time(17, 30), tzinfo=tz)
+    # past shifts are busy around this time of day, so "normal by now" on the live board makes sense
+    # whenever someone opens the demo
+    local_now = now.astimezone(tz)
+    since_midnight = local_now - datetime.combine(local_now.date(), time(0), tzinfo=tz)
+    evening = datetime.combine(night.date, time(0), tzinfo=tz) + since_midnight - timedelta(hours=3)
     first = Tip.objects.filter(night=night).count()
     for n in range(int(rng.randint(9, 15) * busy)):
         amount = Decimal(rng.choice([3, 5, 5, 8, 10, 10, 12, 15, 20])) + Decimal(rng.choice([0, 0, 50])) / 100

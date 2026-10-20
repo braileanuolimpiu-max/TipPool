@@ -1,4 +1,5 @@
-{% extends "base.html" %}{% load static %}
+{% extends "base.html" %}
+{% block body_class %} class="app-shell"{% endblock %}{% load static %}
 {% block body %}
 {% with u=request.resolver_match.url_name %}
 <a class="skip-link" href="#content">Skip to content</a>
@@ -18,6 +19,8 @@
   </button>
   <div class="who-am-i">
     <span>Signed in as <a href="{% url 'two_step' %}" title="Your password and two-step sign-in">{{ user.get_full_name|default:user.username }}</a></span>
+    <button type="button" class="theme-btn" id="theme-btn" aria-label="Colors: automatic" title="Light, dark, or follow your device">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg><span class="theme-label">Auto</span></button>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>
   </div>
 </header>
@@ -63,6 +66,7 @@
 </div>
 <div class="menu-scrim" id="menu-scrim" hidden></div>
 <main class="main" id="content" tabindex="-1">
+  {% if business.payouts_frozen %}<div class="flash error frozen-banner no-print" role="alert"><strong>All payouts are frozen</strong> by {{ business.payouts_frozen_by }}. Tips still come in; nothing is paid out.{% if user.manager.is_owner %} <a href="{% url 'settings' %}#owner">Turn payouts back on</a>{% endif %}</div>{% endif %}
   {% if business.is_demo %}<div class="demo-banner no-print"><strong>Demo business.</strong> Sample data and PayPal sandbox money only. It's removed after a week. <a href="{% url 'signup' %}">Create your own account</a></div>{% endif %}
   <p class="eyebrow" aria-hidden="true"><span class="dot"></span>{{ restaurant_name }}<span class="sep">/</span>{% block eyebrow_date %}{% now "l, M j" %}{% endblock %}</p>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
@@ -86,6 +90,24 @@
     btn.addEventListener("click", () => set(!document.body.classList.contains("menu-open")));
     scrim.addEventListener("click", () => set(false));
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
+  })();
+  (() => {
+    const btn = document.getElementById("theme-btn");
+    if (!btn) return;
+    const names = {auto: "Auto", dark: "Dark", light: "Light"};
+    const show = (mode) => {
+      btn.querySelector(".theme-label").textContent = names[mode];
+      btn.setAttribute("aria-label", "Colors: " + names[mode].toLowerCase() + ". Change");
+    };
+    let mode = document.documentElement.dataset.theme || "auto";
+    show(mode);
+    btn.addEventListener("click", () => {
+      mode = {auto: "dark", dark: "light", light: "auto"}[mode];
+      if (mode === "auto") delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = mode;
+      try { mode === "auto" ? localStorage.removeItem("tp-theme") : localStorage.setItem("tp-theme", mode); } catch (e) {}
+      show(mode);
+    });
   })();
 </script>
 {% endblock %}

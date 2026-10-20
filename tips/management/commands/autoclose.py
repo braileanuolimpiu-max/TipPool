@@ -7,7 +7,7 @@ import time
 
 from django.core.management.base import BaseCommand
 
-from tips import autoclose
+from tips import autoclose, digest, watch
 
 
 class Command(BaseCommand):
@@ -20,6 +20,10 @@ class Command(BaseCommand):
         while True:
             for line in autoclose.run():
                 self.stdout.write(line)
+            for alert in watch.run():
+                self.stdout.write(f"Alert: {alert.text}")
+            if digest.run():
+                self.stdout.write("Sent summary emails")
             if not options["loop"]:
                 break
             time.sleep(60)

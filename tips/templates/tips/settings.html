@@ -18,11 +18,12 @@
     <a href="#after-close"><span>05</span>When a shift closes</a>
     <p class="settings-nav-title">{{ business.name }}</p>
     <a href="#payments"><span>06</span>Payments</a>
-    <a href="#locations"><span>07</span>Locations</a>
-    <a href="#managers"><span>08</span>Managers</a>
-    <a href="#changes"><span>09</span>Recent changes</a>
+    <a href="#owner"><span>07</span>Owner controls</a>
+    <a href="#locations"><span>08</span>Locations</a>
+    <a href="#managers"><span>09</span>Managers</a>
+    <a href="#changes"><span>10</span>Recent changes</a>
     <p class="settings-nav-title">You</p>
-    <a href="#signin"><span>10</span>Your sign-in</a>
+    <a href="#signin"><span>11</span>Your sign-in</a>
   </nav>
 
   <div class="settings-main">
@@ -186,8 +187,43 @@
       </div>
     </form>
 
+    <section class="panel setting" id="owner">
+      <div class="setting-intro"><span class="setting-no">07</span><h2>Owner controls</h2>
+        <p>Limits and early warnings for the whole business. Only the owner can change them.</p></div>
+      <div class="setting-body stack">
+        {% if business.payouts_frozen %}
+        <div class="flash error" style="margin:0"><strong>Payouts are frozen</strong> by {{ business.payouts_frozen_by }} since {{ business.payouts_frozen_at|date:"M j, g:i A" }}. Tips still come in; nothing is paid out.</div>
+        {% endif %}
+        {% if is_owner %}
+        <form method="post" action="{% url 'owner_controls' %}" class="stack">{% csrf_token %}
+          <div><label for="approval_limit">Approval limit for one shift's payout</label>
+            <div class="money-input" style="max-width:220px"><span aria-hidden="true">{{ cur }}</span><input type="number" id="approval_limit" name="approval_limit" min="1" max="1000000" step="1" inputmode="decimal" value="{{ business.approval_limit|default_if_none:''|floatformat:'0' }}" placeholder="No limit"></div>
+            <p class="hint">Payouts above this wait for your OK, even automatic ones. Managers see "waiting for the owner". Leave it empty for no limit.</p></div>
+          <label class="choice"><input type="checkbox" name="smart_alerts" {% if business.smart_alerts %}checked{% endif %}>
+            <span><strong>Smart alerts</strong><span class="small muted">Warn me when something is quietly wrong: no guest tips by the usual time (QR codes missing?), tips far below normal, someone clocked in 12+ hours, a shift never closed or waiting days to be paid, refunds piling up.</span></span></label>
+          <div><label for="digest">Summary email</label>
+            <select id="digest" name="digest" style="max-width:280px">{% for value, label in digest_choices %}<option value="{{ value }}" {% if business.digest == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+            <p class="hint">Totals per location, what needs you and what the close-out checks noticed. <a href="{% url 'digest_preview' %}">See this week's</a>.{% if not email_enabled %} Emails start once email sending is set up on the server.{% endif %}</p></div>
+          <div class="actions"><button class="btn btn-primary">Save owner controls</button></div>
+        </form>
+        <form method="post" action="{% url 'freeze_payouts' %}" class="freeze-box" data-confirm="{% if business.payouts_frozen %}Turn payouts back on? Shifts waiting for an automatic payout go out on the next check.{% else %}Freeze every payout in every location now? Tips still come in. Nothing is paid until you turn payouts back on.{% endif %}">{% csrf_token %}
+          <div><strong>{% if business.payouts_frozen %}Payouts are frozen{% else %}Emergency stop{% endif %}</strong>
+            <span class="small muted">{% if business.payouts_frozen %}Turn them back on when you're ready.{% else %}Stops every payout in every location at once (suspected fraud, a mistake in the rules). Tips keep coming in.{% endif %}</span></div>
+          {% if business.payouts_frozen %}<button class="btn btn-secondary" name="frozen" value="0">Turn payouts back on</button>
+          {% else %}<button class="btn btn-danger" name="frozen" value="1">Freeze all payouts</button>{% endif %}
+        </form>
+        {% else %}
+        <ul class="plain-list">
+          <li>Approval limit: {% if business.approval_limit %}{{ cur }}{{ business.approval_limit|money }} per shift (above that, the owner approves){% else %}none{% endif %}</li>
+          <li>Smart alerts: {{ business.smart_alerts|yesno:"on,off" }}</li>
+          <li>Summary email: {{ business.get_digest_display|lower }}</li>
+        </ul>
+        {% endif %}
+      </div>
+    </section>
+
     <section class="panel setting" id="locations">
-      <div class="setting-intro"><span class="setting-no">07</span><h2>Locations</h2>
+      <div class="setting-intro"><span class="setting-no">08</span><h2>Locations</h2>
         <p>Each location has its own team, roles, tip rules, QR codes and closing times. People can work at several.</p></div>
       <div class="setting-body stack">
         <ul class="rows boxed">
@@ -218,8 +254,8 @@
     </section>
 
     <section class="panel setting" id="managers">
-      <div class="setting-intro"><span class="setting-no">08</span><h2>Managers</h2>
-        <p>Who can sign in to {{ business.name }}. <strong>Managers</strong> run everything except payment settings and managing other managers (owner only). <strong>Shift leads</strong> run the shift (who worked, card and cash tips, codes) but can't pay, change rules or see reports. Staff don't need a login.</p></div>
+      <div class="setting-intro"><span class="setting-no">09</span><h2>Managers</h2>
+        <p>Who can sign in to {{ business.name }}. <strong>Managers</strong> run everything except payment settings, owner controls and managing other managers (owner only). Any manager or shift lead can be limited to some locations. <strong>Shift leads</strong> run the shift (who worked, card and cash tips, codes) but can't pay, change rules or see reports. Staff don't need a login.</p></div>
       <div class="setting-body stack">
         <ul class="rows boxed">
           {% for m in managers %}
@@ -235,6 +271,18 @@
               </select></form>
             <form method="post" action="{% url 'remove_manager' m.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Remove</button></form>
             {% else %}<span class="small muted">{{ m.level_label }}</span>{% endif %}
+            {% if not m.is_owner %}
+            <details class="manager-locs">
+              <summary>{% with picked=m.locations.all %}{% if picked %}{% for loc in picked %}{{ loc.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}All locations{% endif %}{% endwith %}</summary>
+              {% if is_owner %}
+              <form method="post" action="{% url 'manager_locations' m.pk %}" class="stack" style="gap:8px">{% csrf_token %}
+                <p class="small muted" style="margin:0">Tick the locations they run. None ticked = all locations.</p>
+                {% for loc in active_locations %}<label class="choice compact"><input type="checkbox" name="locations" value="{{ loc.pk }}" {% if loc in m.locations.all %}checked{% endif %}><span>{{ loc.display_name }}</span></label>{% endfor %}
+                <button class="btn btn-secondary small">Save locations</button>
+              </form>
+              {% endif %}
+            </details>
+            {% endif %}
           </li>
           {% endfor %}
           {% for invite, link in invites %}
@@ -251,13 +299,17 @@
           <div style="flex:0 1 170px"><label for="invite_level">As</label>
             <select id="invite_level" name="level"><option value="manager">Manager</option><option value="lead">Shift lead</option></select></div>
           <button class="btn btn-secondary">Send invite</button>
+          {% if active_locations|length > 1 %}
+          <fieldset class="invite-locs"><legend class="small muted">Only for some locations? (none ticked = all)</legend>
+            {% for loc in active_locations %}<label class="choice compact"><input type="checkbox" name="locations" value="{{ loc.pk }}"><span>{{ loc.display_name }}</span></label>{% endfor %}
+          </fieldset>{% endif %}
         </form>
         {% else %}<p class="muted small" style="margin:0">Only the owner can invite or remove managers.</p>{% endif %}
       </div>
     </section>
 
     <section class="panel setting wide" id="changes">
-      <div class="setting-intro"><span class="setting-no">09</span><h2>Recent changes</h2>
+      <div class="setting-intro"><span class="setting-no">10</span><h2>Recent changes</h2>
         <p>Who changed rules, hours, tips, the team, settings or payouts at {{ restaurant.display_name }}, including automatic close-outs.</p></div>
       <div class="setting-body">
         {% if changes %}
@@ -268,14 +320,14 @@
           {% endfor %}
           </tbody>
         </table></div>
-        {% if not show_all_changes and changes|length >= 12 %}<p style="margin:12px 0 0"><a href="?all=1#changes">Show all changes</a></p>{% endif %}
+        <p style="margin:12px 0 0"><a href="{% url 'activity' %}">Open the full activity log</a>: filter by person, location and date, or download it.</p>
         {% else %}
         <p class="muted" style="margin:0">Nothing yet.</p>
         {% endif %}
       </div>
     </section>
 
-    {% include "tips/_signin_section.html" with number="10" %}
+    {% include "tips/_signin_section.html" with number="11" %}
   </div>
 </div>
 {% endblock %}

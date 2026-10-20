@@ -15,12 +15,18 @@ def manager_business(request):
     return profile.business if profile else None
 
 
+def allowed_locations(request):
+    """The locations this manager runs: all of them for owners and unrestricted managers."""
+    profile = getattr(getattr(request, "user", None), "manager", None)
+    return profile.allowed_locations() if profile is not None else Location.objects.none()
+
+
 def pick_location(request):
-    """Managers work in one of their own business's locations (picked one kept in the session).
+    """Managers work in one of the locations they run (the picked one is kept in the session).
     Public pages name the location in the link (?at=<slug>)."""
     business = request.business
     if business is not None:
-        own = Location.objects.filter(business=business, archived=False)
+        own = request.allowed_locations
         slug = request.GET.get("at")
         location_id = request.session.get("location_id")
         return ((own.filter(slug=slug).first() if slug else None)
@@ -45,15 +51,19 @@ class LocationMiddleware:
     def __call__(self, request):
         try:
             request.business = manager_business(request)
+            request.allowed_locations = allowed_locations(request) if request.business else Location.objects.none()
             request.location = pick_location(request)
         except Exception:  # e.g. before the first migration
             request.business, request.location = None, None
+            request.allowed_locations = Location.objects.none()
         if request.location is not None:
             timezone.activate(autoclose.location_tz(request.location))
         if (settings.AUTOCLOSE_IN_REQUESTS and getattr(request, "user", None) and request.user.is_authenticated
                 and cache.add("autoclose-check", 1, 60)):
             try:
                 autoclose.run()
+                from . import watch
+                watch.run()
             except Exception:
                 pass
         response = self.get_response(request)

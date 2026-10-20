@@ -23,7 +23,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, guest_i18n, hours as hours_from, roles as role_presets, services
+from . import ai, autoclose, guest_i18n, hours as hours_from, insights, roles as role_presets, services
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, two_step_setup_context
@@ -58,6 +58,7 @@ def dashboard(request):
         "night": night,
         "tips": tips[:40],
         "tip_count": len(guest_tips),
+        "pace": insights.pace(location),
         "total": total,
         "average": (sum((t.amount for t in guest_tips), Decimal("0")) / len(guest_tips)).quantize(Decimal("0.01"))
                    if guest_tips else None,
@@ -401,16 +402,7 @@ def staff_list(request):
         except ValidationError:
             messages.error(request, f"\"{email}\" isn't a valid email. Use the email of their PayPal account.")
             return redirect("staff_list")
-        # the same person at another location (same PayPal email) gets one tips page for everything
-        person = StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).first()
-        if person is None:
-            person = StaffMember.objects.create(business=request.business, name=name, paypal_email=email)
-        membership, made = Membership.objects.get_or_create(staff=person, location=location,
-                                                            defaults={"default_role": role})
-        if not made:
-            membership.active, membership.default_role = True, role
-            membership.save()
-        Change.log(request, f"Added {person.name} ({Role.label(role, location.pk)}) to the team")
+        person = _add_person(request, location, name, email, role)
         others = person.memberships.exclude(location=location).count()
         messages.success(request, f"{person.name} added." + (
             f" They also work at {others} other location{'s' if others > 1 else ''}, so their tips page "
@@ -426,6 +418,90 @@ def staff_list(request):
         "business_type": location.business_type,
         "base_url": request.build_absolute_uri("/").rstrip("/"),
     })
+
+
+def _add_person(request, location, name, email, role):
+    """Put someone on this location's team. The same person at another location (same PayPal email)
+    keeps one tips page for everything."""
+    person = StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).first()
+    if person is None:
+        person = StaffMember.objects.create(business=request.business, name=name, paypal_email=email)
+    membership, made = Membership.objects.get_or_create(staff=person, location=location,
+                                                        defaults={"default_role": role})
+    if not made:
+        membership.active, membership.default_role = True, role
+        membership.save()
+    Change.log(request, f"Added {person.name} ({Role.label(role, location.pk)}) to the team")
+    return person
+
+
+BULK_MAX = 200
+
+
+@manager_required
+@require_POST
+@managers_only
+def staff_bulk(request):
+    """Add many people at once: one per line "Name, PayPal email, role" (pasted or a CSV file)."""
+    import csv
+    location = request.location
+    roles = list(Role.objects.filter(location=location))
+    fallback = request.POST.get("default_role", "")
+    if not any(r.key == fallback for r in roles):
+        fallback = None
+    text = request.POST.get("people", "")
+    upload = request.FILES.get("file")
+    if upload:
+        if upload.size > 200 * 1024:
+            messages.error(request, "That file is too big. Up to 200 people at a time.")
+            return redirect("staff_list")
+        text = upload.read().decode("utf-8-sig", errors="replace")
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        messages.error(request, "Paste one person per line, or choose a CSV file.")
+        return redirect("staff_list")
+    if len(lines) > BULK_MAX:
+        messages.error(request, f"Up to {BULK_MAX} people at a time, please.")
+        return redirect("staff_list")
+    delimiter = "\t" if "\t" in lines[0] else (";" if lines[0].count(";") > lines[0].count(",") else ",")
+    send_links = bool(request.POST.get("send_links"))
+    added, skipped, mailed = [], [], 0
+    for n, cells in enumerate(csv.reader(lines, delimiter=delimiter), 1):
+        cells = [c.strip() for c in cells] + ["", "", ""]
+        name, email, role_text = " ".join(cells[0].split())[:80], cells[1].lower()[:254], cells[2]
+        if n == 1 and name.lower() in ("name", "names", "full name") and "@" not in email:
+            continue  # a header row
+        if not name:
+            skipped.append(f"line {n}: no name")
+            continue
+        try:
+            validate_email(email)
+        except ValidationError:
+            skipped.append(f"line {n} ({name}): \"{email or 'no email'}\" isn't an email")
+            continue
+        found = ai._roles_in(role_text, roles) if role_text else []
+        role = found[0].key if len(found) == 1 else (fallback if not role_text else None)
+        if role is None:
+            skipped.append(f"line {n} ({name}): " + (f"no role called \"{role_text}\"" if role_text else "no role"))
+            continue
+        person = _add_person(request, location, name, email, role)
+        added.append(person)
+        if send_links and settings.EMAIL_ENABLED:
+            link = request.build_absolute_uri(reverse("my_tips", args=[person.access_token]))
+            mailed += send_mail(f"Your tips at {location.display_name}",
+                                f"Hi {person.name},\n\n{location.display_name} pays your share of the tips with "
+                                f"TipPool. This is your private link: your tips, how each share was worked out, "
+                                f"and clocking in and out.\n\n{link}\n\nKeep it to yourself, and add it to "
+                                "your phone's home screen.\n", settings.DEFAULT_FROM_EMAIL, [person.paypal_email],
+                                fail_silently=True)
+    if added:
+        note = f"Added {len(added)} {'person' if len(added) == 1 else 'people'} to the team."
+        if send_links and settings.EMAIL_ENABLED:
+            note += f" Emailed {mailed} private link{'s' if mailed != 1 else ''}."
+        messages.success(request, note)
+    if skipped:
+        messages.warning(request, "Skipped " + "; ".join(skipped[:12]) + ("; and more." if len(skipped) > 12 else "."))
+    return redirect("staff_list")
 
 
 @manager_required
@@ -963,8 +1039,10 @@ REVIEW_CHOICES = [(0, "Don't wait: pay right away"), (30, "30 minutes"), (60, "1
                   (720, "12 hours"), (1440, "24 hours")]
 
 
-def _locations_overview(business):
+def _locations_overview(business, only=None):
     rows = list(Location.objects.filter(business=business).order_by("archived", "created_at").annotate(team_count=Count("memberships", filter=Q(memberships__active=True))))
+    if only is not None:
+        rows = [r for r in rows if r.pk in only]
     for loc in rows:
         loc.type_label = role_presets.PRESETS.get(loc.business_type, {}).get("label", "Business")
     return rows
@@ -1048,7 +1126,12 @@ def settings_page(request):
         "changes": Change.objects.filter(location=restaurant)[:200 if request.GET.get("all") else 12],
         "show_all_changes": bool(request.GET.get("all")),
         "after_choices": Location.AfterClose.choices, "next_close": autoclose.next_close(restaurant),
-        "all_locations": _locations_overview(request.business),
+        # managers of some locations only see (and can't add or archive) those
+        "all_locations": _locations_overview(request.business, None if request.user.manager.all_access
+                                             else set(request.allowed_locations.values_list("pk", flat=True))),
+        "all_access": request.user.manager.all_access,
+        "active_locations": list(Location.objects.filter(business=request.business, archived=False)),
+        "digest_choices": request.business.Digest.choices,
         "managers": request.business.managers.select_related("user").order_by("-is_owner", "user__first_name"),
         # invite links are as good as a key: only the owner sees them
         "invites": [(i, request.build_absolute_uri(reverse("accept_invite", args=[i.token]))
@@ -1074,7 +1157,7 @@ def overview(request):
     business = request.business
     week_start = timezone.localdate() - timedelta(days=timezone.localdate().weekday())
     rows = []
-    for loc in Location.objects.filter(business=business, archived=False):
+    for loc in request.allowed_locations:
         night = Night.objects.filter(location=loc, status=Night.Status.OPEN).first()
         waiting = list(Night.objects.filter(location=loc, status__in=[
             Night.Status.CLOSED, Night.Status.REVIEW, Night.Status.PAYING]).order_by("date"))
@@ -1090,8 +1173,11 @@ def overview(request):
             "held": [n for n in waiting if n.hold],
             "messages": Message.objects.filter(location=loc, resolved_at__isnull=True).count(),
             "alerts": Alert.objects.filter(location=loc, resolved_at__isnull=True).count(),
+            "pace": insights.pace(loc),
+            "trend": insights.week_so_far(loc),
         })
-    return render(request, "tips/overview.html", {
+    template = "tips/_board.html" if request.GET.get("partial") else "tips/overview.html"
+    return render(request, template, {
         "rows": rows,
         "total_now": sum((r["now"] for r in rows), Decimal("0.00")),
         "total_week": sum((r["week"] for r in rows), Decimal("0.00")),
@@ -1161,7 +1247,9 @@ def messages_page(request):
             alert.save(update_fields=["resolved_at", "resolved_by"])
             Change.log(request, f"Marked as handled: {alert.text[:120]}")
             return redirect("messages_page")
-        msg = get_object_or_404(Message, pk=_id(request.POST.get("message")), staff__business=business)
+        msg = get_object_or_404(Message.objects.filter(Q(location__in=request.allowed_locations) |
+                                                       Q(staff__memberships__location__in=request.allowed_locations))
+                                .distinct(), pk=_id(request.POST.get("message")), staff__business=business)
         if msg.kind == Message.Kind.PAYOUT_CHANGE and request.user.manager.is_lead:
             messages.error(request, "Only a manager can approve where someone is paid.")
             return redirect("messages_page")
@@ -1194,7 +1282,8 @@ def messages_page(request):
         messages.success(request, f"Done. {msg.staff.name} sees your answer on their tips page.")
         return redirect("messages_page")
     qs = list(Message.objects.filter(Q(location=request.location) | Q(kind=Message.Kind.PAYOUT_CHANGE,
-                                                                      staff__business=business))
+                                                                      staff__business=business,
+                                                                      staff__memberships__location__in=request.allowed_locations))
               .select_related("staff", "night").distinct())
     alerts = Alert.objects.filter(business=business).filter(Q(location=request.location) | Q(location__isnull=True))
     return render(request, "tips/messages.html", {
@@ -1210,6 +1299,8 @@ def messages_page(request):
 @require_POST
 def location_switch(request):
     location = get_object_or_404(Location, pk=_id(request.POST.get("location")), business=request.business)
+    if not location.archived and not request.allowed_locations.filter(pk=location.pk).exists():
+        raise Http404("You don't manage that location.")
     if location.archived:
         messages.error(request, "That location is archived. Restore it in Settings to work there.")
         return redirect("dashboard")
@@ -1223,6 +1314,9 @@ def location_switch(request):
 @require_POST
 @managers_only
 def location_archive(request, pk):
+    if not request.user.manager.all_access:
+        messages.error(request, "Only the owner, or a manager of every location, can archive locations.")
+        return redirect("settings")
     location = get_object_or_404(Location, pk=pk, business=request.business)
     restore = request.POST.get("restore") == "1"
     if not restore:
@@ -1246,6 +1340,9 @@ def location_archive(request, pk):
 @require_POST
 @managers_only
 def location_add(request):
+    if not request.user.manager.all_access:
+        messages.error(request, "Only the owner, or a manager of every location, can add locations.")
+        return redirect("settings")
     name = request.POST.get("name", "").strip()[:80]
     if not name:
         messages.error(request, "Give the new location a name.")
@@ -1536,3 +1633,62 @@ def _webhook_business(event):
     item = PayoutItem.objects.filter(sender_item_id=sender_item_id).first() if sender_item_id else None
     batch = item.batch if item else (PayoutBatch.objects.filter(paypal_batch_id=batch_id).first() if batch_id else None)
     return batch.night.location.business if batch else None
+
+
+@managers_only
+def digest_preview(request):
+    """The owner's summary email, shown in the app (also handy before email is set up)."""
+    from . import digest
+    kind = request.GET.get("kind") if request.GET.get("kind") in ("daily", "weekly") else (
+        request.business.digest if request.business.digest != "off" else "weekly")
+    today = timezone.now().astimezone(autoclose.location_tz(request.location)).date()
+    data = digest.build(request.business, list(request.allowed_locations), today, kind=kind)
+    return render(request, "tips/digest_preview.html", {**data, "kind": kind, "base_url": ""})
+
+
+@managers_only
+def activity(request):
+    """Who did what, across the locations you manage: filter by person, location, words and dates; CSV export."""
+    import csv
+    from datetime import date
+
+    from .reports import _cell
+    allowed = list(request.allowed_locations)
+    rows = Change.objects.filter(location__in=allowed).select_related("location")
+    where = _id(request.GET.get("location"))
+    if where and any(loc.pk == where for loc in allowed):
+        rows = rows.filter(location_id=where)
+    who = request.GET.get("who", "")[:150]
+    if who:
+        rows = rows.filter(who=who)
+    words = request.GET.get("q", "").strip()[:100]
+    if words:
+        rows = rows.filter(what__icontains=words)
+
+    def day(value):
+        try:
+            return date.fromisoformat(value)
+        except (TypeError, ValueError):
+            return None
+    first, last = day(request.GET.get("from")), day(request.GET.get("to"))
+    if first:
+        rows = rows.filter(at__date__gte=first)
+    if last:
+        rows = rows.filter(at__date__lte=last)
+    if request.GET.get("export") == "csv":
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="tippool-activity.csv"'
+        out = csv.writer(response)
+        out.writerow(["When", "Location", "Who", "What"])
+        for c in rows[:20000]:
+            out.writerow([_cell(timezone.localtime(c.at).strftime("%Y-%m-%d %H:%M")), _cell(c.location.display_name if c.location else ""),
+                          _cell(c.who), _cell(c.what)])
+        return response
+    query = request.GET.copy()
+    query.pop("export", None)
+    return render(request, "tips/activity.html", {
+        "changes": rows[:300], "count": rows.count(), "locations": allowed, "where": where, "who": who, "q": words,
+        "first": first, "last": last, "people": sorted(set(Change.objects.filter(location__in=allowed)
+                                                          .values_list("who", flat=True))),
+        "query": query.urlencode(),
+    })

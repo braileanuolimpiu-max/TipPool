@@ -11,9 +11,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script>try { var t = localStorage.getItem("tp-theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (e) {}</script>
   {% block head %}{% endblock %}
 </head>
-<body>
+<body{% block body_class %}{% endblock %}>
 {% block body %}{% endblock %}
 <script>
   // forms that undo something big ask first

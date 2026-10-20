@@ -1,0 +1,55 @@
+<section class="kpis" aria-label="Totals">
+  <div><b>{{ cur }}{{ total_now|money }}</b><span>in tips in the open shifts</span></div>
+  <div><b>{{ cur }}{{ total_week|money }}</b><span>this week</span></div>
+  <div><b>{{ rows|length }}</b><span>location{{ rows|length|pluralize }}</span></div>
+  <div{% if attention %} class="needs"{% endif %}><b>{{ attention }}</b><span>waiting for you</span></div>
+</section>
+
+<div class="loc-grid">
+  {% for r in rows %}{% with p=r.pace %}
+  <section class="panel loc-card{% if r.waiting or r.messages or r.alerts %} has-work{% endif %}">
+    <div class="panel-head"><h2>{{ r.location.display_name }}</h2>
+      <form method="post" action="{% url 'location_switch' %}">{% csrf_token %}
+        <input type="hidden" name="location" value="{{ r.location.pk }}"><input type="hidden" name="next" value="{% url 'dashboard' %}">
+        <button class="btn btn-secondary small">Open</button></form></div>
+    <div class="panel-body stack" style="gap:12px">
+      <div class="pace-head">
+        <b class="pace-now">{{ cur }}{{ p.now|money }}</b>
+        {% if not p.night %}<span class="pace-chip">No open shift</span>
+        {% elif p.status == "above" %}<span class="pace-chip up">Above normal +{{ p.percent }}%</span>
+        {% elif p.status == "normal" %}<span class="pace-chip ok">About normal</span>
+        {% elif p.status == "below" %}<span class="pace-chip down">Below normal {{ p.percent }}%</span>
+        {% elif p.status == "low" %}<span class="pace-chip bad">Far below normal {{ p.percent }}%</span>
+        {% elif p.status == "quiet" %}<span class="pace-chip bad">No guest tips yet</span>
+        {% elif p.status == "early" %}<span class="pace-chip">Early: usually nothing yet</span>
+        {% else %}<span class="pace-chip">Learning what's normal</span>{% endif %}
+      </div>
+      {% if p.normal_day and p.night %}
+      <div class="pace-meter" role="img" aria-label="{{ cur }}{{ p.now|money }} so far; normal by now {{ cur }}{{ p.normal_now|money }}; a normal day {{ cur }}{{ p.normal_day|money }}">
+        <span class="fill {{ p.status }}" style="width:{% widthratio p.now p.meter_max 100 %}%"></span>
+        <span class="mark" style="left:{% widthratio p.normal_now p.meter_max 100 %}%" title="Normal by now"></span>
+      </div>
+      <p class="small muted" style="margin:0">Normal by now {{ cur }}{{ p.normal_now|money }} · a normal {{ p.night.date|date:"l" }} ends near {{ cur }}{{ p.normal_day|money }}</p>
+      {% elif p.night and p.status == "new" %}
+      <p class="small muted" style="margin:0">After 3 weeks of shifts, this shows how today compares with a normal {{ p.night.date|date:"l" }}.</p>
+      {% endif %}
+      <dl class="pace-stats">
+        <div><dt>Guests</dt><dd>{{ p.guests }}{% if p.normal_guests is not None %}<small> / {{ p.normal_guests }} usual</small>{% endif %}</dd></div>
+        <div><dt>On the clock</dt><dd>{{ r.on_clock }}</dd></div>
+        <div><dt>Per labor hour</dt><dd>{% if p.per_hour %}{{ cur }}{{ p.per_hour|money }}{% else %}–{% endif %}{% if p.normal_per_hour %}<small> / {{ cur }}{{ p.normal_per_hour|money }}</small>{% endif %}</dd></div>
+        <div><dt>This week</dt><dd>{{ cur }}{{ r.trend.now|money }}{% if r.trend.change is not None %}<small class="{% if r.trend.change >= 0 %}up{% else %}down{% endif %}"> {% if r.trend.change >= 0 %}+{% endif %}{{ r.trend.change }}%</small>{% endif %}</dd></div>
+      </dl>
+      {% if r.waiting or r.messages or r.alerts %}
+      <ul class="loc-todo">
+        {% for n in r.waiting %}<li>{% if n.hold %}<strong>On hold:</strong> {{ n }}: {{ n.hold }}{% elif n.status == "closed" %}{{ n }} needs who worked{% elif n.status == "review" %}{{ n }} is ready to approve{% else %}{{ n }} is being paid{% endif %}</li>{% endfor %}
+        {% if r.alerts %}<li>{{ r.alerts }} alert{{ r.alerts|pluralize }}</li>{% endif %}
+        {% if r.messages %}<li>{{ r.messages }} message{{ r.messages|pluralize }} from the team</li>{% endif %}
+      </ul>
+      {% else %}
+      <p class="small muted" style="margin:0">Nothing waiting.</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endwith %}{% endfor %}
+</div>
+<p class="small muted board-time">Updated {% now "g:i A" %}, refreshes every minute. "Per labor hour" is tips divided by hours on the clock; the number after "/" is a normal day.</p>

@@ -7,12 +7,13 @@ from django.core.mail import send_mail
 log = logging.getLogger("tips.alerts")
 
 
-def raise_alert(business, text, location=None, night=None, key="", owners_only=False):
+def raise_alert(business, text, location=None, night=None, key="", owners_only=False, once=False):
     """Record an alert once (same key = same problem) and email the business's managers who run that
     location (or only the owners)."""
     from .models import Alert
-    if key and Alert.objects.filter(business=business, key=key, resolved_at__isnull=True).exists():
-        return None
+    seen = Alert.objects.filter(business=business, key=key)
+    if key and (seen if once else seen.filter(resolved_at__isnull=True)).exists():
+        return None  # `once`: a problem someone already handled isn't raised again
     alert = Alert.objects.create(business=business, location=location, night=night, text=text[:300], key=key[:80])
     email_managers(business, f"Needs your attention: {text[:80]}", text + (f"\n\nLocation: {location.display_name}"
                                                                            if location else ""),

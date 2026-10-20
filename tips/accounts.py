@@ -200,6 +200,8 @@ def invite_manager(request):
     request.business.invites.filter(email__iexact=email, accepted_at__isnull=True).delete()
     invite = Invite.objects.create(business=request.business, email=email, level=level,
                                    invited_by=request.user.get_username())
+    invite.locations.set(Location.objects.filter(business=request.business, archived=False,
+                                                 pk__in=[p for p in request.POST.getlist("locations") if p.isdigit()]))
     link = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
     send_mail(f"Join {request.business.name} on TipPool",
               f"{request.user.get_full_name() or request.user.get_username()} invited you to manage "
@@ -272,7 +274,10 @@ def accept_invite(request, token):
                 errors.append(f"This login already manages {user.manager.business.name}. "
                               "Use a different email for this business.")
             elif not errors:
-                Manager.objects.get_or_create(user=user, defaults={"business": invite.business, "level": invite.level})
+                manager, made = Manager.objects.get_or_create(
+                    user=user, defaults={"business": invite.business, "level": invite.level})
+                if made:
+                    manager.locations.set(invite.locations.all())
                 invite.accepted_at = timezone.now()
                 invite.save(update_fields=["accepted_at"])
                 Change.log(user.get_username(), f"Joined as a manager (invited by {invite.invited_by})",
@@ -494,15 +499,79 @@ def load_sample(request):
 
 def cron_tick(request):
     """Called every few minutes by an outside scheduler (and keeps a free server awake):
-    runs automatic close-outs and removes week-old demos. Needs ?key=CRON_SECRET."""
+    runs automatic close-outs, smart alerts and summary emails, and removes week-old demos.
+    Needs ?key=CRON_SECRET."""
     import hmac
 
     from django.http import Http404, JsonResponse
 
-    from . import autoclose, demo
+    from . import autoclose, demo, digest, watch
     secret = settings.CRON_SECRET
     if not secret or not hmac.compare_digest(request.GET.get("key", ""), secret):
         raise Http404()
     done = autoclose.run()
+    alerts = watch.run()
+    sent = digest.run(base_url=request.build_absolute_uri("/"))
     removed = demo.cleanup()
-    return JsonResponse({"closed": len(done), "demos_removed": removed})
+    return JsonResponse({"closed": len(done), "alerts": len(alerts), "digests": sent, "demos_removed": removed})
+
+
+# --- Owner controls ---------------------------------------------------------------------
+@require_POST
+@owner_required
+def owner_controls(request):
+    from decimal import Decimal, InvalidOperation
+    business = request.business
+    raw = request.POST.get("approval_limit", "").strip()
+    try:
+        limit = Decimal(raw) if raw else None
+        if limit is not None and not (limit.is_finite() and 1 <= limit <= 1000000):
+            raise InvalidOperation
+    except InvalidOperation:
+        messages.error(request, "The approval limit must be an amount from 1 to 1,000,000, or empty for no limit.")
+        return redirect(f"{reverse('settings')}#owner")
+    business.approval_limit = limit.quantize(Decimal("0.01")) if limit is not None else None
+    business.smart_alerts = bool(request.POST.get("smart_alerts"))
+    if request.POST.get("digest") in Business.Digest.values:
+        business.digest = request.POST["digest"]
+    business.save(update_fields=["approval_limit", "smart_alerts", "digest"])
+    Change.log(request, "Owner controls: " + ", ".join([
+        f"approval limit {business.symbol}{business.approval_limit}" if business.approval_limit else "no approval limit",
+        "smart alerts " + ("on" if business.smart_alerts else "off"),
+        f"summary email {business.get_digest_display().lower()}"]))
+    messages.success(request, "Owner controls saved.")
+    return redirect(f"{reverse('settings')}#owner")
+
+
+@require_POST
+@owner_required
+def freeze_payouts(request):
+    """The owner's emergency stop for every payout in every location (tips keep coming in)."""
+    from .alerts import email_managers
+    business = request.business
+    who = request.user.get_full_name() or request.user.get_username()
+    if request.POST.get("frozen") == "1":
+        business.payouts_frozen_at, business.payouts_frozen_by = timezone.now(), who
+        text = f"{who} froze all payouts for {business.name}. Tips still come in; nothing is paid out until they're turned back on."
+    else:
+        business.payouts_frozen_at, business.payouts_frozen_by = None, ""
+        text = f"{who} turned payouts back on for {business.name}."
+    business.save(update_fields=["payouts_frozen_at", "payouts_frozen_by"])
+    Change.log(request, text)
+    email_managers(business, "Payouts frozen" if business.payouts_frozen else "Payouts are back on", text)
+    messages.warning(request, text) if business.payouts_frozen else messages.success(request, text)
+    return redirect(request.POST.get("next") if request.POST.get("next", "").startswith("/") else f"{reverse('settings')}#owner")
+
+
+@require_POST
+@owner_required
+def manager_locations(request, pk):
+    manager = get_object_or_404(Manager, pk=pk, business=request.business, is_owner=False)
+    picked = Location.objects.filter(business=request.business, archived=False,
+                                     pk__in=[p for p in request.POST.getlist("locations") if p.isdigit()])
+    manager.locations.set(picked)
+    name = manager.user.get_full_name() or manager.user.get_username()
+    where = ", ".join(loc.display_name for loc in picked) or "all locations"
+    Change.log(request, f"{name} now runs: {where}")
+    messages.success(request, f"{name} now runs {where}.")
+    return redirect(f"{reverse('settings')}#managers")

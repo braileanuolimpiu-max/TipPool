@@ -110,6 +110,21 @@
     </div>
   </form>
 
+  <details class="panel bulk-add">
+    <summary class="panel-head"><h2>Add several at once</h2><span class="small muted">Paste a list or upload a CSV</span></summary>
+    <form method="post" action="{% url 'staff_bulk' %}" enctype="multipart/form-data" class="panel-body stack">{% csrf_token %}
+      <div><label for="people">One person per line: name, PayPal email, role</label>
+        <textarea id="people" name="people" rows="6" placeholder="Maria Lopez, maria@example.com, server&#10;John Smith, john@example.com, bartender"></textarea>
+        <p class="hint">The role can be left out: then everyone gets the role below. A spreadsheet's columns work too (copy and paste them).</p></div>
+      <div><label for="bulk_file">Or a CSV file</label><input type="file" id="bulk_file" name="file" accept=".csv,text/csv,text/plain"></div>
+      <div><label for="bulk_role">Role for lines without one</label>
+        <select id="bulk_role" name="default_role">{% for r in roles %}<option value="{{ r.key }}">{{ r.name }}</option>{% endfor %}</select></div>
+      <label class="choice"><input type="checkbox" name="send_links" {% if email_enabled %}checked{% endif %}>
+        <span><strong>Email each person their private link</strong><span class="small muted">So they can confirm where they're paid and clock in. {% if not email_enabled %}(Email isn't set up on this server yet.){% endif %}</span></span></label>
+      <button class="btn btn-secondary">Add everyone</button>
+    </form>
+  </details>
+
   <form method="post" action="{% url 'role_add' %}" class="panel">{% csrf_token %}
     <div class="panel-head"><h2>Add a role</h2></div>
     <div class="panel-body stack">

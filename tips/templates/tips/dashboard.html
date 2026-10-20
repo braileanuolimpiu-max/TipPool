@@ -19,7 +19,10 @@
   <div class="stack">
     <section aria-label="Tips so far">
       <div class="counter">
-        <div><div class="big"><span class="hl">{{ cur }}{{ total|money }}</span></div><div class="cap">in tips this shift</div></div>
+        <div><div class="big"><span class="hl">{{ cur }}{{ total|money }}</span></div><div class="cap">in tips this shift</div>
+          {% if pace.normal_now is not None %}<div class="dash-pace">
+            {% if pace.status == "above" %}<span class="pace-chip up">Above normal +{{ pace.percent }}%</span>{% elif pace.status == "normal" %}<span class="pace-chip ok">About normal</span>{% elif pace.status == "below" %}<span class="pace-chip down">Below normal {{ pace.percent }}%</span>{% elif pace.status == "low" %}<span class="pace-chip bad">Far below normal</span>{% elif pace.status == "quiet" %}<span class="pace-chip bad">No guest tips yet</span>{% else %}<span class="pace-chip">Early</span>{% endif %}
+            <span class="small muted">normal by now {{ cur }}{{ pace.normal_now|money }} · a normal {{ night.date|date:"l" }} {{ cur }}{{ pace.normal_day|money }}</span></div>{% endif %}</div>
         <div class="side">
           <div><b>{{ tip_count }}</b><span class="small muted">{% if tip_count == 1 %}guest tipped{% else %}guests tipped{% endif %}</span></div>
           <div><b>{% if average %}{{ cur }}{{ average|money }}{% else %}–{% endif %}</b><span class="small muted">average tip</span></div>

@@ -1,0 +1,20 @@
+{% autoescape off %}{{ business.name }}: tips for {{ label }}
+
+Total: {{ cur }}{{ total|money }}{% if change is not None %} ({% if change >= 0 %}+{% endif %}{{ change }}% vs the {% if kind == "daily" %}same day last week{% else %}week before{% endif %}){% endif %}
+{% for r in rows %}
+{{ r.location.display_name }}: {{ cur }}{{ r.collected|money }}{% if r.change is not None %} ({% if r.change >= 0 %}+{% endif %}{{ r.change }}%){% endif %}, {{ r.shifts }} shift{{ r.shifts|pluralize }}{% if r.per_hour %}, {{ cur }}{{ r.per_hour|money }} per hour worked{% endif %}{% if r.best %}
+  Best shift: {{ r.best.date|date:"D M j" }}, {{ cur }}{{ r.best.total|money }}{% endif %}{% if r.top %}
+  Top earner: {{ r.top.name }}, {{ cur }}{{ r.top.total|money }}{% endif %}
+{% endfor %}
+{% if waiting or alerts or team_messages %}Needs you:
+{% for n in waiting %}- {{ n.location.display_name }}: the {{ n }} {% if n.hold %}is on hold ({{ n.hold }}){% elif n.status == "closed" %}needs who worked{% elif n.status == "review" %}is ready to approve{% else %}is being paid{% endif %}
+{% endfor %}{% if alerts %}- {{ alerts }} open alert{{ alerts|pluralize }}
+{% endif %}{% if team_messages %}- {{ team_messages }} message{{ team_messages|pluralize }} from the team
+{% endif %}{% else %}Nothing is waiting for you.
+{% endif %}
+Close-out checks: {{ stops }} stop{{ stops|pluralize }}, {{ warns }} thing{{ warns|pluralize }} worth a look.
+{% for n in noticed %}- {{ n }}
+{% endfor %}
+{% if base_url %}Open TipPool: {{ base_url }}{% endif %}
+You get this {% if kind == "daily" %}every morning{% else %}every Monday{% endif %}. Change it in Settings.
+{% endautoescape %}
