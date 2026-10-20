@@ -71,7 +71,15 @@ def brevo_check(api_key, sender):
     try:
         account = requests.get(f"{BREVO_API}/account", headers=headers, timeout=15)
         if account.status_code in (401, 403):
-            return "Brevo didn't accept that API key. Copy it again from Brevo (SMTP & API → API Keys)."
+            try:
+                said = str(account.json().get("message", ""))[:200]
+            except ValueError:
+                said = ""
+            if "ip" in said.lower().split() or "ip address" in said.lower():
+                return ("Brevo blocked this server's internet address. In Brevo: your name (top right) → Security → "
+                        "Authorized IPs → turn off blocking of unknown IP addresses, then save here again.")
+            return ("Brevo didn't accept that API key" + (f" (Brevo says: {said})" if said else "") + ". Use an API "
+                    "key (it starts with xkeysib-) from SMTP & API → API Keys, not the SMTP key.")
         if account.status_code >= 400:
             return "Brevo couldn't check that key just now. Try again in a minute."
         senders = requests.get(f"{BREVO_API}/senders", headers=headers, timeout=15)
