@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.views import redirect_to_login
 from django.shortcuts import redirect
+from django.templatetags.static import static
 from django.urls import include, path
 
 from tips.accounts import BrandedResetForm, ResetConfirmView, TwoStepLoginView, change_password, login_code
@@ -17,6 +18,7 @@ def _admin_login(request, extra_context=None):
 admin.site.login = _admin_login
 
 urlpatterns = [
+    path("favicon.ico", lambda request: redirect(static("icons/icon-32.png"), permanent=True)),
     path("admin/", admin.site.urls),
     path("login/", TwoStepLoginView.as_view(), name="login"),
     path("login/code/", login_code, name="login_code"),
