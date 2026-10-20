@@ -1104,29 +1104,8 @@ body.menu-open .tour { display: none; }
 .bulk-add[open] > summary h2::after { content: " \2212"; }
 .bulk-add textarea { font-family: var(--mono); font-size: .85rem; }
 
-/* ---------- dark mode (manager pages): follows the device, or the switch in the top bar.
+/* ---------- dark mode (manager pages): off by default, turned on with the switch in the top bar.
    Receipts, tickets and printed codes stay paper-white. ---------- */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) body.app-shell {
-  --paper: #171716; --ink: #ecebe5; --graphite: #a9a8a0; --hair: #3a3935; --hair-soft: #2b2a27;
-  --tray: #0f0f0e; --tray-deep: #1d1d1b; --steel-1: #242422; --steel-2: #55554f;
-  --marker: #f5d63d; --marker-soft: #3b3417; --go: #5bd394; --go-soft: #13301f; --wait: #f0b357;
-  --wait-soft: #35270f; --void: #ff8577; --void-soft: #3d1a16; --thermal: #1f1f1d;
-  color-scheme: dark; background: var(--paper); color: var(--ink); }
-  :root:not([data-theme="light"]) body.app-shell .btn-primary, .avatar, .is-done .tour-mark { color: var(--paper); }
-  :root:not([data-theme="light"]) body.app-shell .btn-primary:hover { color: #141414; }
-  :root:not([data-theme="light"]) body.app-shell select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ecebe5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); }
-  :root:not([data-theme="light"]) body.app-shell ::placeholder { color: #7a7972; }
-  :root:not([data-theme="light"]) body.app-shell input[type=checkbox]:not(.switch input), input[type=radio] { border-color: #6a6963; }
-  :root:not([data-theme="light"]) body.app-shell input[type=time]::-webkit-calendar-picker-indicator, input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); }
-  :root:not([data-theme="light"]) body.app-shell .hl { background: linear-gradient(100deg, transparent 2%, rgba(245, 214, 61, .38) 3% 97%, transparent 98%) 0 85% / 100% 42% no-repeat; }
-  :root:not([data-theme="light"]) body.app-shell .panel, .kpis > div, .tour { box-shadow: none; }
-  :root:not([data-theme="light"]) body.app-shell .demo-banner { border-color: #6b5c17; }
-  :root:not([data-theme="light"]) body.app-shell .receipt, .ticket, .qr-face, .tent, .sheet, .show-screen, .house-qr, .two-step-setup img { --ink: #141414; --paper: #ffffff; --graphite: #5c5c58; --hair: #dcdcd6; --hair-soft: #ececE7; --steel-1: #f2f3f1; --marker-soft: #fff6c7; --go: #12703d; --wait: #9a5b00; --void: #c4291f; --thermal: #fffefc; color-scheme: light; }
-  :root:not([data-theme="light"]) body.app-shell .ticket { color: #141414; }
-  :root:not([data-theme="light"]) body.app-shell .tour { background: var(--tray-deep); border-color: var(--hair); }
-  :root:not([data-theme="light"]) body.app-shell .btn-danger { color: #141414; }
-}
 :root[data-theme="dark"] body.app-shell {
   --paper: #171716; --ink: #ecebe5; --graphite: #a9a8a0; --hair: #3a3935; --hair-soft: #2b2a27;
   --tray: #0f0f0e; --tray-deep: #1d1d1b; --steel-1: #242422; --steel-2: #55554f;

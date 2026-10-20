@@ -19,8 +19,8 @@
   </button>
   <div class="who-am-i">
     <span>Signed in as <a href="{% url 'two_step' %}" title="Your password and two-step sign-in">{{ user.get_full_name|default:user.username }}</a></span>
-    <button type="button" class="theme-btn" id="theme-btn" aria-label="Colors: automatic" title="Light, dark, or follow your device">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg><span class="theme-label">Auto</span></button>
+    <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch to dark mode" title="Light or dark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg><span class="theme-label">Dark</span></button>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Sign out</button></form>
   </div>
 </header>
@@ -94,19 +94,19 @@
   (() => {
     const btn = document.getElementById("theme-btn");
     if (!btn) return;
-    const names = {auto: "Auto", dark: "Dark", light: "Light"};
-    const show = (mode) => {
-      btn.querySelector(".theme-label").textContent = names[mode];
-      btn.setAttribute("aria-label", "Colors: " + names[mode].toLowerCase() + ". Change");
+    // light by default; the button switches to the other mode
+    const show = (dark) => {
+      btn.querySelector(".theme-label").textContent = dark ? "Light" : "Dark";
+      btn.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
     };
-    let mode = document.documentElement.dataset.theme || "auto";
-    show(mode);
+    let dark = document.documentElement.dataset.theme === "dark";
+    show(dark);
     btn.addEventListener("click", () => {
-      mode = {auto: "dark", dark: "light", light: "auto"}[mode];
-      if (mode === "auto") delete document.documentElement.dataset.theme;
-      else document.documentElement.dataset.theme = mode;
-      try { mode === "auto" ? localStorage.removeItem("tp-theme") : localStorage.setItem("tp-theme", mode); } catch (e) {}
-      show(mode);
+      dark = !dark;
+      if (dark) document.documentElement.dataset.theme = "dark";
+      else delete document.documentElement.dataset.theme;
+      try { dark ? localStorage.setItem("tp-theme", "dark") : localStorage.removeItem("tp-theme"); } catch (e) {}
+      show(dark);
     });
   })();
 </script>
