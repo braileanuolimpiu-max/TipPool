@@ -313,7 +313,7 @@ class PayPalConnectionTests(TestCase):
         self.client.force_login(self.owner)
 
     def test_connect_checks_keys_and_encrypts_the_secret(self):
-        with mock.patch("tips.paypal.PayPalClient.access_token", return_value="tok"):
+        with mock.patch("tips.paypal.PayPalClient.access_token", return_value="tok"),                 mock.patch("tips.paypal.PayPalClient.ensure_webhook", return_value="WH-1"):
             self.client.post(reverse("payment_settings"), {"paypal_client_id": "CID", "paypal_secret": "S3CRET",
                                                            "currency": "USD", "fee_mode": "business"})
         business = Business.objects.get(pk=self.business.pk)
@@ -323,6 +323,29 @@ class PayPalConnectionTests(TestCase):
         self.assertNotContains(self.client.get(reverse("settings")), "S3CRET")
         client = get_client(business)
         self.assertEqual((client.client_id, client.client_secret), ("CID", "S3CRET"))
+
+    def test_test_keys_are_recognised_and_the_webhook_is_set_up(self):
+        from tips.paypal import LIVE_API
+
+        def token(client):
+            if client.base_url == LIVE_API:
+                raise PayPalError("not live keys", 401)
+            return "tok"
+        with mock.patch("tips.paypal.PayPalClient.access_token", autospec=True, side_effect=token),                 mock.patch("tips.paypal.PayPalClient.ensure_webhook", return_value="WH-9") as hook:
+            page = self.client.post(reverse("payment_settings"), {"paypal_client_id": "CID", "paypal_secret": "S",
+                                                                  "currency": "USD", "fee_mode": "business"}, follow=True)
+        business = Business.objects.get(pk=self.business.pk)
+        self.assertEqual((business.paypal_live, business.paypal_webhook_id), (False, "WH-9"))
+        self.assertTrue(hook.call_args[0][0].endswith("/webhooks/paypal/"))
+        self.assertContains(page, "test mode")
+
+    def test_a_webhook_problem_never_blocks_connecting(self):
+        with mock.patch("tips.paypal.PayPalClient.access_token", return_value="tok"),                 mock.patch("tips.paypal.PayPalClient.ensure_webhook", side_effect=PayPalError("https only", 400)):
+            self.client.post(reverse("payment_settings"), {"paypal_client_id": "CID", "paypal_secret": "S",
+                                                           "currency": "USD", "fee_mode": "business"})
+        business = Business.objects.get(pk=self.business.pk)
+        self.assertTrue(business.paypal_connected)
+        self.assertEqual(business.paypal_webhook_id, "")
 
     def test_bad_keys_are_refused(self):
         with mock.patch("tips.paypal.PayPalClient.access_token", side_effect=PayPalError("no")):

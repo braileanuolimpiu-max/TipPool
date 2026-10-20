@@ -1253,3 +1253,13 @@ input[type=time]::-webkit-calendar-picker-indicator { display: none !important; 
 .code-input { font: 700 1.4rem var(--mono); letter-spacing: .35em; text-transform: uppercase; max-width: 240px; }
 .code-input::placeholder { letter-spacing: .35em; }
 .resend { border-top: 1px dashed var(--hair); padding-top: 12px; }
+
+/* ---------- connect PayPal guide ---------- */
+.connect-guide > summary { cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.connect-guide > summary::before { content: ""; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s; }
+.connect-guide[open] > summary::before { transform: rotate(45deg); }
+.guide-steps { margin: 10px 0 16px; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 10px; }
+.guide-steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; line-height: 1.45; }
+.guide-steps li::before { content: counter(step); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--marker); color: #141414; font: 700 .8rem var(--mono); }

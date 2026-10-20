@@ -148,8 +148,8 @@
     <form method="post" action="{% url 'payment_settings' %}" class="panel setting" id="payments">{% csrf_token %}
       <div class="setting-intro"><span class="setting-no">06</span><h2>Payments</h2>
         <p>For every location of {{ business.name }}.</p>
-        {% if business.paypal_connected %}<span class="pill ok">{% if business.paypal_live %}Live PayPal connected{% else %}Sandbox PayPal connected{% endif %}</span>
-        {% else %}<span class="pill wait">Demo: TipPool's sandbox</span>{% endif %}</div>
+        {% if business.paypal_connected %}<span class="pill ok">{% if business.paypal_live %}PayPal connected{% else %}PayPal connected (test mode){% endif %}</span>
+        {% else %}<span class="pill wait">Not connected yet</span>{% endif %}</div>
       <fieldset class="setting-body stack"{% if not is_owner %} disabled{% endif %}>
         <div class="form-grid">
           <div><label for="currency">Currency</label>
@@ -165,22 +165,35 @@
               <span><strong>{{ label }}</strong><span class="small muted">{% if value == "business" %}The team gets every cent guests tipped.{% else %}Allowed in the US: only the actual processing fee comes off, before the split.{% endif %}</span></span></label>{% endfor %}
           </div></div>
         <div class="connect-box">
-          <p style="margin:0">{% if business.paypal_connected %}Tips go straight into <strong>your</strong> PayPal account and payouts come from it.{% else %}<strong>Connect your own PayPal</strong> so tips go into your account and payouts come from it. Until then this is a demo on TipPool's sandbox: no real money.{% endif %}</p>
-          <div class="form-grid">
-            <div><label for="paypal_client_id">Client ID</label>
-              <input type="text" id="paypal_client_id" name="paypal_client_id" value="{{ business.paypal_client_id }}" autocomplete="off" spellcheck="false"></div>
-            <div><label for="paypal_secret">Secret</label>
-              <input type="password" id="paypal_secret" name="paypal_secret" autocomplete="new-password" placeholder="{% if business.paypal_connected %}Saved (hidden){% endif %}"></div>
-            <div><label for="paypal_webhook_id">Webhook ID <span class="muted">(optional)</span></label>
-              <input type="text" id="paypal_webhook_id" name="paypal_webhook_id" value="{{ business.paypal_webhook_id }}" autocomplete="off" spellcheck="false"></div>
-            <label class="choice"><input type="checkbox" name="paypal_live" {% if business.paypal_live %}checked{% endif %}><span><strong>Live (real money)</strong><span class="small muted">Leave off for sandbox testing.</span></span></label>
-          </div>
-          <p class="hint tight">From developer.paypal.com, Apps &amp; Credentials, with Payouts turned on. The secret is stored encrypted and never shown again. Webhook address: <code>{{ webhook_url }}</code></p>
+          {% if business.paypal_connected %}
+          <p style="margin:0"><span class="pill ok">Connected</span> Tips go straight into <strong>your</strong> PayPal account and payouts come from it{% if not business.paypal_live %}, in <strong>test mode</strong> (no real money yet){% endif %}.
+            {% if business.paypal_webhook_id %}PayPal updates TipPool the moment something happens.{% endif %}</p>
+          <details class="connect-guide">
+            <summary>Use different PayPal codes</summary>
+          {% else %}
+          <p style="margin:0"><strong>Connect your PayPal</strong> so guests' tips go into your account and payouts come from it. It takes about 5 minutes, once. Until then everything runs on TipPool's test money.</p>
+          <details class="connect-guide" open>
+            <summary>How to connect, step by step</summary>
+          {% endif %}
+            <ol class="guide-steps">
+              <li><span>Open <a href="https://developer.paypal.com/dashboard/applications/live" target="_blank" rel="noopener">PayPal's page for apps</a> and log in with your <strong>business</strong> PayPal email and password.</span></li>
+              <li><span>Click <strong>Create App</strong>, name it <strong>TipPool</strong>, and click <strong>Create App</strong> again.</span></li>
+              <li><span>Scroll to <strong>Features</strong> and tick <strong>Payouts</strong> (that's how your team gets paid). Save.</span></li>
+              <li><span>At the top you see two codes. Copy each one into the boxes below.</span></li>
+            </ol>
+            <div class="form-grid">
+              <div><label for="paypal_client_id">Client ID <span class="muted">(the first code)</span></label>
+                <input type="text" id="paypal_client_id" name="paypal_client_id" value="{{ business.paypal_client_id }}" autocomplete="off" spellcheck="false" placeholder="Starts with A…"></div>
+              <div><label for="paypal_secret">Secret <span class="muted">(click "Show" in PayPal first)</span></label>
+                <input type="password" id="paypal_secret" name="paypal_secret" autocomplete="new-password" placeholder="{% if business.paypal_connected %}Saved and hidden{% else %}Starts with E…{% endif %}"></div>
+            </div>
+            <p class="hint tight">TipPool checks the codes with PayPal, works out whether they're for real money or testing, and keeps the Secret locked away (it's never shown again).</p>
+          </details>
         </div>
       </fieldset>
       <div class="setting-foot">
         {% if is_owner %}
-        <span class="small muted">We check the keys with PayPal before saving.</span>
+        <span class="small muted">We check the codes with PayPal before saving.</span>
         {% if business.paypal_connected %}<button class="btn btn-quiet" name="action" value="disconnect" formnovalidate>Disconnect PayPal</button>{% endif %}
         <button class="btn btn-primary">Save payments</button>
         {% else %}<span class="muted">Only the owner can change payment settings.</span>{% endif %}
@@ -203,7 +216,7 @@
             <span><strong>Smart alerts</strong><span class="small muted">Warn me when something is quietly wrong: no guest tips by the usual time (QR codes missing?), tips far below normal, someone clocked in 12+ hours, a shift never closed or waiting days to be paid, refunds piling up.</span></span></label>
           <div><label for="digest">Summary email</label>
             <select id="digest" name="digest" style="max-width:280px">{% for value, label in digest_choices %}<option value="{{ value }}" {% if business.digest == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-            <p class="hint">Totals per location, what needs you and what the close-out checks noticed. <a href="{% url 'digest_preview' %}">See this week's</a>.{% if not email_enabled %} Emails start once email sending is set up on the server.{% endif %}</p></div>
+            <p class="hint">Totals per location, what needs you and what the close-out checks noticed. <a href="{% url 'digest_preview' %}">See this week's</a>.{% if not email_enabled %} Emails start as soon as TipPool's email is switched on.{% endif %}</p></div>
           <div class="actions"><button class="btn btn-primary">Save owner controls</button></div>
         </form>
         <form method="post" action="{% url 'freeze_payouts' %}" class="freeze-box" data-confirm="{% if business.payouts_frozen %}Turn payouts back on? Shifts waiting for an automatic payout go out on the next check.{% else %}Freeze every payout in every location now? Tips still come in. Nothing is paid until you turn payouts back on.{% endif %}" data-confirm-yes="{% if business.payouts_frozen %}Turn payouts back on{% else %}Freeze all payouts{% endif %}"{% if not business.payouts_frozen %} data-confirm-danger{% endif %}>{% csrf_token %}

@@ -167,6 +167,15 @@ class PayPalClient:
         return None
 
     # --- Webhooks ------------------------------------------------------------
+    def ensure_webhook(self, url):
+        """Make sure this PayPal app tells TipPool about payments and payouts (reuses an existing
+        registration for the same address). Returns the webhook id. PayPal only accepts https addresses."""
+        for hook in self._request("GET", "/v1/notifications/webhooks").get("webhooks", []):
+            if hook.get("url") == url:
+                return hook["id"]
+        body = {"url": url, "event_types": [{"name": "*"}]}  # everything; TipPool ignores what it doesn't use
+        return self._request("POST", "/v1/notifications/webhooks", json=body)["id"]
+
     def verify_webhook(self, headers, event, webhook_id):
         """Ask PayPal whether this webhook is genuine. Returns True/False."""
         body = {
@@ -218,3 +227,14 @@ def webhook_id_for(business):
     if business is not None and business.paypal_connected:
         return business.paypal_webhook_id
     return settings.PAYPAL_WEBHOOK_ID
+
+
+def detect_mode(client_id, secret):
+    """True for real-money (live) keys, False for test (sandbox) keys, None when PayPal accepts neither."""
+    for live, base in ((True, LIVE_API), (False, SANDBOX_API)):
+        try:
+            PayPalClient(client_id, secret, base).access_token()
+            return live
+        except PayPalError:
+            continue
+    return None

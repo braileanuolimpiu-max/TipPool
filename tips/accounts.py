@@ -300,7 +300,7 @@ def payment_settings(request):
     from decimal import Decimal, InvalidOperation
 
     from .models import Tip
-    from .paypal import LIVE_API, SANDBOX_API, PayPalClient, PayPalError
+    from .paypal import LIVE_API, SANDBOX_API, PayPalClient, PayPalError, detect_mode
     business = request.business
     if request.POST.get("action") == "disconnect":
         business.paypal_client_id = business.paypal_secret_encrypted = business.paypal_webhook_id = ""
@@ -329,28 +329,36 @@ def payment_settings(request):
             ignored.append("the card fee (a percent from 0 to 10)")
     except InvalidOperation:
         ignored.append("the card fee (a percent from 0 to 10)")
-    business.paypal_webhook_id = request.POST.get("paypal_webhook_id", business.paypal_webhook_id).strip()[:60]
 
     client_id = request.POST.get("paypal_client_id", "").strip()
     secret = request.POST.get("paypal_secret", "").strip()
-    live = bool(request.POST.get("paypal_live"))
-    if client_id and (secret or client_id != business.paypal_client_id or live != business.paypal_live):
+    connected_now = False
+    if client_id and (secret or client_id != business.paypal_client_id):
         secret = secret or business.paypal_secret
-        try:
-            PayPalClient(client_id, secret, LIVE_API if live else SANDBOX_API).access_token()
-        except PayPalError:
+        live = detect_mode(client_id, secret)  # real-money keys or test keys: PayPal tells us
+        if live is None:
             business.save()  # everything else in the form is kept
-            messages.error(request, "Your other payment settings were saved, but PayPal didn't accept that client "
-                                    "ID and secret. Check them in your PayPal developer dashboard (Apps & "
-                                    "Credentials) and that you picked the right mode.")
+            messages.error(request, "Your other payment settings were saved, but PayPal didn't accept those two codes. "
+                                    "Copy them again from PayPal (step 4 below): the Client ID, then the Secret.")
             return redirect(f"{reverse('settings')}#payments")
         business.paypal_client_id, business.paypal_live = client_id, live
         business.set_paypal_secret(secret)
-        Change.log(request, f"Connected a {'live' if live else 'sandbox'} PayPal account")
+        # PayPal tells TipPool about payments and payouts as they happen (needs the site's https address)
+        business.paypal_webhook_id = ""
+        try:
+            business.paypal_webhook_id = PayPalClient(client_id, secret, LIVE_API if live else SANDBOX_API) \
+                .ensure_webhook(request.build_absolute_uri(reverse("paypal_webhook")))[:60]
+        except Exception:
+            pass  # e.g. on a computer without https: TipPool asks PayPal itself instead
+        connected_now = True
+        Change.log(request, f"Connected a {'real-money' if live else 'test (sandbox)'} PayPal account")
     business.save()
     Change.log(request, f"Changed payment settings: {business.currency}, {business.get_fee_mode_display().lower()}")
     if ignored:
         messages.warning(request, "Saved, except " + " and ".join(ignored) + ".")
+    elif connected_now:
+        messages.success(request, "PayPal is connected" + (" for real money." if business.paypal_live else
+                                  " in test mode (sandbox): no real money moves until you use your live codes."))
     else:
         messages.success(request, "Payment settings saved.")
     return redirect(f"{reverse('settings')}#payments")
