@@ -297,13 +297,14 @@ def qr_page(request):
 
 def qr_show(request):
     """Full-screen QR for a server's phone or a counter tablet. No login, it only links to the tip page."""
-    if request.location is None:
+    location = public_location(request) if request.GET.get("at") else request.location
+    if location is None:
         raise Http404("Unknown business.")
     table = request.GET.get("table", "")[:20]
     to = request.GET.get("to", "")
-    member = (Membership.objects.filter(pk=int(to), location=request.location).select_related("staff").first()
+    member = (Membership.objects.filter(pk=int(to), location=location).select_related("staff").first()
               if to.isascii() and to.isdigit() else None)
-    url = request.build_absolute_uri(reverse("tip_page")) + f"?at={request.location.slug}" + (
+    url = request.build_absolute_uri(reverse("tip_page")) + f"?at={location.slug}" + (
         f"&table={table}" if table else "") + (f"&to={member.pk}" if member else "")
     label = f"Tip {member.staff.name}" if member else (
         (f"Table {table}" if table.isdigit() else table) if table else "Leave a tip")
@@ -473,7 +474,12 @@ def staff_bulk(request):
         if upload.size > 200 * 1024:
             messages.error(request, "That file is too big. Up to 200 people at a time.")
             return redirect("staff_list")
-        text = upload.read().decode("utf-8-sig", errors="replace")
+        raw = upload.read()
+        if raw[:2] == b"PK" or raw[:4] == b"\xd0\xcf\x11\xe0":  # an Excel file, not a CSV
+            messages.error(request, "That's an Excel file. In Excel choose File → Save As → CSV, then upload that, "
+                                    "or copy the columns and paste them into the box.")
+            return redirect("staff_list")
+        text = raw.decode("utf-8-sig", errors="replace")
     lines = [line for line in text.splitlines() if line.strip()]
     if not lines:
         messages.error(request, "Paste one person per line, or choose a CSV file.")
@@ -482,10 +488,12 @@ def staff_bulk(request):
         messages.error(request, f"Up to {BULK_MAX} people at a time, please.")
         return redirect("staff_list")
     delimiter = "\t" if "\t" in lines[0] else (";" if lines[0].count(";") > lines[0].count(",") else ",")
-    send_links = bool(request.POST.get("send_links"))
+    send_links = bool(request.POST.get("send_links")) and not request.business.is_demo
     added, skipped, mailed, outgoing, capped = [], [], 0, [], False
-    for n, cells in enumerate(csv.reader(lines, delimiter=delimiter), 1):
-        cells = [c.strip() for c in cells] + ["", "", ""]
+    seen, updated = {}, []
+    for n, line in enumerate(lines, 1):
+        sep = "\t" if "\t" in line else (";" if line.count(";") > line.count(",") else ",")
+        cells = [c.strip() for c in next(csv.reader([line], delimiter=sep))] + ["", "", ""]
         name, email, role_text = " ".join(cells[0].split())[:80], cells[1].lower()[:254], cells[2]
         if n == 1 and name.lower() in ("name", "names", "full name") and "@" not in email:
             continue  # a header row
@@ -501,6 +509,15 @@ def staff_bulk(request):
         role = found[0].key if len(found) == 1 else (fallback if not role_text else None)
         if role is None:
             skipped.append(f"line {n} ({name}): " + (f"no role called \"{role_text}\"" if role_text else "no role"))
+            continue
+        if email in seen:
+            skipped.append(f"line {n} ({name}): same email as line {seen[email]}")
+            continue
+        seen[email] = n
+        existing = StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).first()
+        if existing is not None and Membership.objects.filter(staff=existing, location=location, active=True).exists():
+            Membership.objects.filter(staff=existing, location=location).update(default_role=role)
+            updated.append(existing.name)
             continue
         if _name_taken(request.business, name, email):
             skipped.append(f"line {n} ({name}): someone on the team already has that name")
@@ -527,6 +544,9 @@ def staff_bulk(request):
     if capped:
         messages.warning(request, f"Up to {LINK_EMAILS_PER_DAY} private links can be emailed per day. The rest were "
                                   "added; send their links from the Team page later.")
+    if updated:
+        messages.info(request, "Already on the team (usual role updated): " + ", ".join(updated[:12]) +
+                      ("…" if len(updated) > 12 else "") + ".")
     if added:
         note = f"Added {len(added)} {'person' if len(added) == 1 else 'people'} to the team."
         if send_links and platform.email_enabled():
@@ -974,9 +994,22 @@ def pay(request, pk):
         night.refresh_from_db()
         return redirect("payout_status" if night.status == Night.Status.PAYING else "review", pk=pk)
     except PayPalError as exc:
-        messages.error(request, f"PayPal refused the payout: {exc} (debug id {exc.debug_id})")
+        messages.error(request, _payout_refusal(exc, night))
         return redirect("review", pk=pk)
     return redirect("payout_status", pk=pk)
+
+
+def _payout_refusal(exc, night):
+    """PayPal's reason in words, naming the person whose payout address it didn't accept."""
+    details = (exc.details or {}).get("details") or []
+    paid = [s for s in night.shares.select_related("staff") if s.amount > 0]
+    for d in details if isinstance(details, list) else []:
+        m = re.match(r"items\[(\d+)\]\.receiver", str(d.get("field", "")) if isinstance(d, dict) else "")
+        if m and int(m.group(1)) < len(paid):
+            person = paid[int(m.group(1))].staff
+            return (f"PayPal didn't accept where {person.name} is paid ({person.payout_to}). Fix it on the Team page "
+                    "(Edit), then pay again. Nobody was paid.")
+    return f"PayPal refused the payout: {exc} (debug id {exc.debug_id}). Nobody was paid."
 
 
 @manager_required
@@ -988,6 +1021,8 @@ def payout_status(request, pk):
     if request.method == "POST":
         try:
             for each in night.payout_batches.all():
+                if (each.paypal_batch_id or "").startswith("DEMO"):
+                    continue  # sample history: nothing to ask PayPal about
                 if services.needs_recheck(each):
                     each = services.recheck_unclear(each)
                 services.refresh_batch(each)
@@ -1031,7 +1066,11 @@ def payout_action(request, pk):
                       "accepted them yet. Open PayPal (or sign up with that email) to accept them.\n\nWrong address? "
                       f"Change it on your tips page:\n{link}\n",
                       settings.DEFAULT_FROM_EMAIL, [staff.paypal_email], fail_silently=True)
-            messages.success(request, f"Reminder emailed to {staff.paypal_email}.")
+            if platform.email_enabled():
+                messages.success(request, f"Reminder emailed to {staff.paypal_email}.")
+            else:
+                messages.warning(request, "TipPool's email isn't switched on, so no reminder could be sent. Tell "
+                                          f"{staff.name} to accept the payout in PayPal ({item.receiver}).")
         else:
             messages.error(request, "Unknown action.")
     except services.TipPoolError as exc:
@@ -1065,11 +1104,7 @@ def payout_status_json(request, pk):
 
 
 # --- Settings: automatic close-out --------------------------------------------
-TIMEZONES = [
-    ("America/New_York", "US Eastern"), ("America/Chicago", "US Central"), ("America/Denver", "US Mountain"),
-    ("America/Los_Angeles", "US Pacific"), ("Europe/London", "UK"), ("Europe/Bucharest", "Romania"),
-    ("Europe/Berlin", "Central Europe"), ("UTC", "UTC"),
-]
+from .timezones import TIMEZONES  # noqa: E402
 
 
 REVIEW_CHOICES = [(0, "Don't wait: pay right away"), (30, "30 minutes"), (60, "1 hour"), (120, "2 hours"),
@@ -1254,7 +1289,8 @@ def reports_page(request):
     from . import ask
     question = request.GET.get("q", "").strip()
     asked = ask.answer(question, reports.scope_locations(request, scope), today,
-                       location=request.location, user=request.user) if question else None
+                       location=request.location, user=request.user,
+                       named_from=list(request.allowed_locations)) if question else None
     params = request.GET.copy()
     params.pop("q", None)
     return render(request, "tips/reports.html", {
@@ -1425,8 +1461,10 @@ def my_tips(request, token):
     if request.method == "POST":
         try:
             if request.POST.get("clock") == "in":
-                location = get_object_or_404(Location, pk=_id(request.POST.get("location")), archived=False,
-                                             memberships__staff=member, memberships__active=True)
+                location = Location.objects.filter(pk=_id(request.POST.get("location")), archived=False,
+                                                   memberships__staff=member, memberships__active=True).first()
+                if location is None:
+                    raise hours_from.ClockError("You're not on the team there any more. Ask your manager.")
                 hours_from.clock_in(member, location)
                 messages.success(request, f"Clocked in at {location.display_name}. Have a good shift!")
             elif request.POST.get("clock") == "out":
@@ -1523,7 +1561,7 @@ def _staff_payout(request, member, token):
                            payload=payload, text=f"Please pay me with {wanted} (now: {member.payout_to}).")
     email_managers(member.business, f"{member.name} wants to be paid somewhere else",
                    f"{member.name} asked to be paid with {wanted} instead of {member.payout_to}. "
-                   "Approve or decline it in Messages.")
+                   "Approve or decline it in Messages.", location=location.location, leads=False)
     messages.success(request, f"Sent to your manager. Until they approve it, you're still paid with {member.payout_to}.")
     return redirect("my_tips", token=token)
 
@@ -1547,7 +1585,7 @@ def _staff_message(request, member, token):
     from .alerts import email_managers
     email_managers(member.business, f"{member.name} {'flagged a problem' if night else 'sent you a message'}",
                    f"{member.name} wrote" + (f" about the {night}" if night else "") + f":\n\n{text}\n\n"
-                   "Answer in Messages.")
+                   "Answer in Messages.", location=location)
     if night and night.status == Night.Status.REVIEW and not night.hold:
         night.hold = f"{member.name} flagged a problem."
         night.save(update_fields=["hold"])
@@ -1596,7 +1634,9 @@ def paypal_webhook(request):
     elif event_type in ("PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED"):
         capture_id = _capture_id_of(resource)
         if capture_id:
-            services.tip_given_back(capture_id, "refund" if event_type.endswith("REFUNDED") else "reversal")
+            total = _dig(resource, "seller_payable_breakdown", "total_refunded_amount", "value")
+            services.tip_given_back(capture_id, "refund" if event_type.endswith("REFUNDED") else "reversal",
+                                    refunded_total=total)
     elif event_type == "CUSTOMER.DISPUTE.CREATED":
         for row in _as_list(resource.get("disputed_transactions")):
             if isinstance(row, dict) and row.get("seller_transaction_id"):
@@ -1722,6 +1762,8 @@ def activity(request):
         except (TypeError, ValueError):
             return None
     first, last = day(request.GET.get("from")), day(request.GET.get("to"))
+    if first and last and first > last:
+        first, last = last, first
     if first:
         rows = rows.filter(at__date__gte=first)
     if last:

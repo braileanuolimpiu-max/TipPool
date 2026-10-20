@@ -81,7 +81,8 @@ class Manager(models.Model):
     user = models.OneToOneField("auth.User", related_name="manager", on_delete=models.CASCADE)
     business = models.ForeignKey(Business, related_name="managers", on_delete=models.CASCADE)
     is_owner = models.BooleanField(default=False)
-    # shift leads run the shift (who worked, card/cash tips, codes) but can't pay, change rules or see pay
+    # shift leads run the shift (who worked, card/cash tips, codes, checking the split) but can't pay,
+    # change rules, see reports or change settings
     level = models.CharField(max_length=10, choices=Level.choices, default=Level.MANAGER)
     # two-step sign-in: a 6-digit code from an authenticator app (secret stored encrypted)
     totp_secret_encrypted = models.TextField(blank=True)
@@ -486,6 +487,8 @@ class Tip(models.Model):
     problem = models.CharField(max_length=200, blank=True)
     # partly refunded: `amount` is what still counts, this is what went back to the guest
     refunded = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0"))
+    # the guest's amount before any refund (set the first time a refund touches this tip)
+    original_amount = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     paypal_capture_id = models.CharField(max_length=64, blank=True)
     payer_name = models.CharField(max_length=120, blank=True)
     table = models.CharField(max_length=20, blank=True)

@@ -34,8 +34,8 @@ def recipients(business, location=None, owners_only=False, leads=True):
     return people
 
 
-def email_managers(business, subject, body, location=None, owners_only=False):
-    emails = [m.user.email for m in recipients(business, location, owners_only)]
+def email_managers(business, subject, body, location=None, owners_only=False, leads=True):
+    emails = [m.user.email for m in recipients(business, location, owners_only, leads=leads)]
     if not emails:
         return
     try:

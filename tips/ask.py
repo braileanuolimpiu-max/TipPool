@@ -55,11 +55,22 @@ ASK_SYSTEM = """You answer a manager's questions about their team's tips, using 
 
 
 # ---------------------------------------------------------------------------
-def answer(question, locations, today, location=None, user=None):
-    """Answer a question, or propose an action to confirm (only for `location`, by `user`)."""
+def answer(question, locations, today, location=None, user=None, named_from=None):
+    """Answer a question, or propose an action to confirm (only for `location`, by `user`).
+    A location named in the question ("How much did Uptown make?") is the one answered about."""
     question = (question or "").strip()[:300]
     if not question:
         return None
+    named = [loc for loc in (named_from or []) if loc.display_name.lower() in question.lower()]
+    if named:
+        locations = named
+    result = _answer(question, locations, today, location, user)
+    if result and named and result.get("by") != "Claude":
+        result["answer"] = f"{', '.join(loc.display_name for loc in named)}: {result['answer']}"
+    return result
+
+
+def _answer(question, locations, today, location=None, user=None):
     if ai.mode() == "claude":
         try:
             content = [{"type": "text", "text": _data_summary(locations, today)

@@ -11,10 +11,11 @@
 </header>
 {% include "tips/_stepper.html" with step=2 %}
 
+{% if night.hold and "owner's OK" in night.hold %}<div class="flash warning"><strong>Waiting for the owner.</strong> {{ night.hold }}{% if user.manager.is_owner %} As the owner, you can pay it below.{% endif %}</div>{% endif %}
 {% if flags %}<div class="flash warning"><strong>Check before paying.</strong>
   {% for f in flags %}{{ f.staff.name }} wrote: "{{ f.text }}"{% if not forloop.last %} · {% endif %}{% endfor %}
   <a href="{% url 'messages_page' %}">Answer in Messages</a></div>
-{% elif night.hold %}<div class="flash warning">{{ night.hold }} Automatic payout is on hold until you pay.</div>{% endif %}
+{% elif night.hold and "owner's OK" not in night.hold %}<div class="flash warning">{{ night.hold }} Automatic payout is on hold until a manager pays.</div>{% endif %}
 {% if paid_total != to_share %}<div class="flash error">The shares add up to {{ cur }}{{ paid_total|money }}, but {{ cur }}{{ to_share|money }} should be shared. Go back to who worked and calculate again.</div>{% endif %}
 
 <div class="split-2 reverse">

@@ -197,6 +197,10 @@ def _save_paypal(request, cfg):
     if live is None:
         messages.error(request, "PayPal didn't accept those two codes. Copy the Client ID, then the Secret, again.")
         return redirect(f"{reverse('platform_settings')}#paypal")
+    if live:
+        messages.error(request, "Those are real-money (Live) codes. TipPool's own PayPal runs the demo, so use the "
+                                "codes from the Sandbox tab. Each business connects its real PayPal in its Settings.")
+        return redirect(f"{reverse('platform_settings')}#paypal")
     cfg.paypal_client_id, cfg.paypal_live = client_id, live
     cfg.paypal_secret_encrypted = encrypt(secret)
     cfg.paypal_webhook_id = ""
@@ -217,7 +221,23 @@ def _disconnect_paypal(request, cfg):
 
 
 # --- the demo, the scheduler, contact ----------------------------------------------------------------
+def _valid_email(value):
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+    try:
+        validate_email(value)
+        return True
+    except ValidationError:
+        return False
+
+
 def _save_demo(request, cfg):
+    typed = [request.POST.get("demo_buyer_email", "").strip()] + [request.POST.get(f"staff_{n}", "").strip()
+                                                                  for n in DEMO_STAFF]
+    bad = [t for t in typed if t and not _valid_email(t)]
+    if bad:
+        messages.error(request, f"\"{bad[0][:60]}\" isn't an email address. Nothing was saved.")
+        return redirect(f"{reverse('platform_settings')}#demo")
     cfg.demo_buyer_email = request.POST.get("demo_buyer_email", "").strip()[:200]
     cfg.demo_buyer_password = request.POST.get("demo_buyer_password", "").strip()[:100]
     cfg.demo_staff = {name: request.POST.get(f"staff_{name}", "").strip()[:200] for name in DEMO_STAFF
@@ -235,6 +255,10 @@ def _new_cron(request, cfg):
 
 
 def _save_contact(request, cfg):
-    cfg.contact_email = request.POST.get("contact_email", "").strip()[:200]
+    value = request.POST.get("contact_email", "").strip()[:200]
+    if value and not _valid_email(value):
+        messages.error(request, "That isn't an email address.")
+        return redirect(f"{reverse('platform_settings')}#contact")
+    cfg.contact_email = value
     cfg.save()
     return _done(request, "contact email saved", "contact")

@@ -200,7 +200,7 @@ def sync_capture(capture_id):
     tip = Tip.objects.select_related("night__location__business").get(paypal_capture_id=capture_id)
     status = get_client(business_of(tip.night)).get_capture(capture_id).get("status")
     if status in ("REFUNDED", "PARTIALLY_REFUNDED"):
-        return tip_given_back(capture_id, "refund")  # reads how much went back from the order
+        return tip_given_back(capture_id, "refund", full=status == "REFUNDED")  # the amount is read from the order
     if status == "REVERSED":
         return tip_given_back(capture_id, "reversal")
     return tip
@@ -223,7 +223,7 @@ def mark_capture_completed(order_id, capture_id):
     return 1
 
 
-def tip_given_back(capture_id, what):
+def tip_given_back(capture_id, what, refunded_total=None, full=None):
     """A guest got a tip back (refund, chargeback) or opened a dispute.
     Before payout: the tip leaves the split. After payout: the business is told, since the money is gone."""
     tip = Tip.objects.select_related("night__location__business").filter(paypal_capture_id=capture_id).first()
@@ -238,12 +238,27 @@ def tip_given_back(capture_id, what):
                               f"({night}). Answer it in your PayPal account.",
                     location=night.location, night=night, key=f"dispute:{capture_id}")
         return tip
-    original = tip.amount + tip.refunded
+    if tip.status == Tip.Status.REFUNDED:
+        return tip  # all of it went back already
+    original = tip.original_amount or tip.amount
     back = original
     if what == "refund":
-        back = min(refunded_so_far(tip), original) or original
+        known = refunded_total if refunded_total else refunded_so_far(tip)
+        if not known and full is None:  # how much isn't known: PayPal at least says whether it was all of it
+            try:
+                full = get_client(business).get_capture(capture_id).get("status") == "REFUNDED"
+            except Exception:
+                full = None
+        if known:
+            back = min(Decimal(str(known)), original)
+        elif not full:  # PayPal says some went back but not how much: never guess the whole tip
+            raise_alert(business, f"Part of a {business.symbol}{original} tip from the {night} was refunded, but "
+                                  "TipPool couldn't read how much. Check it in your PayPal account.",
+                        location=night.location, night=night, key=f"refund-unknown:{capture_id}")
+            return tip
     if back <= tip.refunded:
         return tip  # this refund was already counted
+    tip.original_amount = original
     given_back_now = back - tip.refunded
     if back >= original:
         tip.status = Tip.Status.REFUNDED
@@ -253,7 +268,7 @@ def tip_given_back(capture_id, what):
             tip.amount = (original - back).quantize(CENT)
         tip.problem = f"{business.symbol}{back} of {business.symbol}{original} refunded to the guest"
     tip.refunded = back
-    tip.save(update_fields=["status", "problem", "amount", "refunded"])
+    tip.save(update_fields=["status", "problem", "amount", "refunded", "original_amount"])
     if night.status in (Night.Status.PAYING, Night.Status.PAID):
         raise_alert(business, f"{business.symbol}{given_back_now} of a tip from the {night} was "
                               f"{'refunded' if what == 'refund' else 'charged back'} after the team was paid. "
@@ -460,6 +475,9 @@ def pay_night(night, allow_unconfirmed=False, by_owner=False):
         night.hold = ""
         night.save()
     _send_batch(batch, business, subject=f"Your tips for {night.date:%b %d}")
+    from .models import Alert
+    Alert.objects.filter(business=business, key=f"owner-ok:{night.pk}", resolved_at__isnull=True) \
+        .update(resolved_at=timezone.now(), resolved_by="Paid")  # the owner's OK isn't waiting any more
     return batch
 
 

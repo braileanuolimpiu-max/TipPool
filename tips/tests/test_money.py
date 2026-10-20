@@ -214,6 +214,7 @@ class MoneyTests(TestCase):
     def test_refund_before_payout_leaves_the_split(self):
         night = self.shift_with(("100", "0"), ("20", "0"))
         services.build_split(night, self.rules)
+        self.paypal.capture_status = "REFUNDED"  # PayPal says the whole tip went back
         services.tip_given_back(f"C{night.pk}-1", "refund")
         night.refresh_from_db()
         self.assertEqual((night.status, night.tip_total), (Night.Status.CLOSED, Decimal("100.00")))
@@ -228,6 +229,7 @@ class MoneyTests(TestCase):
     @override_settings(PAYPAL_WEBHOOK_ID="WEBHOOK")
     def test_refund_and_dispute_webhooks(self):
         night = self.paid_night()
+        self.paypal.capture_status = "REFUNDED"
         refund = {"id": "WH-R", "event_type": "PAYMENT.CAPTURE.REFUNDED", "resource": {
             "id": "REF1", "links": [{"rel": "up", "href": f"https://api/v2/payments/captures/C{night.pk}-0"}]}}
         dispute = {"id": "WH-D", "event_type": "CUSTOMER.DISPUTE.CREATED", "resource": {

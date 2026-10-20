@@ -24,11 +24,7 @@ from .ratelimit import client_ip, hit, limited, over
 
 User = get_user_model()
 
-TIMEZONES = [
-    ("America/New_York", "US Eastern"), ("America/Chicago", "US Central"), ("America/Denver", "US Mountain"),
-    ("America/Los_Angeles", "US Pacific"), ("Europe/London", "UK"), ("Europe/Bucharest", "Romania"),
-    ("Europe/Berlin", "Central Europe"), ("UTC", "UTC"),
-]
+from .timezones import TIMEZONES  # noqa: E402
 
 
 def manager_required(view):
@@ -191,7 +187,8 @@ def signup(request):
                     business_type=data["business_type"], timezone=data["timezone"],
                     tip_mode=role_presets.default_tip_mode(data["business_type"]))
                 role_presets.apply_preset(location, data["business_type"])
-                Change.log(user.get_username(), f"Created the business account {business.name}", location=location)
+                Change.log(user.get_full_name() or user.get_username(), f"Created the business account {business.name}",
+                           location=location)
             if not finishing:
                 login(request, user, backend="tips.accounts.EmailBackend")
             request.session["location_id"] = location.pk
@@ -231,6 +228,9 @@ def email_my_link(request):
 @require_POST
 @owner_required
 def invite_manager(request):
+    if request.business.is_demo:
+        messages.error(request, "Demo businesses can't invite people. Create your own account to invite your managers.")
+        return redirect(f"{reverse('settings')}#managers")
     email = request.POST.get("email", "").strip().lower()[:254]
     try:
         validate_email(email)
@@ -325,7 +325,7 @@ def accept_invite(request, token):
                     manager.locations.set(invite.locations.all())
                 invite.accepted_at = timezone.now()
                 invite.save(update_fields=["accepted_at"])
-                Change.log(user.get_username(), f"Joined as a manager (invited by {invite.invited_by})",
+                Change.log(user.get_full_name() or user.get_username(), f"Joined as a manager (invited by {invite.invited_by})",
                            location=invite.business.locations.first())
                 if not request.user.is_authenticated:
                     login(request, user, backend="tips.accounts.EmailBackend")
@@ -378,6 +378,10 @@ def payment_settings(request):
     client_id = request.POST.get("paypal_client_id", "").strip()
     secret = request.POST.get("paypal_secret", "").strip()
     connected_now = False
+    if business.is_demo and client_id:
+        business.save()
+        messages.error(request, "The demo always runs on test money. Create your own account to connect your PayPal.")
+        return redirect(f"{reverse('settings')}#payments")
     if client_id and (secret or client_id != business.paypal_client_id):
         secret = secret or business.paypal_secret
         try:
@@ -527,9 +531,10 @@ def two_step_setup_context(request):
 
 
 # --- Try the demo ---------------------------------------------------------------------
-@require_POST
 @limited("demo", 5, 3600)
 def demo_start(request):
+    if request.method != "POST":
+        return redirect("login")
     """One click: a fresh demo business full of sample data, signed in. For judges and the curious."""
     from . import demo
     user = demo.create_demo()
@@ -719,7 +724,8 @@ def change_password(request):
                   "ignore this email: nothing changes without the code.\n",
                   settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
         messages.success(request, f"We sent a 6-character code to {_masked(user.email)}.")
-        if settings.DEBUG and settings.EMAIL_BACKEND.endswith("console.EmailBackend"):
+        if (settings.DEBUG and platform.email_settings() is None
+                and settings.EMAIL_FALLBACK_BACKEND.endswith("console.EmailBackend")):
             # local development: emails only print in the server's terminal, so show the code here too
             messages.info(request, f"Testing on your computer: no email service is connected, so the email was "
                                    f"printed in the server's terminal. Your code is {code}.")
@@ -757,3 +763,18 @@ def change_password(request):
         session.pop("pw_code", None)
         return redirect("password_change")
     return render(request, "registration/password_change_form.html", {**ctx, "step": "code" if pending else "start"})
+
+
+class ResetConfirmView(__import__("django.contrib.auth.views", fromlist=["PasswordResetConfirmView"]).PasswordResetConfirmView):
+    """Choosing a new password from the emailed link; the account's owner is told it changed."""
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        user = form.user
+        if user.email:
+            send_mail("Your TipPool password was changed",
+                      f"Hi {user.get_full_name() or user.get_username()},\n\nThe password for your TipPool account was "
+                      "just reset with the emailed link. If this wasn't you, reset it again right away and tell the "
+                      "owner of your business.\n", settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+        Change.log(user.get_full_name() or user.get_username(), "Reset their password with the emailed link")
+        return response

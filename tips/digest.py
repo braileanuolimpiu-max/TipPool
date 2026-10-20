@@ -93,6 +93,10 @@ def run(now=None, base_url=""):
         # claim today's digest: only one run (of several at once) gets it, even if a send fails
         if not Business.objects.filter(pk=business.pk).exclude(digest_sent_on=today).update(digest_sent_on=today):
             continue
+        from .models import Night
+        first, last = period(business, today)[:2]
+        if not Night.objects.filter(location__business=business, date__gte=first, date__lte=last).exists():
+            continue  # nothing happened in that period (e.g. a brand-new business): no empty summary
         for manager in recipients(business, leads=False):
             try:
                 send(business, manager, today, base_url)
