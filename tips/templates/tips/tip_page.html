@@ -184,6 +184,7 @@
         clientId: "{{ paypal_client_id }}",
         components: ["paypal-payments", "venmo-payments"],
         pageType: "checkout",
+        locale: "{{ paypal_locale }}",
       });
       const methods = await sdk.findEligibleMethods({currencyCode: CURRENCY});
 

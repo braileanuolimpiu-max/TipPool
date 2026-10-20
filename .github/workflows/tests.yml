@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run the test suite (PayPal and Claude are mocked)
+        run: python manage.py test tips
+        env:
+          AI_MODE: mock
+      - name: Production settings check
+        run: |
+          python manage.py check --deploy --fail-level WARNING
+          python manage.py collectstatic --no-input
+        env:
+          DJANGO_DEBUG: "0"
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdefghijklmnopqrstuvwxyz
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          TIPPOOL_ENCRYPTION_KEY: Q2lPbmx5Tm90QVJlYWxLZXlPbmx5Rm9yQ0lfXzAxMjM=

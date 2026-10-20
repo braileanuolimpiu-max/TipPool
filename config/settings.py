@@ -40,6 +40,11 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o]
+# Render tells the app its own address, so a fresh deploy works without setting hosts by hand
+RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
+if RENDER_HOST:
+    ALLOWED_HOSTS.append(RENDER_HOST)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_HOST}")
 
 
 # Application definition
@@ -56,6 +61,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serves the CSS and icons in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -94,7 +100,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 if os.environ.get("DATABASE_URL"):
     import dj_database_url
     DATABASES = {"default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=60,
-                                                  ssl_require=not DEBUG)}
+                                                  ssl_require=not DEBUG and os.environ["DATABASE_URL"].startswith("postgres"))}
 else:
     if not (DEBUG or TESTING):
         raise ImproperlyConfigured("DATABASE_URL (Postgres) must be set in production.")
@@ -102,7 +108,7 @@ else:
 
 RATELIMIT_ENABLED = not TESTING  # the rate-limit tests turn it on for themselves
 # how many proxies put the visitor's address into X-Forwarded-For (Render: 1); 0 = use the connection
-TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0" if DEBUG else "1"))
+TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0" if (DEBUG or TESTING) else "1"))
 # Rate limits are counted in the cache, so every worker must share it: the database in production.
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}} if (DEBUG or TESTING) else {
     "default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "tippool_cache"}}
@@ -150,6 +156,10 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
+if not (DEBUG or TESTING):
+    # compressed files with a content hash in the name, cached by browsers for a year
+    STORAGES = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+                "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -158,7 +168,7 @@ AUTHENTICATION_BACKENDS = ["tips.accounts.EmailBackend"]
 # Email (invites, password resets, alerts). Locally they print in the terminal. In production without
 # EMAIL_HOST they are dropped, never printed: reset links in server logs would let anyone take over accounts.
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
-EMAIL_ENABLED = bool(EMAIL_HOST) or DEBUG
+EMAIL_ENABLED = bool(EMAIL_HOST) or DEBUG or TESTING
 if EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
@@ -198,7 +208,7 @@ DEMO_BUYER_EMAIL = os.environ.get("DEMO_BUYER_EMAIL", "")
 DEMO_BUYER_PASSWORD = os.environ.get("DEMO_BUYER_PASSWORD", "")
 # Automatic close-outs: locally they run while a manager uses the app; in production from the
 # `python manage.py autoclose` cron job only, so several web workers never race each other.
-AUTOCLOSE_IN_REQUESTS = os.environ.get("AUTOCLOSE_IN_REQUESTS", "1" if DEBUG else "0") == "1"
+AUTOCLOSE_IN_REQUESTS = os.environ.get("AUTOCLOSE_IN_REQUESTS", "1" if (DEBUG or TESTING) else "0") == "1"
 
 # --- Security headers and cookies (production) ---
 SESSION_COOKIE_HTTPONLY = True
@@ -208,7 +218,7 @@ CSRF_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"     # private tips links never leak to other sites
-if not DEBUG:
+if not (DEBUG or TESTING):
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = os.environ.get("DJANGO_SSL_REDIRECT", "1") == "1"
@@ -223,6 +233,11 @@ RESTAURANT_NAME = os.environ.get("RESTAURANT_NAME", "")
 # "mock" = built-in rule parser, no API key, no cost (good while building)
 # "claude" = real Claude API (needs ANTHROPIC_API_KEY)
 AI_MODE = os.environ.get("AI_MODE", "mock")
+if AI_MODE == "claude" and not os.environ.get("ANTHROPIC_API_KEY") and not TESTING:
+    # no key yet: keep the app working with the built-in AI instead of failing every AI step
+    import logging
+    logging.getLogger("tips").warning("AI_MODE=claude but ANTHROPIC_API_KEY is empty; using the built-in AI.")
+    AI_MODE = "mock"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
 
 LOGGING = {

@@ -181,7 +181,7 @@ def _guest_language(request, lang):
         query.pop("cancelled", None)
         links.append({"code": code, "name": name, "url": "?" + query.urlencode(), "current": code == lang})
     t = guest_i18n.strings(lang)
-    return {"lang": lang, "t": t, "lang_links": links, "js_words": {k: t[k] for k in guest_i18n.JS_KEYS}}
+    return {"lang": lang, "t": t, "lang_links": links, "paypal_locale": guest_i18n.PAYPAL_LOCALES[lang], "js_words": {k: t[k] for k in guest_i18n.JS_KEYS}}
 
 
 def tip_thanks(request):

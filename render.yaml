@@ -1,0 +1,49 @@
+# One-click deploy on Render (free plan). Database: a free Neon Postgres; paste its URL as DATABASE_URL.
+# Keep it awake and run close-outs: point a free cron-job.org job at
+#   https://<your-app>.onrender.com/internal/tick/?key=<CRON_SECRET>   every 10 minutes.
+services:
+  - type: web
+    name: tippool
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application --workers 2 --timeout 60
+    healthCheckPath: /login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: TIPPOOL_ENCRYPTION_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: AI_MODE
+        value: claude
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DEMO_BUYER_EMAIL
+        sync: false
+      - key: DEMO_BUYER_PASSWORD
+        sync: false
+      - key: MARIA_EMAIL
+        sync: false
+      - key: JOHN_EMAIL
+        sync: false
+      - key: LEA_EMAIL
+        sync: false
+      - key: ALEX_EMAIL
+        sync: false
+      - key: SAM_EMAIL
+        sync: false
+      - key: CONTACT_EMAIL
+        sync: false

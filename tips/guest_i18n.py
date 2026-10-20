@@ -6,6 +6,9 @@ A plain table instead of gettext, so nothing has to be compiled on the server.
 LANGS = {"en": "English", "es": "Español", "fr": "Français", "de": "Deutsch", "it": "Italiano", "pt": "Português",
          "ro": "Română"}
 COOKIE = "tp_lang"
+# PayPal's own checkout window in the same language
+PAYPAL_LOCALES = {"en": "en-US", "es": "es-ES", "fr": "fr-FR", "de": "de-DE", "it": "it-IT", "pt": "pt-PT",
+                  "ro": "ro-RO"}
 
 STRINGS = {
     "en": {
