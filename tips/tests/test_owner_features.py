@@ -47,8 +47,11 @@ class PerLocationManagerTests(TestCase):
         from tips.alerts import raise_alert
         raise_alert(self.business, "Something at main", location=self.main)
         self.assertEqual(mail.outbox[-1].to, ["owner@example.com"])
+        before = len(mail.outbox)
         raise_alert(self.business, "Something uptown", location=self.second)
-        self.assertEqual(sorted(mail.outbox[-1].to), ["m2@example.com", "owner@example.com"])
+        # one email each, so nobody sees the other managers' addresses
+        self.assertEqual(sorted(m.to[0] for m in mail.outbox[before:]), ["m2@example.com", "owner@example.com"])
+        self.assertTrue(all(len(m.to) == 1 for m in mail.outbox[before:]))
 
 
 class OwnerControlTests(TestCase):

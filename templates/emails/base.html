@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{{ subject }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* only for clients that read <style>; everything important is inline */
+  .copy { -webkit-user-select: all; user-select: all; }
+  @media (max-width: 600px) {
+    .sheet { padding: 24px 20px !important; }
+    .code { font-size: 28px !important; letter-spacing: 6px !important; }
+    h1 { font-size: 26px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#e7e8e4;color:#141414;-webkit-text-size-adjust:100%">
+{% if preheader %}<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#e7e8e4">{{ preheader }}</div>{% endif %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#e7e8e4">
+  <tr><td align="center" style="padding:28px 12px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+      <!-- the brand, like the top of the app -->
+      <tr><td style="padding:0 4px 14px">
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td style="background:#141414;border-radius:7px;width:30px;height:30px;text-align:center;vertical-align:middle;font:800 17px Archivo,'Arial Narrow',Arial,sans-serif;color:#ffe14d">T</td>
+          <td style="padding-left:10px;font:800 22px Archivo,'Arial Narrow',Arial,sans-serif;letter-spacing:-.01em;color:#141414">TipPool</td>
+        </tr></table>
+      </td></tr>
+      <!-- the receipt -->
+      <tr><td class="sheet" style="background:#fffefc;border:1px solid #dcdcd6;border-top:4px solid #141414;border-radius:3px;padding:32px 36px;font:400 16px/1.55 Archivo,Arial,Helvetica,sans-serif;color:#141414">
+        {% if eyebrow %}<p style="margin:0 0 10px;font:700 12px/1.4 'IBM Plex Mono',Consolas,'Courier New',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5c5c58"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#12703d;margin-right:6px;vertical-align:1px"></span>{{ eyebrow }}</p>{% endif %}
+        {% block body %}
+        <h1 style="margin:0 0 16px;font:800 30px/1.08 Archivo,'Arial Narrow',Arial,sans-serif;letter-spacing:-.01em;color:#141414">{{ heading }}</h1>
+        {% if greeting %}<p style="margin:0 0 14px">{{ greeting }}</p>{% endif %}
+        {% for p in paragraphs %}<p style="margin:0 0 14px">{{ p|linebreaksbr }}</p>{% endfor %}
+
+        {% if quote %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 18px"><tr>
+          <td style="border-left:4px solid #ffe14d;background:#fff6c7;padding:12px 16px;font-size:15px">{{ quote|linebreaksbr }}</td></tr></table>{% endif %}
+
+        {% if code %}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 8px"><tr>
+          <td align="center" style="background:#fff6c7;border:1.5px dashed #141414;border-radius:4px;padding:20px 12px">
+            <span class="copy code" style="-webkit-user-select:all;user-select:all;font:700 34px/1 'IBM Plex Mono',Consolas,'Courier New',monospace;letter-spacing:8px;color:#141414">{{ code }}</span>
+          </td></tr></table>
+        <p style="margin:0 0 18px;font-size:13px;color:#5c5c58;text-align:center">{{ code_note|default:"Tap or double-click the code to select it, then copy." }}</p>
+        {% endif %}
+
+        {% if details %}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 18px;border-collapse:collapse">
+          {% for label, value in details %}<tr>
+            <td style="padding:9px 12px 9px 0;border-top:1px dashed #dcdcd6;font:700 12px 'IBM Plex Mono',Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:#5c5c58;white-space:nowrap;vertical-align:top">{{ label }}</td>
+            <td style="padding:9px 0;border-top:1px dashed #dcdcd6;font-size:15px;text-align:right;vertical-align:top">{{ value }}</td>
+          </tr>{% endfor %}
+          <tr><td colspan="2" style="border-top:1px dashed #dcdcd6;font-size:0;line-height:0">&nbsp;</td></tr>
+        </table>
+        {% endif %}
+
+        {% if button %}
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 18px"><tr>
+          <td style="background:#141414;border-radius:4px"><a href="{{ button.1 }}" style="display:inline-block;padding:13px 22px;font:700 16px Archivo,Arial,sans-serif;color:#ffffff;text-decoration:none">{{ button.0 }} &rarr;</a></td>
+        </tr></table>
+        {% endif %}
+
+        {% for label, url in links %}
+        <p style="margin:0 0 6px;font:700 12px 'IBM Plex Mono',Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;color:#5c5c58">{{ label }}</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px"><tr>
+          <td style="background:#f2f3f1;border:1px solid #dcdcd6;border-radius:4px;padding:12px 14px;word-break:break-all">
+            <a href="{{ url }}" class="copy" style="-webkit-user-select:all;user-select:all;font:400 14px/1.45 'IBM Plex Mono',Consolas,'Courier New',monospace;color:#141414;text-decoration:none">{{ url }}</a>
+          </td></tr></table>
+        {% endfor %}
+
+        {% for n in notes %}<p style="margin:0 0 10px;font-size:14px;color:#5c5c58">{{ n }}</p>{% endfor %}
+        {% endblock %}
+      </td></tr>
+      <!-- footer -->
+      <tr><td style="padding:16px 6px 0;font:400 12px/1.5 Archivo,Arial,sans-serif;color:#5c5c58">
+        {{ footer|default:"Sent by TipPool: tips shared fairly, paid with PayPal." }}{% if site_url %} &middot; <a href="{{ site_url }}" style="color:#5c5c58">{{ site_host }}</a>{% endif %}
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

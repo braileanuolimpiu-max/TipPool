@@ -109,7 +109,13 @@ def run(now=None, base_url=""):
 def send(business, manager, today, base_url=""):
     locations = list(manager.allowed_locations())
     data = build(business, locations, today)
-    data["base_url"] = base_url
+    from . import platform
+    from urllib.parse import urlparse
+    data["base_url"] = base_url or platform.site_url()
+    data.update(eyebrow=f"{business.name} · {data['label']}", site_url=data["base_url"],
+                site_host=urlparse(data["base_url"]).netloc if data["base_url"] else "",
+                footer=f"You get this {'every morning' if data.get('kind') == 'daily' else 'every Monday'}. "
+                       "Change it in Settings → Owner controls.")
     subject = f"[TipPool] {business.name}: {data['cur']}{data['total']:,.2f} in tips, {data['label']}"
     text = render_to_string("emails/digest.txt", data)
     html = render_to_string("emails/digest.html", data)

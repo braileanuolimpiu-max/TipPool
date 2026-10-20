@@ -110,6 +110,17 @@ def contact_email():
     return config().contact_email or settings.CONTACT_EMAIL
 
 
+# --- the site's own address (for links in emails sent outside a request: alerts, summaries) ------
+def site_url():
+    """https://… of this site: SITE_URL, else Render's address, else the address it was last opened at."""
+    import os
+    if os.environ.get("SITE_URL"):
+        return os.environ["SITE_URL"].rstrip("/") + "/"
+    if getattr(settings, "RENDER_HOST", ""):
+        return f"https://{settings.RENDER_HOST}/"
+    return cache.get("site-url", "")
+
+
 # --- who runs the site -------------------------------------------------------------------------
 def is_operator(user):
     return bool(user and user.is_authenticated and user.is_superuser)

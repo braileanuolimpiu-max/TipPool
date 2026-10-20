@@ -7,11 +7,9 @@ from decimal import Decimal, InvalidOperation
 
 import qrcode
 import qrcode.image.svg
-from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
@@ -532,13 +530,15 @@ def staff_bulk(request):
             if not hit(f"link-mail:{request.business.pk}", LINK_EMAILS_PER_DAY, 24 * 3600):
                 capped = True
                 continue
-            from django.core.mail import EmailMessage
+            from . import emails
             link = request.build_absolute_uri(reverse("my_tips", args=[person.access_token]))
-            outgoing.append(EmailMessage(
-                f"Your tips at {location.display_name}",
-                f"Hi {person.name},\n\n{location.display_name} pays your share of the tips with TipPool. This is your "
-                f"private link: your tips, how each share was worked out, and clocking in and out.\n\n{link}\n\n"
-                "Keep it to yourself, and add it to your phone's home screen.\n", to=[person.paypal_email]))
+            outgoing.append(emails.build(
+                person.paypal_email, f"Your tips at {location.display_name}", eyebrow=location.display_name,
+                heading="Your tips, in one link", greeting=f"Hi {person.name},",
+                paragraphs=[f"{location.display_name} pays your share of the tips with TipPool. This is your private "
+                            "link: your tips, how each share was worked out, and clocking in and out."],
+                button=("Open my tips", link), links=[("Your private link", link)],
+                notes=["Keep it to yourself, and add it to your phone's home screen."]))
     if outgoing:  # one connection for all of them
         from django.core.mail import get_connection
         try:
@@ -1093,11 +1093,17 @@ def payout_action(request, pk):
                 messages.info(request, f"{staff.name} was already reminded today.")
                 return redirect("payout_status", night.pk)
             link = request.build_absolute_uri(reverse("my_tips", args=[staff.access_token]))
-            send_mail(f"{request.business.symbol}{item.share.amount} in tips is waiting for you",
-                      f"Hi {staff.name},\n\nYour tips for the {night} were sent to {item.receiver}, but nobody has "
-                      "accepted them yet. Open PayPal (or sign up with that email) to accept them.\n\nWrong address? "
-                      f"Change it on your tips page:\n{link}\n",
-                      settings.DEFAULT_FROM_EMAIL, [staff.paypal_email], fail_silently=True)
+            from . import emails
+            emails.send(staff.paypal_email, f"{request.business.symbol}{item.share.amount} in tips is waiting for you",
+                        eyebrow=night.location.display_name,
+                        heading=f"{request.business.symbol}{item.share.amount} is waiting for you",
+                        greeting=f"Hi {staff.name},",
+                        paragraphs=[f"Your tips for the {night} were sent with PayPal, but nobody has accepted them "
+                                    "yet. Open PayPal (or sign up with that email) to accept them."],
+                        details=[("Sent to", item.receiver), ("Shift", str(night)),
+                                 ("Amount", f"{request.business.symbol}{item.share.amount}")],
+                        button=("Open PayPal", "https://www.paypal.com/"),
+                        links=[("Wrong address? Change it on your tips page", link)])
             if platform.email_enabled():
                 messages.success(request, f"Reminder emailed to {staff.paypal_email}.")
             else:
@@ -1597,8 +1603,9 @@ def _staff_payout(request, member, token):
     Message.objects.create(staff=member, location=location.location, kind=Message.Kind.PAYOUT_CHANGE,
                            payload=payload, text=f"Please pay me with {wanted} (now: {member.payout_to}).")
     email_managers(member.business, f"{member.name} wants to be paid somewhere else",
-                   f"{member.name} asked to be paid with {wanted} instead of {member.payout_to}. "
-                   "Approve or decline it in Messages.", location=location.location, leads=False)
+                   f"{member.name} asked to be paid with {wanted} instead of {member.payout_to}.\n\n"
+                   "Until you approve it, they're still paid the old way.", location=location.location, leads=False,
+                   button="Approve or decline")
     messages.success(request, f"Sent to your manager. Until they approve it, you're still paid with {member.payout_to}.")
     return redirect("my_tips", token=token)
 
@@ -1621,8 +1628,9 @@ def _staff_message(request, member, token):
     Message.objects.create(staff=member, location=location, night=night, text=text)
     from .alerts import email_managers
     email_managers(member.business, f"{member.name} {'flagged a problem' if night else 'sent you a message'}",
-                   f"{member.name} wrote" + (f" about the {night}" if night else "") + f":\n\n{text}\n\n"
-                   "Answer in Messages.", location=location)
+                   f"{member.name} wrote" + (f" about the {night}" if night else "") + ":", location=location,
+                   quote=text, button="Answer in Messages",
+                   heading=f"{member.name} {'flagged a problem' if night else 'sent you a message'}")
     if night and night.status == Night.Status.REVIEW and not night.hold:
         night.hold = f"{member.name} flagged a problem."
         night.save(update_fields=["hold"])

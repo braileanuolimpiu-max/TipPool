@@ -11,14 +11,13 @@ from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import roles as role_presets
+from . import emails, roles as role_presets
 from .models import Business, Change, Invite, Location, Manager
 from .ratelimit import client_ip, hit, limited, over
 
@@ -121,14 +120,16 @@ class EmailBackend(ModelBackend):
 def _warn_owner(user, ip):
     """Tell the account's owner someone kept typing the wrong password."""
     when = timezone.localtime().strftime("%b %d, %I:%M %p")
-    send_mail("Someone kept trying to sign in to your TipPool account",
-              f"Hi {user.get_full_name() or user.get_username()},\n\n"
-              f"Someone typed the wrong password {WRONG_IN_A_ROW} times in a row for your TipPool account "
-              f"({user.email}) on {when}, from the internet address {ip}. Signing in to your account is paused "
-              "for a minute.\n\nIf it was you: wait a minute, or use \"Forgot your password?\" on the sign-in page.\n"
-              "If it wasn't you: your password is still safe, but change it to be sure, and turn on two-step "
-              "sign-in (Settings → Your sign-in) so a password alone is never enough.\n",
-              settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+    emails.send(user.email, "Someone kept trying to sign in to your TipPool account",
+                eyebrow="Security alert", heading="Someone kept trying your password",
+                greeting=f"Hi {user.get_full_name() or user.get_username()},",
+                paragraphs=[f"Someone typed the wrong password {WRONG_IN_A_ROW} times in a row for your TipPool "
+                            "account, so signing in to it is paused for a minute."],
+                details=[("Account", user.email), ("When", when), ("From", ip)],
+                button=("Reset your password", emails.absolute(reverse("password_reset"))),
+                notes=["If it was you: wait a minute, or reset your password.",
+                       "If it wasn't you: your password is still safe, but change it to be sure, and turn on two-step "
+                       "sign-in (Settings → Your sign-in) so a password alone is never enough."])
 
 
 def _new_user(email, password, name):
@@ -216,13 +217,14 @@ def email_my_link(request):
         # at most one email per address every 2 minutes
         if "@" in email and cache.add(f"my-link:{email}", 1, 120):
             people = StaffMember.objects.filter(paypal_email__iexact=email, memberships__active=True).distinct()
-            lines = [f"{p.business.name}: {request.build_absolute_uri(reverse('my_tips', args=[p.access_token]))}"
+            links = [(p.business.name, request.build_absolute_uri(reverse("my_tips", args=[p.access_token])))
                      for p in people.select_related("business")]
-            if lines:
-                send_mail("Your TipPool tips link",
-                          "Here is your private link to your tips. Keep it to yourself: anyone with it can see "
-                          "your tips.\n\n" + "\n".join(lines) + "\n\nTip: add it to your phone's home screen.\n",
-                          settings.DEFAULT_FROM_EMAIL, [email], fail_silently=True)
+            if links:
+                emails.send(email, "Your TipPool tips link", eyebrow="Your tips", heading="Your private tips link",
+                            paragraphs=["Your tips, how each share was worked out, and clocking in and out."],
+                            button=("Open my tips", links[0][1]) if len(links) == 1 else None, links=links,
+                            notes=["Keep it to yourself: anyone with it can see your tips.",
+                                   "Tip: open it on your phone and add it to the home screen."])
     return render(request, "registration/my_link.html", {"sent": sent})
 
 
@@ -252,11 +254,15 @@ def invite_manager(request):
     link = request.build_absolute_uri(reverse("accept_invite", args=[invite.token]))
     where = ", ".join(loc.display_name for loc in invite.locations.all())
     role = "a shift lead" if level == Manager.Level.LEAD else "a manager"
-    send_mail(f"Join {request.business.name} on TipPool",
-              f"{request.user.get_full_name() or request.user.get_username()} invited you to be {role} at "
-              f"{request.business.name} on TipPool" + (f", for {where}" if where else "") + ".\n\n"
-              f"Accept here (valid for {Invite.VALID_DAYS} days):\n{link}\n",
-              settings.DEFAULT_FROM_EMAIL, [email], fail_silently=True)
+    inviter = request.user.get_full_name() or request.user.get_username()
+    emails.send(email, f"Join {request.business.name} on TipPool", eyebrow=request.business.name,
+                heading=f"Join {request.business.name} on TipPool",
+                paragraphs=[f"{inviter} invited you to be {role} at {request.business.name}"
+                            + (f", for {where}" if where else "") + "."],
+                details=[("Role", "Shift lead" if level == Manager.Level.LEAD else "Manager"),
+                         ("Locations", where or "All locations"), ("Valid for", f"{Invite.VALID_DAYS} days")],
+                button=("Accept the invite", link), links=[("Or copy this link", link)],
+                notes=["Didn't expect this? You can ignore this email."])
     Change.log(request, f"Invited {email} as a manager")
     messages.success(request, f"Invite sent to {email}. You can also copy the link below and send it yourself.")
     return redirect(f"{reverse('settings')}#managers")
@@ -519,12 +525,14 @@ def login_code(request):
             cache.delete(fails_key)
             request.session.pop("two_step", None)
             if user and user.email and cache.add(f"login-code-warned:{uid}", 1, 3600):
-                send_mail("Someone has your TipPool password",
-                          f"Hi {user.get_full_name() or user.get_username()},\n\n"
-                          f"Someone typed your TipPool password correctly, then got the two-step code wrong "
-                          f"{CODE_TRIES} times. Your two-step sign-in stopped them. Please change your password "
-                          f"now (Settings → Your account).\n\nTipPool",
-                          settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+                emails.send(user.email, "Someone has your TipPool password", eyebrow="Security alert",
+                            heading="Someone has your password",
+                            greeting=f"Hi {user.get_full_name() or user.get_username()},",
+                            paragraphs=[f"Someone typed your TipPool password correctly, then got the two-step code "
+                                        f"wrong {CODE_TRIES} times. Your two-step sign-in stopped them."],
+                            details=[("Account", user.email), ("From", client_ip(request))],
+                            button=("Change your password", emails.absolute(reverse("password_change"))),
+                            notes=["Please change your password now, and anywhere else you use the same one."])
             messages.error(request, "Too many wrong codes for this account. Please try again in 15 minutes.")
             return redirect("login")
         error = "That code isn't right. Use the newest code in your authenticator app."
@@ -690,7 +698,8 @@ def freeze_payouts(request):
         text = f"{who} turned payouts back on for {business.name}."
     business.save(update_fields=["payouts_frozen_at", "payouts_frozen_by"])
     Change.log(request, text)
-    email_managers(business, "Payouts frozen" if business.payouts_frozen else "Payouts are back on", text)
+    email_managers(business, "Payouts frozen" if business.payouts_frozen else "Payouts are back on", text,
+                   page="dashboard")
     messages.warning(request, text) if business.payouts_frozen else messages.success(request, text)
     from django.utils.http import url_has_allowed_host_and_scheme
     nxt = request.POST.get("next", "")
@@ -753,11 +762,7 @@ def change_password(request):
             session.pop(key, None)
         Change.log(request, "Changed their password")
         if user.email:
-            send_mail("Your TipPool password was changed",
-                      f"Hi {user.get_full_name() or user.get_username()},\n\nThe password for your TipPool account was "
-                      "just changed. If this wasn't you, reset it right away from the sign-in page "
-                      "(\"Forgot your password?\") and tell the owner of your business.\n",
-                      settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+            _password_changed_email(user, "was just changed.")
         return redirect("password_change_done")
 
     # no way to send a code: the classic form with the current password
@@ -783,11 +788,12 @@ def change_password(request):
         code = "".join(secrets.choice(CODE_CHARS) for _ in range(6))
         session["pw_code"] = {"hash": _code_hash(user, code), "at": now, "tries": 0}
         session.pop("pw_ok_at", None)
-        send_mail(f"Your TipPool code: {code}",
-                  f"Hi {user.get_full_name() or user.get_username()},\n\nYour code to change your TipPool password is:\n\n"
-                  f"    {code}\n\nIt works for {CODE_MINUTES} minutes. If you didn't ask to change your password, "
-                  "ignore this email: nothing changes without the code.\n",
-                  settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+        emails.send(user.email, f"Your TipPool code: {code}", eyebrow="Password change", heading="Your code",
+                    greeting=f"Hi {user.get_full_name() or user.get_username()},",
+                    paragraphs=["Type this code in TipPool to change your password."], code=code,
+                    preheader=f"{code} is your code. It works for {CODE_MINUTES} minutes.",
+                    notes=[f"It works for {CODE_MINUTES} minutes.",
+                           "Didn't ask to change your password? Ignore this email: nothing changes without the code."])
         messages.success(request, f"We sent a 6-character code to {_masked(user.email)}.")
         if (settings.DEBUG and platform.email_settings() is None
                 and settings.EMAIL_FALLBACK_BACKEND.endswith("console.EmailBackend")):
@@ -830,6 +836,34 @@ def change_password(request):
     return render(request, "registration/password_change_form.html", {**ctx, "step": "code" if pending else "start"})
 
 
+def _password_changed_email(user, how):
+    emails.send(user.email, "Your TipPool password was changed", eyebrow="Security", heading="Password changed",
+                greeting=f"Hi {user.get_full_name() or user.get_username()},",
+                paragraphs=[f"The password for your TipPool account ({user.email}) {how}"],
+                details=[("When", timezone.localtime().strftime("%b %d, %I:%M %p"))],
+                notes=["Was this you? Then there's nothing to do.",
+                       "If it wasn't you, reset your password right away and tell the owner of your business."],
+                button=("Reset my password", emails.absolute(reverse("password_reset"))))
+
+
+from django.contrib.auth.forms import PasswordResetForm  # noqa: E402
+
+
+class BrandedResetForm(PasswordResetForm):
+    """The reset link email in TipPool's own look."""
+
+    def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email,
+                  html_email_template_name=None):
+        path = reverse("password_reset_confirm", kwargs={"uidb64": context["uid"], "token": context["token"]})
+        link = f"{context['protocol']}://{context['domain']}{path}"
+        emails.send(to_email, "Reset your TipPool password", eyebrow="Password reset",
+                    heading="Choose a new password",
+                    paragraphs=[f"Someone asked to reset the password for your TipPool account ({to_email})."],
+                    button=("Choose a new password", link), links=[("Or copy this link", link)],
+                    notes=["The link works once, for a few days.",
+                           "If it wasn't you, ignore this email: your password stays the same."])
+
+
 class ResetConfirmView(__import__("django.contrib.auth.views", fromlist=["PasswordResetConfirmView"]).PasswordResetConfirmView):
     """Choosing a new password from the emailed link; the account's owner is told it changed."""
 
@@ -837,9 +871,6 @@ class ResetConfirmView(__import__("django.contrib.auth.views", fromlist=["Passwo
         response = super().form_valid(form)
         user = form.user
         if user.email:
-            send_mail("Your TipPool password was changed",
-                      f"Hi {user.get_full_name() or user.get_username()},\n\nThe password for your TipPool account was "
-                      "just reset with the emailed link. If this wasn't you, reset it again right away and tell the "
-                      "owner of your business.\n", settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+            _password_changed_email(user, "was just reset with the emailed link.")
         Change.log(user.get_full_name() or user.get_username(), "Reset their password with the emailed link")
         return response

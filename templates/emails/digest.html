@@ -1,6 +1,6 @@
-<div style="font-family:Arial,Helvetica,sans-serif;color:#141414;max-width:620px;margin:0 auto;line-height:1.5">
-  <p style="margin:0 0 4px;font:700 12px monospace;letter-spacing:.06em;text-transform:uppercase;color:#5c5c58">{{ business.name }} · {{ label }}</p>
-  <h1 style="margin:0 0 6px;font-size:30px;line-height:1.1">{{ cur }}{{ total|money }} in tips</h1>
+{% extends "emails/base.html" %}{% load money %}
+{% block body %}
+  <h1 style="margin:0 0 6px;font:800 34px/1.05 Archivo,'Arial Narrow',Arial,sans-serif;letter-spacing:-.01em">{{ cur }}{{ total|money }} in tips</h1>
   {% if change is not None %}<p style="margin:0 0 18px;color:{% if change >= 0 %}#12703d{% else %}#9a5b00{% endif %};font-weight:700">{% if change >= 0 %}+{% endif %}{{ change }}% vs the {% if kind == "daily" %}same day last week{% else %}week before{% endif %}</p>{% endif %}
 
   <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 20px">
@@ -9,7 +9,7 @@
       <strong style="font-size:16px">{{ r.location.display_name }}</strong><br>
       <span style="color:#5c5c58;font-size:14px">{{ r.shifts }} shift{{ r.shifts|pluralize }}{% if r.per_hour %} · {{ cur }}{{ r.per_hour|money }} per hour worked{% endif %}{% if r.best %} · best: {{ r.best.date|date:"D M j" }}, {{ cur }}{{ r.best.total|money }}{% endif %}{% if r.top %} · top earner: {{ r.top.name }}{% endif %}</span>
     </td><td style="padding:12px 0;border-top:1px solid #dcdcd6;text-align:right;vertical-align:top;white-space:nowrap">
-      <strong style="font:700 16px monospace">{{ cur }}{{ r.collected|money }}</strong>{% if r.change is not None %}<br><span style="font-size:13px;color:{% if r.change >= 0 %}#12703d{% else %}#9a5b00{% endif %}">{% if r.change >= 0 %}+{% endif %}{{ r.change }}%</span>{% endif %}
+      <strong style="font:700 16px 'IBM Plex Mono',Consolas,monospace">{{ cur }}{{ r.collected|money }}</strong>{% if r.change is not None %}<br><span style="font-size:13px;color:{% if r.change >= 0 %}#12703d{% else %}#9a5b00{% endif %}">{% if r.change >= 0 %}+{% endif %}{{ r.change }}%</span>{% endif %}
     </td></tr>
     {% endfor %}
   </table>
@@ -27,6 +27,6 @@
   <p style="margin:0 0 8px">{{ stops }} stop{{ stops|pluralize }}, {{ warns }} thing{{ warns|pluralize }} worth a look.</p>
   {% if noticed %}<ul style="margin:0 0 20px;padding-left:20px">{% for n in noticed %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
 
-  {% if base_url %}<p style="margin:24px 0"><a href="{{ base_url }}" style="background:#141414;color:#fff;padding:12px 18px;border-radius:4px;text-decoration:none;font-weight:700">Open TipPool</a></p>{% endif %}
-  <p style="color:#5c5c58;font-size:13px">You get this {% if kind == "daily" %}every morning{% else %}every Monday{% endif %}. Change it in Settings → Owner controls.</p>
-</div>
+  {% if base_url %}<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 18px"><tr>
+    <td style="background:#141414;border-radius:4px"><a href="{{ base_url }}" style="display:inline-block;padding:13px 22px;font:700 16px Archivo,Arial,sans-serif;color:#ffffff;text-decoration:none">Open TipPool &rarr;</a></td></tr></table>{% endif %}
+{% endblock %}
