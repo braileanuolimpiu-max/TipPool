@@ -81,8 +81,17 @@ flowchart LR
   **your own PayPal** (the secret is stored encrypted). Each business only ever sees its own data.
 - **Money handled honestly.** PayPal's fee is read from every payment: the business covers it, or it comes
   off before the split. Refunds, chargebacks and disputes are tracked. USD, EUR, GBP, CAD, AUD.
-- **Reports and history.** Tips per person, role and shift, CSV export for payroll, and a log of who
-  changed what.
+- **Live board.** Every location against a normal day at this hour (the same weekday over the last
+  8 weeks), tips per labor hour, who's working, and what's waiting. It refreshes itself.
+- **Smart alerts.** The owner hears about quiet problems: no guest tips by the usual time (QR codes missing?),
+  tips far below normal, someone clocked in 12+ hours, a shift never closed or waiting days, refunds piling up.
+- **Owner controls.** A payout approval limit (bigger payouts wait for the owner, even automatic ones), an
+  emergency freeze for every payout, managers and shift leads limited to their own locations, and a daily
+  or weekly summary email.
+- **Reports and history.** Tips per person, role and shift, CSV export for payroll, and a full activity log
+  (who did what, filterable, downloadable).
+- **Quick setup.** Add a whole team at once (paste a list or a CSV) and email everyone their private link.
+  Dark mode for late close-outs.
 - **Staff side.** A private link per person (no account needed): their shifts, shares, explanations and
   totals, clock in/out, and "flag a problem". It installs on the home screen like an app.
 - **Guests in their language:** English, Español, Français, Deutsch, Italiano, Português, Română.
@@ -143,7 +152,7 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 219 tests, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 252 tests, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -194,13 +203,13 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`.
 python manage.py test tips
 ```
 
-219 tests cover:
+252 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes
 - the close-out check and Ask actions
 - security: business isolation, rate limits, tokens, unsigned webhooks
-- the demo, the tour and the guest page languages
+- the demo, the tour, the guest page languages, and the owner features (alerts, digest, limits, per-location managers)
 
 They also run on every push with GitHub Actions.
 
