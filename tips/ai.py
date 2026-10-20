@@ -204,7 +204,7 @@ def _mock_parse_rules(text, roles):
     """Very small offline parser for sentences like
     'Bartenders get 20%, bussers 10% split equally, the rest goes to servers by hours'.
     Works with whatever roles the business has."""
-    pools, warnings = [], ["Read by the built-in rule reader. With Claude turned on, rules are read more smartly."]
+    pools, warnings = [], []
     unmatched = []
     eligible = [r for r in roles if not r.no_tips]
     parts = []

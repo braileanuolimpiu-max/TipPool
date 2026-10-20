@@ -1120,7 +1120,8 @@ def payout_action(request, pk):
         if exc.status is None or exc.status >= 500:
             messages.error(request, "PayPal had a problem on their side and nothing changed. Try again in a minute.")
         else:
-            messages.error(request, f"PayPal said no: {exc} (debug id {exc.debug_id})")
+            debug = f" (PayPal debug id {exc.debug_id})" if getattr(exc, "debug_id", None) else ""
+            messages.error(request, f"PayPal said no: {exc}{debug}")
     return redirect("payout_status", pk=night.pk)
 
 

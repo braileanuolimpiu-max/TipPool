@@ -19,7 +19,7 @@
 </header>
 
 <form method="get" class="panel ask" role="search">
-  <div class="panel-head"><h2>Ask about your tips</h2><span class="small muted">{% if ai_mode == "claude" %}Answered by Claude from your numbers{% else %}Built-in answers (turn on Claude for any question){% endif %}</span></div>
+  <div class="panel-head"><h2>Ask about your tips</h2><span class="small muted">{% if ai_mode == "claude" %}Answered by Claude from your numbers{% else %}Answers to common questions, from your numbers{% endif %}</span></div>
   <div class="panel-body stack">
     <div class="ask-row">
       <input type="search" name="q" value="{{ question }}" maxlength="300" placeholder="e.g. How much did servers make last week?" aria-label="Your question">

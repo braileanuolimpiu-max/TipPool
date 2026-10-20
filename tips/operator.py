@@ -200,7 +200,6 @@ def _test_email(request, cfg):
                      paragraphs=["TipPool can send email now: invites, password codes and reset links, alerts and "
                                  "summaries, for every business on this site."],
                      details=[("Sent with", cfg.get_email_provider_display()), ("From", cfg.email_from or cfg.email_user)],
-                     code="ABC123", code_note="This is how codes look. Tap or double-click to select it.",
                      button=("Open Platform settings", emails.absolute(reverse("platform_settings")))
                      ).send(fail_silently=False)
     except Exception as exc:  # show the reason, in a sentence

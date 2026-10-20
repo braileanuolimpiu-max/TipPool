@@ -23,7 +23,7 @@
         <a href="{% url 'staff_list' %}#roles">Change roles</a></p>
       <div class="actions">
         <button class="btn btn-primary" name="parse">Read my rules</button>
-        <span class="small muted">{% if ai_mode == "claude" %}Read by Claude{% else %}Read by the offline parser (Claude mode is off){% endif %}</span>
+        <span class="small muted">{% if ai_mode == "claude" %}Read by Claude{% else %}Read by the built-in rule reader{% endif %}</span>
       </div>
     </div>
   </form>

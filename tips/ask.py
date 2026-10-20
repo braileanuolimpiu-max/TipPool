@@ -80,9 +80,9 @@ def _answer(question, locations, today, location=None, user=None):
             if out.action and location and user:
                 result.update(_proposal(out.action.kind, out.action.model_dump(exclude_none=True), location, user))
             return result
-        except ai.AIError as exc:
-            return {"answer": f"{exc} Here's what I can work out offline: " + _offline(question, locations, today),
-                    "by": "offline"}
+        except ai.AIError:
+            return {"answer": "Claude couldn't answer just now, so here's what I can work out from your numbers: "
+                              + _offline(question, locations, today), "by": "offline"}
     parsed = actions.parse(question, today) if location and user else None
     if parsed:
         return {"by": "offline", **_proposal(parsed[0], parsed[1], location, user)}
@@ -214,8 +214,7 @@ def _offline(question, locations, today):
         return (f"Total tips {when}: {_money(r['collected'])} over {_count(r['shift_count'], 'shift')}, "
                 f"{_money(r['paid_out'])} of it paid out so far.")
 
-    return ("The built-in assistant can answer questions like: " + "; ".join(f'"{e}"' for e in EXAMPLES)
-            + ". With Claude turned on you can ask anything.")
+    return ("I can answer questions like: " + "; ".join(f'"{e}"' for e in EXAMPLES) + ".")
 
 
 def _count(n, word):

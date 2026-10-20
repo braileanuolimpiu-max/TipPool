@@ -87,7 +87,7 @@ class AskTests(TestCase):
                          "John and Maria earned the most in August: $10.00 each.")
 
     def test_unknown_question_lists_examples(self):
-        self.assertIn("The built-in assistant can answer", self.ask("what's the weather"))
+        self.assertIn("I can answer questions like", self.ask("what's the weather"))
 
     def test_page_shows_answer(self):
         page = self.client.get(reverse("reports") + "?q=Who+earned+the+most+this+year%3F")
