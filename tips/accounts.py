@@ -579,7 +579,7 @@ def manager_locations(request, pk):
 
 # --- Change your password: prove it's you with a code sent to your email -----------------
 CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I to mix up
-CODE_MINUTES = 10
+CODE_MINUTES = 5
 CODE_TRIES = 5
 
 
@@ -653,6 +653,10 @@ def change_password(request):
                   "ignore this email: nothing changes without the code.\n",
                   settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
         messages.success(request, f"We sent a 6-character code to {_masked(user.email)}.")
+        if settings.DEBUG and settings.EMAIL_BACKEND.endswith("console.EmailBackend"):
+            # local development: emails only print in the server's terminal, so show the code here too
+            messages.info(request, f"Testing on your computer: no email service is connected, so the email was "
+                                   f"printed in the server's terminal. Your code is {code}.")
         return redirect("password_change")
 
     if action == "verify":

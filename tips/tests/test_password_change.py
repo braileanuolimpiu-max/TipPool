@@ -47,7 +47,7 @@ class EmailCodePasswordChangeTests(TestCase):
     def test_codes_expire(self):
         self.code()
         session = self.client.session
-        session["pw_code"]["at"] -= 11 * 60
+        session["pw_code"]["at"] -= 5 * 60 + 1
         session.save()
         self.assertContains(self.client.get(self.url), "Email me a code")
 
