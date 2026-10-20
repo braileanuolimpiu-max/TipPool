@@ -1,9 +1,8 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from decimal import Decimal
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 

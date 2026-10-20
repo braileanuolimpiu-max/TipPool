@@ -1,0 +1,6 @@
+line-length = 120
+exclude = ["tips/migrations", ".venv"]
+
+[lint]
+# real problems only: unused or undefined names, syntax errors
+select = ["F", "E9"]

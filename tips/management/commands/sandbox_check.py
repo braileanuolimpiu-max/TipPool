@@ -6,11 +6,9 @@
 It makes its own "Sandbox check" demo business (removed after a week with the other demos), so real data
 is never touched. Staff are paid at the sandbox personal accounts in .env (MARIA_EMAIL, JOHN_EMAIL, ...).
 """
-import os
 import time
 from decimal import Decimal
 
-from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 

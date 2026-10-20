@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from django.db.models import Sum
 
-from .models import Location, Night, Role, Share, Tip
+from .models import Night, Role, Share, Tip
 
 ZERO = Decimal("0.00")
 

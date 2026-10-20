@@ -469,11 +469,7 @@ def login_code(request):
 @manager_required
 def two_step(request):
     """Turn two-step sign-in on (scan, then confirm one code) or off (needs a current code)."""
-    import base64
-    import io
 
-    import qrcode
-    import qrcode.image.svg
 
     from . import totp
     from .vault import decrypt, encrypt

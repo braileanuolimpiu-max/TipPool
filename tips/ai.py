@@ -13,12 +13,10 @@ Important: the AI never decides amounts. It writes the rules; split.py does the 
 import base64
 import threading
 from contextlib import contextmanager
-import os
 import logging
 import re
 from typing import Literal, Optional  # noqa: F401
 
-from django.conf import settings
 from pydantic import BaseModel, Field
 
 from .roles import plural, word_pattern

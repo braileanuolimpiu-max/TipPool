@@ -1,5 +1,4 @@
 def app_context(request):
-    from .models import Location
     location = getattr(request, "location", None)
     business = getattr(request, "business", None)
     try:

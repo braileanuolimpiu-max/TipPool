@@ -2,7 +2,6 @@ import json
 import os
 import subprocess
 import sys
-from datetime import date
 from decimal import Decimal
 from unittest import mock
 
@@ -12,8 +11,8 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from tips import ai, reports, services
-from tips.models import Invite, Location, Manager, Night, Role, Shift, Tip, TipRuleSet
+from tips import reports, services
+from tips.models import Invite, Location, Manager, Night, Role, Tip
 from tips.tests.helpers import hire, make_manager
 from tips.tests.test_money import FakePayPal
 

@@ -113,7 +113,6 @@ class AutoCloseTests(TestCase):
 
 class SettingsPageTests(TestCase):
     def test_save_schedule(self):
-        from django.contrib.auth import get_user_model
         from django.urls import reverse
         user = make_manager("m")
         self.client.force_login(user)

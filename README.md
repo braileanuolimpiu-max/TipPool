@@ -10,6 +10,14 @@ Built for the PayPal AI Hackathon 2026 ("Build What's Next with PayPal and AI").
 
 > **Live demo:** _link added after deploy_. Click **Try the demo** on the sign-in page: no sign-up, sandbox money only.
 
+| Closing a shift: every share explained, checked, then paid | The guest's tip page (from the QR code) |
+|---|---|
+| ![Split review](docs/screenshots/split-review.png) | <img src="docs/screenshots/guest-tip-page.png" alt="Guest tip page" width="260"> |
+
+| Current shift | Live board: every location against a normal day |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Live board](docs/screenshots/live-board.png) |
+
 ---
 
 ## For judges: the 2-minute path
@@ -145,28 +153,34 @@ questions, so the app works without an API key (and the demo history is generate
 - Payouts can't go out twice: one fixed `sender_batch_id` per shift attempt, unclear answers from PayPal
   are checked, never blindly re-sent, and a shift is only marked paid when every payout arrived.
 - Webhooks are applied only when PayPal's signature verifies; otherwise the app asks PayPal directly.
-- Rate limits on sign-in (failures only), password reset, tip orders and the demo. Optional two-step
-  sign-in (TOTP). Secure cookies, HSTS, CSRF protection, and a referrer policy that keeps private staff links from leaking to other sites.
+- Rate limits on sign-in (failures only), password reset, tip orders and the demo. After 10 wrong passwords
+  in a row an account pauses for a minute and its owner gets an alert email. Optional two-step sign-in (TOTP).
+- Changing a password needs a 6-character code sent by email (valid 5 minutes); a new password can't be the
+  current one, and every change or reset sends a notice.
+- Managers and shift leads can be limited to their own locations; leads can close out but never pay.
+- Running the site (Platform settings) belongs to the first account on a new site, or needs a one-time setup
+  code from the server's log. Platform secrets (email password, API keys) are encrypted and never shown again. Secure cookies, HSTS, CSRF protection, and a referrer policy that keeps private staff links from leaking to other sites.
 - CSV exports are protected against spreadsheet formula injection.
 
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 274 tests, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 286 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
 Requirements: Python 3.11+, a free PayPal Developer account.
 
 ```bash
-git clone <this repo> && cd tippool
+git clone https://github.com/braileanuolimpiu-max/tippool.git && cd tippool
 python -m venv .venv
 .venv\Scripts\activate          # Windows  (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 copy .env.example .env          # macOS/Linux: cp .env.example .env
 ```
 
-Fill `.env`:
+`.env` is optional: everything in it can also be set on the website (**Platform** settings, see below).
+For a quick local start, fill:
 - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`: developer.paypal.com → Apps & Credentials → **Sandbox**
   (make sure **Payouts** is enabled for the app).
 - `MARIA_EMAIL`, `JOHN_EMAIL`, ...: your sandbox **personal** account emails, so demo payouts really arrive.
@@ -178,7 +192,8 @@ python manage.py runserver
 ```
 
 Open http://127.0.0.1:8000 and click **Try the demo**, or **Create a business account**.
-Emails (invites, password resets, alerts) print in the terminal until you set `EMAIL_HOST`.
+Emails (invites, password codes and resets, alerts) print in the terminal until you connect an email
+service in **Platform → Email**. Locally, the password-change code is also shown on the page.
 
 Check the PayPal side for real: `python manage.py sandbox_check` (add `--wait 300` to also approve a tip
 in your browser as a sandbox buyer and have it captured).
@@ -210,7 +225,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-274 tests cover:
+286 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes
@@ -218,7 +233,25 @@ python manage.py test tips
 - security: business isolation, rate limits, tokens, unsigned webhooks
 - the demo, the tour, the guest page languages, and the owner features (alerts, digest, limits, per-location managers)
 
-They also run on every push with GitHub Actions.
+They run on every push with GitHub Actions, together with `ruff check .`.
+
+## Project layout
+
+```
+config/             Django settings and URLs
+tips/
+  models.py         businesses, locations, staff, shifts, tips, payouts
+  split.py          the exact-cent split engine
+  ai.py             Claude calls (rules, explanations, checks, Ask) and the offline fallback
+  paypal.py         PayPal REST client (Orders, Payouts, balances, webhooks)
+  services.py       tip capture, close-out, paying a shift (locks, freeze, approval limit)
+  check.py          the close-out check before any payout
+  watch.py, digest.py, insights.py   smart alerts, summary emails, "normal by now"
+  operator.py, platform.py           Platform settings (stored encrypted, no code needed)
+  tests/            the test suite
+templates/, static/ plain HTML, CSS and JS
+docs/               screenshots and the demo video script
+```
 
 ## License
 

@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from tips import totp
-from tips.models import Location, Manager, Night, Share, Tip
+from tips.models import Location, Manager, Night, Share
 from tips.tests.helpers import hire, make_manager
 from tips.vault import encrypt
 

@@ -1,7 +1,6 @@
 """Owner features: per-location managers, owner controls, smart alerts, digest, live board, activity, bulk add."""
 from datetime import timedelta
 from decimal import Decimal
-from unittest import mock
 
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -9,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from tips import digest, insights, watch
-from tips.models import (Alert, Business, Change, ClockEntry, Location, Manager, Membership, Night, StaffMember,
+from tips.models import (Alert, Change, ClockEntry, Location, Membership, Night, StaffMember,
                          Tip)
 from tips.tests.helpers import hire, make_manager
 

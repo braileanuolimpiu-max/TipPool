@@ -4,7 +4,6 @@
 - An empty real business can load the same sample data from its dashboard.
 Demo businesses only ever use the PayPal sandbox, and are deleted after a week.
 """
-import os
 import random
 import secrets
 from datetime import datetime, time, timedelta

@@ -492,7 +492,6 @@ def staff_bulk(request):
     if len(lines) > BULK_MAX:
         messages.error(request, f"Up to {BULK_MAX} people at a time, please.")
         return redirect("staff_list")
-    delimiter = "\t" if "\t" in lines[0] else (";" if lines[0].count(";") > lines[0].count(",") else ",")
     send_links = bool(request.POST.get("send_links")) and not request.business.is_demo
     added, skipped, mailed, outgoing, capped = [], [], 0, [], False
     seen, updated = {}, []
@@ -1236,7 +1235,6 @@ def overview(request):
     from datetime import timedelta
 
     from .models import Message
-    business = request.business
     week_start = timezone.localdate() - timedelta(days=timezone.localdate().weekday())
     rows = []
     for loc in request.allowed_locations:

@@ -13,7 +13,9 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt ruff
+      - name: Lint (unused or undefined names, syntax errors)
+        run: ruff check .
       - name: Run the test suite (PayPal and Claude are mocked)
         run: python manage.py test tips
         env:

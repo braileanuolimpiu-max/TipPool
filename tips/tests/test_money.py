@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from tips import ai, services
-from tips.models import Alert, Business, Location, Message, Night, PayoutItem, Shift, StaffMember, Tip, TipRuleSet
+from tips.models import Alert, Business, Location, Message, Night, PayoutItem, Shift, Tip, TipRuleSet
 from tips.paypal import PayPalError, get_client
 from tips.tests.helpers import hire, make_manager
 

@@ -2,7 +2,6 @@ from datetime import date
 from decimal import Decimal
 from unittest import mock
 
-from django.core import signing
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
