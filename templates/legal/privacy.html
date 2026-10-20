@@ -1,0 +1,40 @@
+{% extends "legal/_legal.html" %}
+{% block title %}Privacy{% endblock %}
+{% block content %}
+<h1>Privacy</h1>
+<p class="lead">TipPool collects tips for a business and splits them between its staff. It keeps only what that job needs, and it never sells or shares data for advertising.</p>
+
+<h2>If you leave a tip</h2>
+<ul>
+  <li>You pay through PayPal or Venmo. Your card and bank details stay with PayPal; TipPool and the business never see them.</li>
+  <li>TipPool keeps the amount, the time, the table if the code had one, the person you tipped if you picked someone, and the payer name PayPal sends back. That is how the tip reaches the right shift and the right people.</li>
+  <li>If you pick a language, a cookie remembers it. There are no ads and no tracking cookies.</li>
+</ul>
+
+<h2>If you work at a business that uses TipPool</h2>
+<ul>
+  <li>Your manager adds your name, your role, the email or Venmo phone your tips are paid to, and your hours or clock-ins.</li>
+  <li>TipPool uses these to work out your share and to send it to you with PayPal Payouts. Your private staff link shows only your own shifts and shares.</li>
+  <li>When you leave, a manager can erase your personal details. The amounts stay, without your name, because the business has to keep its pay records.</li>
+</ul>
+
+<h2>If you manage a business</h2>
+<ul>
+  <li>We keep your name, email, password (hashed, never readable) and, if you turn it on, your two-step sign-in key.</li>
+  <li>Your PayPal API secret is stored encrypted and is only used to take tips and send payouts for your business.</li>
+  <li>A change history records who changed rules, team members and payouts, so every split can be checked later.</li>
+</ul>
+
+<h2>Who else sees data</h2>
+<ul>
+  <li><strong>PayPal</strong> handles every payment and payout.</li>
+  <li><strong>Anthropic (Claude)</strong> reads your tip rules, and for a shift the staff first names, roles, hours and amounts, to turn rules into a split, explain shares and check a close-out. Anthropic does not use API data to train its models.</li>
+  <li><strong>Our host and database provider</strong> store the data. <strong>Google Fonts</strong> serves the typefaces, so your browser contacts Google when a page loads.</li>
+</ul>
+
+<h2>How long we keep it</h2>
+<p>Business data stays while the business has an account, because tip and pay records have to be kept. Demo businesses, and everything in them, are deleted after 7 days.</p>
+
+<h2>Your choices</h2>
+<p>Ask the business you work for, or tipped, to see, correct or erase your details. A manager can close their business account and have its data removed.</p>
+{% endblock %}

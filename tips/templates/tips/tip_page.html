@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Leave a tip{% endblock %}
+{% block lang %}{{ lang }}{% endblock %}
+{% block title %}{{ t.title }}{% endblock %}
 {% block body %}
 <div class="guest">
   {% if user.is_authenticated %}
@@ -8,51 +9,52 @@
   <div class="receipt-wrap" style="width:100%">
     <div class="receipt">
       <div class="head">
-        <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}Thank you{% endif %}</h2>
-        <p>{% if table %}Table {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
+        <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}{{ t.thanks }}{% endif %}</h2>
+        <p>{% if table %}{{ t.table }} {{ table }}, {% endif %}{% now "M j, g:i A" %}</p>
       </div>
       <hr>
       {% if tip_message %}<p style="margin:0 0 10px;font-weight:700">{{ tip_message }}</p>{% endif %}
       {% if tip_mode == "pool" or not people %}
-      <p style="margin:0">Thank you. Your tip is shared with the whole team who looked after you today.</p>
+      <p style="margin:0">{{ t.pool_note }}</p>
       {% else %}
-      <p style="margin:0 0 10px" id="who-label">{% if tip_mode == "personal" %}Who would you like to tip?{% else %}Who is this tip for?{% endif %}</p>
+      <p style="margin:0 0 10px" id="who-label">{% if tip_mode == "personal" %}{{ t.who_personal }}{% else %}{{ t.who_both }}{% endif %}</p>
       <div class="who-pick" role="group" aria-labelledby="who-label">
-        {% if tip_mode == "both" %}<button type="button" class="who-btn" data-to="" aria-pressed="{% if not to %}true{% else %}false{% endif %}">The whole team</button>{% endif %}
+        {% if tip_mode == "both" %}<button type="button" class="who-btn" data-to="" aria-pressed="{% if not to %}true{% else %}false{% endif %}">{{ t.whole_team }}</button>{% endif %}
         {% for m in people %}<button type="button" class="who-btn" data-to="{{ m.pk }}" aria-pressed="{% if to == m.pk %}true{% else %}false{% endif %}">{{ m.staff.name }}<small>{{ m.role_name }}</small></button>{% endfor %}
       </div>
-      <p class="small" style="margin:8px 0 0;color:#5c5f62" id="who-note">{% if tip_mode == "both" %}Tips for the whole team are shared fairly. A tip for one person goes to them in full.{% else %}Your whole tip goes to the person you choose.{% endif %}</p>
+      <p class="small" style="margin:8px 0 0;color:#5c5f62" id="who-note">{% if tip_mode == "both" %}{{ t.note_both }}{% else %}{{ t.note_personal }}{% endif %}</p>
       {% endif %}
       <hr>
-      {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">No tip was taken. Choose an amount to try again.</p>{% endif %}
+      {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">{{ t.cancelled }}</p>{% endif %}
       {% if tip_style == "percent" %}
-      <label for="bill">Your bill</label>
+      <label for="bill">{{ t.bill }}</label>
       <input type="number" id="bill" min="1" max="10000" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00">
-      <div class="amounts" role="group" aria-label="Tip percent">
+      <div class="amounts" role="group" aria-label="{{ t.tip_percent }}">
         {% for p in presets %}<button type="button" class="amount pct" data-percent="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">{{ p }}%<small>–</small></button>{% endfor %}
       </div>
       {% else %}
-      <div class="amounts" role="group" aria-label="Tip amount">
+      <div class="amounts" role="group" aria-label="{{ t.tip_amount }}">
         {% for p in presets %}<button type="button" class="amount" data-amount="{{ p }}" aria-pressed="{% if p == default_pick %}true{% else %}false{% endif %}">{{ cur }}{{ p }}</button>{% endfor %}
       </div>
       {% endif %}
-      <label for="custom">Other amount</label>
+      <label for="custom">{{ t.other }}</label>
       <input type="number" id="custom" min="1" max="500" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00">
       {% if nobody %}
-      <p class="flash warning" style="margin:12px 0 0">Nobody is taking tips here right now. Please ask the staff.</p>
+      <p class="flash warning" style="margin:12px 0 0">{{ t.nobody }}</p>
       {% endif %}
       <div class="pay-buttons"{% if nobody %} hidden{% endif %}>
         <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
         <venmo-button type="pay" class="venmo-blue" hidden></venmo-button>
       </div>
-      <p id="status" class="status-line" role="status">Loading PayPal…</p>
+      <p id="status" class="status-line" role="status">{{ t.loading }}</p>
     </div>
   </div>
   {% if sandbox_buyer %}
   <div class="sandbox-buyer"><strong>Trying the demo?</strong> Pay with this PayPal sandbox buyer (no real money):
     <code>{{ sandbox_buyer.0 }}</code> / <code>{{ sandbox_buyer.1 }}</code></div>
   {% endif %}
-  <p class="guest-note">Payments are processed by PayPal. The business never sees your card details.</p>
+  <p class="guest-note">{{ t.guest_note }} <a href="{% url 'privacy' %}">{{ t.privacy }}</a></p>
+  {% include "tips/_lang_switch.html" %}
 </div>
 {% endblock %}
 {% block scripts %}
@@ -64,8 +66,10 @@
 {{ tip_style|json_script:"style-data" }}
 {{ cur|json_script:"cur-data" }}
 {{ currency|json_script:"currency-data" }}
+{{ js_words|json_script:"words-data" }}
 <script>
   const CSRF = "{{ csrf_token }}";
+  const T = JSON.parse(document.getElementById("words-data").textContent);
   const TABLE = JSON.parse(document.getElementById("table-data").textContent);
   const AT = JSON.parse(document.getElementById("at-data").textContent);
   const statusEl = document.getElementById("status");
@@ -121,27 +125,27 @@
 
   // Our server creates the PayPal order, so the amount can't be tampered with in the browser
   async function createOrder() {
-    if (!amount && percent !== null) throw new Error("Enter your bill to tip a percent, or type an amount.");
-    if (!amount || Number(amount) < 1) throw new Error("Please choose a tip amount.");
-    if (MODE === "personal" && whoButtons.length && !to) throw new Error("Please choose who you'd like to tip.");
+    if (!amount && percent !== null) throw new Error(T.err_bill);
+    if (!amount || Number(amount) < 1) throw new Error(T.err_amount);
+    if (MODE === "personal" && whoButtons.length && !to) throw new Error(T.err_who);
     const res = await fetch("{% url 'api_create_order' %}", {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-CSRFToken": CSRF},
       body: JSON.stringify({amount: amount, table: TABLE, at: AT, to: to}),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not start the payment.");
+    if (!res.ok) throw new Error(data.error || T.err_start);
     return {orderId: data.orderId};
   }
 
   async function onApprove(data) {
-    statusEl.textContent = "Completing your tip…";
+    statusEl.textContent = T.completing;
     const res = await fetch("/api/orders/" + encodeURIComponent(data.orderId) + "/capture/", {
       method: "POST", headers: {"X-CSRFToken": CSRF},
     });
     const result = await res.json();
     if (res.ok) { window.location.href = result.redirect; return; }
-    statusEl.textContent = result.message || result.error || "Something went wrong.";
+    statusEl.textContent = result.message || result.error || T.err_generic;
   }
 
   let activeSession = null;
@@ -149,7 +153,7 @@
 
   const callbacks = {
     onApprove: onApprove,
-    onCancel: () => { statusEl.textContent = "Payment cancelled. You can try again."; },
+    onCancel: () => { statusEl.textContent = T.pay_cancelled; },
     onError: (err) => {
       console.error(err);
       // popup blocked or not possible: open PayPal inside the page instead
@@ -158,7 +162,7 @@
         startPayment(activeSession, "modal");
         return;
       }
-      statusEl.textContent = "PayPal error. Please try again.";
+      statusEl.textContent = T.err_paypal;
     },
   };
 
@@ -170,7 +174,7 @@
       // v6: pass the Promise from createOrder(), not the function itself
       await session.start({presentationMode: mode || "popup"}, createOrder());
     } catch (err) {
-      statusEl.textContent = err.message || "Could not start the payment.";
+      statusEl.textContent = err.message || T.err_start;
     }
   }
 
@@ -197,7 +201,7 @@
       statusEl.textContent = "";
     } catch (err) {
       console.error(err);
-      statusEl.textContent = "PayPal could not be loaded. Please refresh the page.";
+      statusEl.textContent = T.err_load;
     }
   }
 </script>

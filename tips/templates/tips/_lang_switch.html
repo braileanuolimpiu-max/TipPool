@@ -1,0 +1,3 @@
+<nav class="lang-switch no-print" aria-label="{{ t.language }}">
+  {% for l in lang_links %}<a href="{{ l.url }}" lang="{{ l.code }}" hreflang="{{ l.code }}"{% if l.current %} aria-current="true"{% endif %}>{{ l.name }}</a>{% endfor %}
+</nav>

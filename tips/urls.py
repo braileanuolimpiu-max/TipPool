@@ -4,6 +4,8 @@ from . import accounts, views
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("privacy/", views.legal_page, {"page": "privacy"}, name="privacy"),
+    path("terms/", views.legal_page, {"page": "terms"}, name="terms"),
     # business accounts
     path("signup/", accounts.signup, name="signup"),
     path("demo/", accounts.demo_start, name="demo_start"),

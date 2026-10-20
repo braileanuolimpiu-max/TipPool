@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% load static %}
+{% block site %}TipPool{% endblock %}
+{% block body %}
+<main class="error-page">
+  <a class="brand" href="/"><img class="brand-mark" src="{% static 'icons/tippool.svg' %}" alt=""><b>TipPool</b></a>
+  <div class="receipt-wrap">
+    <div class="receipt error-receipt">
+      <div class="head"><h2>{% block code %}{% endblock %}</h2><p>{% block headline %}{% endblock %}</p></div>
+      <hr>
+      {% block message %}{% endblock %}
+      <hr>
+      <div class="error-actions">{% block actions %}<a class="btn btn-primary" href="/">Go to TipPool</a>{% endblock %}</div>
+    </div>
+  </div>
+</main>
+{% endblock %}

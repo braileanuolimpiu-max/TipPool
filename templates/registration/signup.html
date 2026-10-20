@@ -27,6 +27,7 @@
         <p class="hint">At least 8 characters, not only numbers, not too common.</p></div>
       {% endif %}
       <button class="btn btn-primary btn-block">{% if finishing %}Continue{% else %}Create account{% endif %}</button>
+      <p class="hint tight center">By continuing you agree to the <a href="{% url 'terms' %}">Terms</a> and <a href="{% url 'privacy' %}">Privacy</a> notes.</p>
       {% if not finishing %}<p class="auth-switch">Already have an account? <a href="{% url 'login' %}">Sign in</a></p>{% endif %}
     </form>
   </div>

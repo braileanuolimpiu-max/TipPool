@@ -20,3 +20,5 @@ urlpatterns = [
     path("password/reset/done/", auth_views.PasswordResetCompleteView.as_view(), name="password_reset_complete"),
     path("", include("tips.urls")),
 ]
+
+handler404 = "tips.errors.not_found"

@@ -1,0 +1,8 @@
+{% extends "_error.html" %}
+{% block title %}Not allowed{% endblock %}
+{% block code %}403{% endblock %}
+{% block headline %}Staff only{% endblock %}
+{% block message %}
+<p>You don't have access to this page. If you're a manager, sign in with the account your business invited.</p>
+{% endblock %}
+{% block actions %}<a class="btn btn-primary" href="{% url 'login' %}">Sign in</a><a class="btn btn-secondary" href="/">Home</a>{% endblock %}

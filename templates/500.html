@@ -1,0 +1,8 @@
+{% extends "_error.html" %}
+{% block title %}Something went wrong{% endblock %}
+{% block code %}500{% endblock %}
+{% block headline %}Our mistake{% endblock %}
+{% block message %}
+<p>Something broke on our side. Nothing was paid twice: payouts only go out once, even when a page fails.</p>
+<p class="small muted">Wait a minute and try again. If it keeps happening, tell us what you were doing.</p>
+{% endblock %}

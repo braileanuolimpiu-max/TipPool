@@ -17,12 +17,12 @@ from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonRespo
 from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, hours as hours_from, roles as role_presets, services
+from . import ai, autoclose, guest_i18n, hours as hours_from, roles as role_presets, services
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, two_step_setup_context
@@ -137,27 +137,51 @@ def tip_page(request):
         people = sorted(members, key=lambda m: (m.staff_id not in working, m.staff.name))
     to = request.GET.get("to", "")
     style, values = location.tip_buttons
-    return render(request, "tips/tip_page.html", {
-        "location": location, "restaurant_name": location.display_name, "restaurant_named": bool(location.name),
-        "sandbox_buyer": (settings.DEMO_BUYER_EMAIL, settings.DEMO_BUYER_PASSWORD)
-                         if location.business.is_demo and settings.DEMO_BUYER_EMAIL else None,
-        "at": location.slug,
-        "tip_style": style,
-        # personal tips only, and nobody to pick: tipping can't work right now
-        "nobody": location.tip_mode == Location.TipMode.PERSONAL and not people,
-        "presets": values,
-        "default_pick": values[1] if len(values) > 1 else values[0],
-        "tip_message": location.tip_message,
-        "tip_mode": location.tip_mode,
-        "people": people,
-        "to": int(to) if to.isascii() and to.isdigit() and any(m.pk == int(to) for m in people) else None,
-        "cancelled": "cancelled" in request.GET,
-        "table": request.GET.get("table", "")[:20],
-        "paypal_client_id": checkout_config(location.business)[0],
-        "paypal_sdk_url": checkout_config(location.business)[1],
-        "currency": location.business.currency,
-        "cur": location.business.symbol,
-    })
+    lang = guest_i18n.pick(request)
+    with translation.override(lang):  # month names in the guest's language too
+        response = render(request, "tips/tip_page.html", {
+            **_guest_language(request, lang),
+            "location": location, "restaurant_name": location.display_name, "restaurant_named": bool(location.name),
+            "sandbox_buyer": (settings.DEMO_BUYER_EMAIL, settings.DEMO_BUYER_PASSWORD)
+                             if location.business.is_demo and settings.DEMO_BUYER_EMAIL else None,
+            "at": location.slug,
+            "tip_style": style,
+            # personal tips only, and nobody to pick: tipping can't work right now
+            "nobody": location.tip_mode == Location.TipMode.PERSONAL and not people,
+            "presets": values,
+            "default_pick": values[1] if len(values) > 1 else values[0],
+            "tip_message": location.tip_message,
+            "tip_mode": location.tip_mode,
+            "people": people,
+            "to": int(to) if to.isascii() and to.isdigit() and any(m.pk == int(to) for m in people) else None,
+            "cancelled": "cancelled" in request.GET,
+            "table": request.GET.get("table", "")[:20],
+            "paypal_client_id": checkout_config(location.business)[0],
+            "paypal_sdk_url": checkout_config(location.business)[1],
+            "currency": location.business.currency,
+            "cur": location.business.symbol,
+        })
+    return guest_i18n.remember(response, request, lang)
+
+
+LEGAL_UPDATED = "October 20, 2026"
+
+
+def legal_page(request, page):
+    return render(request, f"legal/{page}.html", {"page": page, "updated": LEGAL_UPDATED,
+                                                  "contact_email": settings.CONTACT_EMAIL})
+
+
+def _guest_language(request, lang):
+    """The guest page's words, plus links to the same page in each other language."""
+    links = []
+    for code, name in guest_i18n.LANGS.items():
+        query = request.GET.copy()
+        query["lang"] = code
+        query.pop("cancelled", None)
+        links.append({"code": code, "name": name, "url": "?" + query.urlencode(), "current": code == lang})
+    t = guest_i18n.strings(lang)
+    return {"lang": lang, "t": t, "lang_links": links, "js_words": {k: t[k] for k in guest_i18n.JS_KEYS}}
 
 
 def tip_thanks(request):
@@ -174,11 +198,17 @@ def tip_thanks(request):
     if request.location is None:
         raise Http404("We couldn't find that tip.")
     timezone.activate(autoclose.location_tz(request.location))
-    return render(request, "tips/tip_thanks.html", {
-        "tip": tip, "table": tip.table if tip else "", "location": request.location,
-        "cur": request.location.business.symbol,
-        "restaurant_name": request.location.display_name, "restaurant_named": bool(request.location.name),
-    })
+    lang = guest_i18n.pick(request)
+    t = guest_i18n.strings(lang)
+    cur = request.location.business.symbol
+    with translation.override(lang):
+        return render(request, "tips/tip_thanks.html", {
+            **_guest_language(request, lang),
+            "tip": tip, "table": tip.table if tip else "", "location": request.location, "cur": cur,
+            "done_text": t["done_personal"].format(name=tip.staff.name) if tip and tip.staff_id else t["done_note"],
+            "confirming_text": t["confirming"].format(amount=f"{cur}{tip.amount}") if tip else "",
+            "restaurant_name": request.location.display_name, "restaurant_named": bool(request.location.name),
+        })
 
 
 @require_POST

@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% load static %}
+{% block site %}TipPool{% endblock %}
+{% block body %}
+<div class="legal">
+  <header class="legal-top">
+    <a class="brand" href="/"><img class="brand-mark" src="{% static 'icons/tippool.svg' %}" alt=""><b>TipPool</b></a>
+    <nav aria-label="Legal"><a href="{% url 'privacy' %}"{% if page == "privacy" %} aria-current="page"{% endif %}>Privacy</a><a href="{% url 'terms' %}"{% if page == "terms" %} aria-current="page"{% endif %}>Terms</a></nav>
+  </header>
+  <main class="legal-body">
+    <p class="eyebrow">Last updated {{ updated }}</p>
+    {% block content %}{% endblock %}
+    <hr>
+    <p class="small muted">{% if contact_email %}Questions? Write to <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.{% else %}Questions? Ask the business that uses TipPool, or open an issue on the project's public repository.{% endif %}</p>
+  </main>
+</div>
+{% endblock %}

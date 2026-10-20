@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% load static %}
 {% block body %}
 {% with u=request.resolver_match.url_name %}
+<a class="skip-link" href="#content">Skip to content</a>
 <header class="topbar">
   <a class="brand" href="{% url 'dashboard' %}"><img class="brand-mark" src="{% static 'icons/tippool.svg' %}" alt=""><b>TipPool</b>{% if locations|length <= 1 %}<span>{{ restaurant_name }}</span>{% endif %}</a>
   {% if locations|length > 1 %}
@@ -61,11 +62,12 @@
   </nav>
 </div>
 <div class="menu-scrim" id="menu-scrim" hidden></div>
-<main class="main">
+<main class="main" id="content" tabindex="-1">
   {% if business.is_demo %}<div class="demo-banner no-print"><strong>Demo business.</strong> Sample data and PayPal sandbox money only. It's removed after a week. <a href="{% url 'signup' %}">Create your own account</a></div>{% endif %}
   <p class="eyebrow" aria-hidden="true"><span class="dot"></span>{{ restaurant_name }}<span class="sep">/</span>{% now "l, M j" %}</p>
   {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}
+  <footer class="app-foot no-print"><span>TipPool</span><a href="{% url 'privacy' %}">Privacy</a><a href="{% url 'terms' %}">Terms</a></footer>
 </main>
 {% endwith %}
 <script>

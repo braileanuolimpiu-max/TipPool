@@ -190,6 +190,9 @@ if not TIPPOOL_ENCRYPTION_KEY and not (DEBUG or TESTING):
                                "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"")
 # an outside scheduler calls /internal/tick/?key=CRON_SECRET every few minutes (close-outs, demo clean-up)
 CRON_SECRET = os.environ.get("CRON_SECRET", "")
+# shown on the privacy and terms pages
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "")
+CSRF_FAILURE_VIEW = "tips.errors.csrf_failure"
 # shown on demo tip pages so people trying TipPool can pay with a PayPal sandbox buyer account
 DEMO_BUYER_EMAIL = os.environ.get("DEMO_BUYER_EMAIL", "")
 DEMO_BUYER_PASSWORD = os.environ.get("DEMO_BUYER_PASSWORD", "")

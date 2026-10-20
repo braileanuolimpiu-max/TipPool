@@ -1,0 +1,8 @@
+{% extends "_error.html" %}
+{% block title %}Page not found{% endblock %}
+{% block code %}404{% endblock %}
+{% block headline %}Nothing on this ticket{% endblock %}
+{% block message %}
+<p>{% if exception %}{{ exception }}{% else %}This page doesn't exist, or the link has changed.{% endif %}</p>
+<p class="small muted">Scanned a tip code? Ask the staff for a fresh one. Lost your staff link? <a href="{% url 'email_my_link' %}">Email me my link</a>.</p>
+{% endblock %}

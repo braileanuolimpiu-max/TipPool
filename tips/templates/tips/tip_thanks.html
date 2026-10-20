@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Thank you{% endblock %}
+{% block lang %}{{ lang }}{% endblock %}
+{% block title %}{{ t.thanks }}{% endblock %}
 {% block body %}
 <div class="guest">
   {% if user.is_authenticated %}
@@ -8,23 +9,23 @@
   <div class="receipt-wrap" style="width:100%">
     <div class="receipt" style="text-align:center">
       <div class="head">
-        <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}Thank you{% endif %}</h2>
-        <p>{% if table %}Table {{ table }}, {% endif %}{% if tip %}{{ tip.created_at|date:"M j, g:i A" }}{% else %}{% now "M j, g:i A" %}{% endif %}</p>
+        <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}{{ t.thanks }}{% endif %}</h2>
+        <p>{% if table %}{{ t.table }} {{ table }}, {% endif %}{% if tip %}{{ tip.created_at|date:"M j, g:i A" }}{% else %}{% now "M j, g:i A" %}{% endif %}</p>
       </div>
       <hr>
       {% if tip and tip.status == "completed" %}
-        <span class="big-stamp">PAID</span>
-        <div class="line total" style="justify-content:space-between"><span>Tip</span><span>{{ cur }}{{ tip.amount }}</span></div>
+        <span class="big-stamp">{{ t.paid }}</span>
+        <div class="line total" style="justify-content:space-between"><span>{{ t.tip }}</span><span>{{ cur }}{{ tip.amount }}</span></div>
         <hr>
-        <p style="margin:0">Thank you. At the end of the shift it's split between everyone who worked and paid straight to their PayPal.</p>
+        <p style="margin:0">{{ done_text }}</p>
       {% elif tip %}
-        <p style="margin:8px 0">Your {{ cur }}{{ tip.amount }} tip is being confirmed by PayPal. You can close this page.</p>
+        <p style="margin:8px 0">{{ confirming_text }}</p>
       {% else %}
-        <p style="margin:8px 0">We couldn't find this tip. If you were charged, your receipt from PayPal is on its way.</p>
+        <p style="margin:8px 0">{{ t.not_found }}</p>
       {% endif %}
       <hr>
-      <a class="btn btn-secondary btn-block" href="{% url 'tip_page' %}?at={{ location.slug }}{% if table %}&table={{ table|urlencode }}{% endif %}">Leave another tip</a>
-      <p class="foot">You can close this page.</p>
+      <a class="btn btn-secondary btn-block" href="{% url 'tip_page' %}?at={{ location.slug }}{% if table %}&table={{ table|urlencode }}{% endif %}">{{ t.another }}</a>
+      <p class="foot">{{ t.close_page }}</p>
     </div>
   </div>
 </div>
