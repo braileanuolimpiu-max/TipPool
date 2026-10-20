@@ -771,7 +771,9 @@ class PlatformConfig(models.Model):
 
     @classmethod
     def load(cls):
-        return cls.objects.get_or_create(pk=1)[0]
+        from django.conf import settings
+        defaults = {"cron_secret": settings.CRON_SECRET} if settings.CRON_SECRET else {}
+        return cls.objects.get_or_create(pk=1, defaults=defaults)[0]
 
     def save(self, *args, **kwargs):
         self.pk = 1

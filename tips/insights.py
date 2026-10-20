@@ -35,7 +35,8 @@ def pace(location, now=None):
     tz = location_tz(location)
     night = Night.objects.filter(location=location, status=Night.Status.OPEN).order_by("-date").first()
     day = night.date if night else now.astimezone(tz).date()
-    since_midnight = now - _midnight(day, tz)
+    local_now = now.astimezone(tz)
+    days_after = (local_now.date() - day).days  # a shift past midnight (bars) is still that day's shift
 
     out = {"night": night, "now": Decimal("0.00"), "guests": 0, "labor_hours": None, "per_hour": None,
            "normal_now": None, "normal_guests": None, "normal_day": None, "normal_per_hour": None,
@@ -62,7 +63,8 @@ def pace(location, now=None):
                  .values_list("night_id", "h"))
     so_far, guests, totals, rates = [], [], [], []
     for n in past:
-        cutoff = _midnight(n.date, tz) + since_midnight
+        # the same time on the clock, so a daylight-saving change never shifts "normal by now" by an hour
+        cutoff = datetime.combine(n.date + timedelta(days=days_after), local_now.time(), tzinfo=tz)
         rows = by_night[n.pk]
         so_far.append(sum((a for a, _, c in rows if c <= cutoff), Decimal("0")))
         guests.append(sum(1 for _, s, c in rows if s == Tip.Source.PAYPAL and c <= cutoff))

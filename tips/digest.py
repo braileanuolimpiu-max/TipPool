@@ -82,11 +82,17 @@ def run(now=None, base_url=""):
             continue
         local = now.astimezone(location_tz(first_location))
         today = local.date()
-        due = local.hour >= SEND_FROM_HOUR and business.digest_sent_on != today and (
-            business.digest == Business.Digest.DAILY or today.weekday() == 0)
+        monday = today - timedelta(days=today.weekday())
+        if business.digest == Business.Digest.DAILY:
+            due = local.hour >= SEND_FROM_HOUR and business.digest_sent_on != today
+        else:  # the first check on or after Monday morning, so a server asleep on Monday doesn't skip the week
+            due = ((today > monday or local.hour >= SEND_FROM_HOUR)
+                   and (business.digest_sent_on is None or business.digest_sent_on < monday))
         if not due:
             continue
-        Business.objects.filter(pk=business.pk).update(digest_sent_on=today)  # once, even if a send fails
+        # claim today's digest: only one run (of several at once) gets it, even if a send fails
+        if not Business.objects.filter(pk=business.pk).exclude(digest_sent_on=today).update(digest_sent_on=today):
+            continue
         for manager in recipients(business, leads=False):
             try:
                 send(business, manager, today, base_url)

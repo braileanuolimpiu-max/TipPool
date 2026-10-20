@@ -453,6 +453,7 @@ def _add_person(request, location, name, email, role):
 
 
 BULK_MAX = 200
+LINK_EMAILS_PER_DAY = 300  # protects the site's email account (and everyone else's codes and invites)
 
 
 @manager_required
@@ -482,7 +483,7 @@ def staff_bulk(request):
         return redirect("staff_list")
     delimiter = "\t" if "\t" in lines[0] else (";" if lines[0].count(";") > lines[0].count(",") else ",")
     send_links = bool(request.POST.get("send_links"))
-    added, skipped, mailed = [], [], 0
+    added, skipped, mailed, outgoing, capped = [], [], 0, [], False
     for n, cells in enumerate(csv.reader(lines, delimiter=delimiter), 1):
         cells = [c.strip() for c in cells] + ["", "", ""]
         name, email, role_text = " ".join(cells[0].split())[:80], cells[1].lower()[:254], cells[2]
@@ -507,13 +508,25 @@ def staff_bulk(request):
         person = _add_person(request, location, name, email, role)
         added.append(person)
         if send_links and platform.email_enabled():
+            if not hit(f"link-mail:{request.business.pk}", LINK_EMAILS_PER_DAY, 24 * 3600):
+                capped = True
+                continue
+            from django.core.mail import EmailMessage
             link = request.build_absolute_uri(reverse("my_tips", args=[person.access_token]))
-            mailed += send_mail(f"Your tips at {location.display_name}",
-                                f"Hi {person.name},\n\n{location.display_name} pays your share of the tips with "
-                                f"TipPool. This is your private link: your tips, how each share was worked out, "
-                                f"and clocking in and out.\n\n{link}\n\nKeep it to yourself, and add it to "
-                                "your phone's home screen.\n", settings.DEFAULT_FROM_EMAIL, [person.paypal_email],
-                                fail_silently=True)
+            outgoing.append(EmailMessage(
+                f"Your tips at {location.display_name}",
+                f"Hi {person.name},\n\n{location.display_name} pays your share of the tips with TipPool. This is your "
+                f"private link: your tips, how each share was worked out, and clocking in and out.\n\n{link}\n\n"
+                "Keep it to yourself, and add it to your phone's home screen.\n", to=[person.paypal_email]))
+    if outgoing:  # one connection for all of them
+        from django.core.mail import get_connection
+        try:
+            mailed = get_connection(fail_silently=True).send_messages(outgoing) or 0
+        except Exception:
+            mailed = 0
+    if capped:
+        messages.warning(request, f"Up to {LINK_EMAILS_PER_DAY} private links can be emailed per day. The rest were "
+                                  "added; send their links from the Team page later.")
     if added:
         note = f"Added {len(added)} {'person' if len(added) == 1 else 'people'} to the team."
         if send_links and platform.email_enabled():
@@ -1083,7 +1096,7 @@ def settings_page(request):
             Change.log(request, f"Renamed the business from {request.business.name} to {business_name}")
             request.business.name = business_name
             request.business.save(update_fields=["name"])
-        new_name = request.POST.get("name", "").strip()[:80]
+        new_name = " ".join(request.POST.get("name", "").split())[:80]
         if new_name and Location.objects.filter(business=request.business, name__iexact=new_name, archived=False) \
                 .exclude(pk=restaurant.pk).exists():
             messages.error(request, f"Another location is already called {new_name}. Pick a name that tells them apart.")
@@ -1270,15 +1283,20 @@ def messages_page(request):
     business = request.business
     if request.method == "POST":
         if request.POST.get("alert"):
-            alert = get_object_or_404(Alert, pk=_id(request.POST["alert"]), business=business)
+            alert = get_object_or_404(Alert.objects.filter(Q(location__in=request.allowed_locations) |
+                                                           Q(location__isnull=True)),
+                                      pk=_id(request.POST["alert"]), business=business)
             alert.resolved_at = timezone.now()
             alert.resolved_by = request.user.get_full_name() or request.user.get_username()
             alert.save(update_fields=["resolved_at", "resolved_by"])
             Change.log(request, f"Marked as handled: {alert.text[:120]}")
             return redirect("messages_page")
-        msg = get_object_or_404(Message.objects.filter(Q(location__in=request.allowed_locations) |
-                                                       Q(staff__memberships__location__in=request.allowed_locations))
-                                .distinct(), pk=_id(request.POST.get("message")), staff__business=business)
+        # a message about a shift belongs to that shift's location; a payout-address request to the person,
+        # so any manager of a location they work at may answer it
+        msg = get_object_or_404(Message.objects.filter(
+            Q(location__in=request.allowed_locations) |
+            Q(kind=Message.Kind.PAYOUT_CHANGE, staff__memberships__location__in=request.allowed_locations))
+            .distinct(), pk=_id(request.POST.get("message")), staff__business=business)
         if msg.kind == Message.Kind.PAYOUT_CHANGE and request.user.manager.is_lead:
             messages.error(request, "Only a manager can approve where someone is paid.")
             return redirect("messages_page")
@@ -1372,7 +1390,7 @@ def location_add(request):
     if not request.user.manager.all_access:
         messages.error(request, "Only the owner, or a manager of every location, can add locations.")
         return redirect("settings")
-    name = request.POST.get("name", "").strip()[:80]
+    name = " ".join(request.POST.get("name", "").split())[:80]
     if not name:
         messages.error(request, "Give the new location a name.")
         return redirect("settings")

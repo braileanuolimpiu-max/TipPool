@@ -429,6 +429,7 @@ def pay_night(night, allow_unconfirmed=False, by_owner=False):
                          "waits for the owner's OK. They've been told.")
     with transaction.atomic():
         night = Night.objects.select_for_update().get(pk=night.pk)
+        check_not_frozen(business)  # again, now that the shift is locked: a freeze a second ago still counts
         if night.status != Night.Status.REVIEW:
             raise TipPoolError("Only a reviewed split can be paid.")
         shares = [s for s in night.shares.select_related("staff") if s.amount > 0]

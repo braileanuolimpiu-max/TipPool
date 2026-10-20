@@ -43,12 +43,15 @@ class PayPalClient:
             return self._token
         if not self.client_id or not self.client_secret:
             raise PayPalError("PayPal isn't connected yet. Connect it in Settings (or Platform settings for the demo).")
-        response = requests.post(
-            f"{self.base_url}/v1/oauth2/token",
-            auth=(self.client_id, self.client_secret),
-            data={"grant_type": "client_credentials"},
-            timeout=30,
-        )
+        try:
+            response = requests.post(
+                f"{self.base_url}/v1/oauth2/token",
+                auth=(self.client_id, self.client_secret),
+                data={"grant_type": "client_credentials"},
+                timeout=30,
+            )
+        except requests.RequestException as exc:
+            raise PayPalError(f"Couldn't reach PayPal ({exc.__class__.__name__})") from exc
         if not response.ok:
             raise PayPalError("Could not log in to PayPal", response.status_code,
                               response.headers.get("PayPal-Debug-Id"))
@@ -243,10 +246,13 @@ def webhook_id_for(business):
 
 def detect_mode(client_id, secret):
     """True for real-money (live) keys, False for test (sandbox) keys, None when PayPal accepts neither."""
+    unreachable = 0
     for live, base in ((True, LIVE_API), (False, SANDBOX_API)):
         try:
             PayPalClient(client_id, secret, base).access_token()
             return live
-        except PayPalError:
-            continue
+        except PayPalError as exc:
+            unreachable += exc.status is None
+    if unreachable == 2:  # PayPal never answered: that says nothing about the codes
+        raise PayPalError("Couldn't reach PayPal")
     return None

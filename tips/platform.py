@@ -99,9 +99,11 @@ def demo_staff_email(name):
     return (config().demo_staff or {}).get(name) or os.environ.get(f"{name.upper()}_EMAIL", "")
 
 
-def cron_secret():
-    cfg = config()
-    return cfg.cron_secret if cfg.pk else settings.CRON_SECRET
+def cron_secrets():
+    """The scheduler keys that work: the one shown on Platform settings and, so an existing cron job never
+    breaks, the one from the environment."""
+    keys = [config().cron_secret if config().pk else "", settings.CRON_SECRET]
+    return [k for k in keys if k]
 
 
 def contact_email():
@@ -115,4 +117,30 @@ def is_operator(user):
 
 def has_operator():
     from django.contrib.auth import get_user_model
-    return get_user_model().objects.filter(is_superuser=True).exists()
+    return get_user_model().objects.filter(is_superuser=True, is_active=True).exists()
+
+
+def setup_code():
+    """A code only someone who can read the server's log (the person who deployed TipPool) knows.
+    Needed to take over running a site that already has businesses but nobody running it."""
+    import hashlib
+    import hmac
+    digest = hmac.new(settings.SECRET_KEY.encode(), b"tippool-operator-claim", hashlib.sha256).hexdigest()
+    return digest[:10].upper()
+
+
+def make_first_operator(user, business):
+    """The first real business on a brand-new site runs it. Locked, so two sign-ups at once can't both win."""
+    from django.db import transaction
+
+    from .models import Business, PlatformConfig
+    with transaction.atomic():
+        PlatformConfig.objects.get_or_create(pk=1)
+        PlatformConfig.objects.select_for_update().get(pk=1)
+        # any other real business with people in it means the site is already in use
+        others = Business.objects.filter(is_demo=False, managers__isnull=False).exclude(pk=business.pk).exists()
+        if has_operator() or others:
+            return False
+        user.is_superuser = user.is_staff = True
+        user.save(update_fields=["is_superuser", "is_staff"])
+        return True

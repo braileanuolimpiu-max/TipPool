@@ -26,11 +26,19 @@ def _operator_only(request):
     profile = getattr(request.user, "manager", None)
     can_claim = (not platform.has_operator() and profile is not None and profile.is_owner
                  and not profile.business.is_demo)
+    if can_claim:
+        import logging
+        logging.getLogger("tips.operator").warning("TipPool setup code (to take over running this site): %s",
+                                                   platform.setup_code())
     return render(request, "tips/platform_claim.html", {"can_claim": can_claim}, status=200 if can_claim else 403)
 
 
+def _who(request):
+    return request.user.get_full_name() or request.user.get_username()
+
+
 def _done(request, text, section):
-    Change.log(request, f"Platform settings: {text}")
+    Change.log(_who(request), f"Platform settings: {text}")  # site-wide: not in any business's history
     messages.success(request, text[0].upper() + text[1:] + ".")
     return redirect(f"{reverse('platform_settings')}#{section}")
 
@@ -61,14 +69,26 @@ def platform_settings(request):
 @require_POST
 def claim_platform(request):
     """On a fresh site with no operator yet, the owner of a real business can take the role."""
-    if not request.user.is_authenticated or platform.has_operator():
+    import hmac
+
+    from django.db import transaction
+    if not request.user.is_authenticated:
         return redirect("dashboard")
     profile = getattr(request.user, "manager", None)
     if profile is None or not profile.is_owner or profile.business.is_demo:
         return redirect("dashboard")
-    request.user.is_superuser = request.user.is_staff = True
-    request.user.save(update_fields=["is_superuser", "is_staff"])
-    Change.log(request, "Became the operator of this TipPool site")
+    typed = request.POST.get("code", "").strip().upper()
+    if not hmac.compare_digest(typed, platform.setup_code()):
+        messages.error(request, "That setup code isn't right. It's in your server's log (on Render: your service → Logs).")
+        return redirect("platform_settings")
+    with transaction.atomic():
+        PlatformConfig.objects.get_or_create(pk=1)
+        PlatformConfig.objects.select_for_update().get(pk=1)
+        if platform.has_operator():
+            return redirect("dashboard")
+        request.user.is_superuser = request.user.is_staff = True
+        request.user.save(update_fields=["is_superuser", "is_staff"])
+    Change.log(_who(request), "Became the operator of this TipPool site")
     messages.success(request, "You run this TipPool site now. Set up email and the rest below.")
     return redirect("platform_settings")
 
@@ -97,14 +117,20 @@ def _save_email(request, cfg):
     user = request.POST.get("email_user", "").strip()[:200]
     password = request.POST.get("email_password", "").replace(" ", "") if provider == "gmail" else \
         request.POST.get("email_password", "").strip()
+    if not password and (host != cfg.email_host or user != cfg.email_user):
+        messages.error(request, "You changed the server or the address, so type the password again.")
+        return redirect(f"{reverse('platform_settings')}#email")
     password = password or cfg.email_password
     if not (host and user and password):
         messages.error(request, "Fill in the email address and its password (and the server for another service).")
         return redirect(f"{reverse('platform_settings')}#email")
     try:  # log in once, so a typo shows up now instead of when someone needs a code
-        connection = smtplib.SMTP_SSL(host, port, timeout=15) if port == 465 else smtplib.SMTP(host, port, timeout=15)
+        import ssl
+        context = ssl.create_default_context()  # the server's certificate is checked
+        connection = (smtplib.SMTP_SSL(host, port, timeout=15, context=context) if port == 465
+                      else smtplib.SMTP(host, port, timeout=15))
         if port != 465:
-            connection.starttls()
+            connection.starttls(context=context)
         connection.login(user, password)
         connection.quit()
     except smtplib.SMTPAuthenticationError:
@@ -160,10 +186,14 @@ def _save_ai(request, cfg):
 
 # --- TipPool's own PayPal ----------------------------------------------------------------------------
 def _save_paypal(request, cfg):
-    from .paypal import LIVE_API, SANDBOX_API, PayPalClient, detect_mode
+    from .paypal import LIVE_API, SANDBOX_API, PayPalClient, PayPalError, detect_mode
     client_id = request.POST.get("paypal_client_id", "").strip()
     secret = request.POST.get("paypal_secret", "").strip() or (cfg.paypal_secret if client_id == cfg.paypal_client_id else "")
-    live = detect_mode(client_id, secret) if client_id and secret else None
+    try:
+        live = detect_mode(client_id, secret) if client_id and secret else None
+    except PayPalError:
+        messages.error(request, "Couldn't reach PayPal just now. Nothing was changed: try again in a minute.")
+        return redirect(f"{reverse('platform_settings')}#paypal")
     if live is None:
         messages.error(request, "PayPal didn't accept those two codes. Copy the Client ID, then the Secret, again.")
         return redirect(f"{reverse('platform_settings')}#paypal")

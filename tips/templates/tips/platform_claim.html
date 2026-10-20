@@ -6,7 +6,9 @@
 <div class="panel panel-body stack narrow-panel">
 {% if can_claim %}
   <p style="margin:0"><strong>Nobody runs this TipPool site yet.</strong> If you set it up (you deployed it, or you're its administrator), take this role to connect email, AI and the rest from here.</p>
-  <form method="post" action="{% url 'claim_platform' %}" data-confirm="Become the person who runs this TipPool site? You'll manage email, AI and payments for every business on it." data-confirm-yes="Yes, I run this site">{% csrf_token %}
+  <p class="small muted" style="margin:0">To prove it, type the setup code from the server's log. On Render: open your service, then <strong>Logs</strong>, and look for "TipPool setup code". It was written there just now.</p>
+  <form method="post" action="{% url 'claim_platform' %}" class="inline-form">{% csrf_token %}
+    <div><label for="code">Setup code</label><input type="text" id="code" name="code" required autocomplete="off" spellcheck="false" maxlength="12" class="code-input" style="max-width:260px"></div>
     <button class="btn btn-primary">I run this site</button></form>
 {% else %}
   <p style="margin:0">Only the person who runs this TipPool site can open Platform settings. Your own business's settings are in <a href="{% url 'settings' %}">Settings</a>.</p>

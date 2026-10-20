@@ -119,7 +119,7 @@ class WrongPasswordPauseTests(TestCase):
         self.assertIn("kept trying", mail.outbox[-1].subject)
         self.assertNotEqual(self.login("right-pass-123").status_code, 302)  # paused, even with the right one
         from django.core.cache import cache
-        cache.delete("login-pause:owner@example.com")  # a minute later
+        cache.delete(f"login-pause:user-{self.user.pk}")  # a minute later
         self.assertEqual(self.login("right-pass-123").status_code, 302)
 
     def test_a_right_password_resets_the_count(self):

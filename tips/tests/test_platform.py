@@ -29,12 +29,15 @@ class OperatorTests(TestCase):
         owner = make_manager("owner")
         self.client.force_login(owner)
         self.assertContains(self.client.get(reverse("platform_settings")), "I run this site")
-        self.client.post(reverse("claim_platform"))
+        self.client.post(reverse("claim_platform"), {"code": "WRONG"})
+        owner.refresh_from_db()
+        self.assertFalse(owner.is_superuser)  # the setup code from the server's log is needed
+        self.client.post(reverse("claim_platform"), {"code": platform.setup_code().lower()})
         owner.refresh_from_db()
         self.assertTrue(owner.is_superuser)
         other = make_manager("other", owner.manager.business, owner=False)
         self.client.force_login(other)
-        self.client.post(reverse("claim_platform"))
+        self.client.post(reverse("claim_platform"), {"code": platform.setup_code()})
         other.refresh_from_db()
         self.assertFalse(other.is_superuser)
 
@@ -109,3 +112,74 @@ class SettingsFromTheWebsiteTests(TestCase):
         self.client.force_login(helper)
         self.client.post(self.url, {"section": "contact", "contact_email": "evil@example.com"})
         self.assertNotEqual(platform.contact_email(), "evil@example.com")
+
+
+class ReviewFixTests(TestCase):
+    def test_a_stranger_never_takes_over_a_site_already_in_use(self):
+        make_manager("existing")  # a real business already here, nobody running the site
+        self.client.post(reverse("signup"), {"business": "Stranger Co", "business_type": "cafe", "timezone": "UTC",
+                                             "name": "Eve", "email": "eve@example.com", "password": "Strong-pass-2026"})
+        self.assertFalse(get_user_model().objects.get(email="eve@example.com").is_superuser)
+
+    @override_settings(CRON_SECRET="old-key")
+    def test_the_environments_scheduler_key_keeps_working(self):
+        cfg = PlatformConfig.load()
+        self.assertEqual(cfg.cron_secret, "old-key")
+        cfg.cron_secret = "new-key"
+        cfg.save()
+        for key in ("old-key", "new-key"):
+            self.assertEqual(self.client.get(reverse("cron_tick") + f"?key={key}").status_code, 200, key)
+
+    def test_open_redirect_on_freeze_is_closed(self):
+        owner = make_manager("owner")
+        self.client.force_login(owner)
+        res = self.client.post(reverse("freeze_payouts"), {"frozen": "0", "next": "//evil.example/x"})
+        self.assertNotIn("evil", res.url)
+
+    def test_paypal_unreachable_is_a_message_not_a_crash(self):
+        import requests
+        owner = make_manager("owner")
+        self.client.force_login(owner)
+        with mock.patch("tips.paypal.requests.post", side_effect=requests.ConnectionError("down")):
+            page = self.client.post(reverse("payment_settings"), {"paypal_client_id": "CID", "paypal_secret": "S",
+                                                                  "currency": "USD", "fee_mode": "business"}, follow=True)
+        self.assertContains(page, "be reached just now")
+
+    def test_manager_with_only_archived_locations_sees_why(self):
+        from tips.models import Location
+        owner = make_manager("owner")
+        business = owner.manager.business
+        uptown = Location.objects.create(business=business, name="Uptown", slug="uptown2", archived=True)
+        limited = make_manager("limited", business, owner=False)
+        limited.manager.locations.set([uptown])
+        self.client.force_login(limited)
+        self.assertContains(self.client.get(reverse("dashboard")), "No open locations", status_code=403)
+
+
+class LimitedManagerMessageTests(TestCase):
+    def setUp(self):
+        from tips.models import Alert, Location, Message, Night
+        from tips.tests.helpers import hire
+        owner = make_manager("owner")
+        self.business = owner.manager.business
+        self.main = Location.default()
+        self.uptown = Location.objects.create(business=self.business, name="Uptown", slug="uptown")
+        self.alert = Alert.objects.create(business=self.business, location=self.main, text="Main problem")
+        ann = hire("Ann", "server", self.main)
+        from tips.models import Membership
+        Membership.objects.create(staff=ann, location=self.uptown, default_role="server")
+        self.night = Night.objects.create(location=self.main, status=Night.Status.REVIEW, hold="Ann flagged a problem.")
+        self.flag = Message.objects.create(staff=ann, location=self.main, night=self.night, text="hours wrong")
+        limited = make_manager("uptown-mgr", self.business, owner=False)
+        limited.manager.locations.set([self.uptown])
+        self.client.force_login(limited)
+
+    def test_cannot_dismiss_another_locations_alert(self):
+        self.assertEqual(self.client.post(reverse("messages_page"), {"alert": self.alert.pk}).status_code, 404)
+        self.alert.refresh_from_db()
+        self.assertIsNone(self.alert.resolved_at)
+
+    def test_cannot_answer_another_locations_flag(self):
+        self.assertEqual(self.client.post(reverse("messages_page"), {"message": self.flag.pk, "reply": "ok"}).status_code, 404)
+        self.night.refresh_from_db()
+        self.assertTrue(self.night.hold)

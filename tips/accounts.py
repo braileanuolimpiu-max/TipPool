@@ -37,8 +37,10 @@ def manager_required(view):
     def wrapper(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect(f"{reverse('login')}?next={request.path}")
-        if getattr(request, "business", None) is None or request.location is None:
+        if getattr(request, "business", None) is None:
             return redirect("signup")
+        if request.location is None:  # e.g. every location they run was archived
+            return render(request, "registration/no_locations.html", status=403)
         return view(request, *args, **kwargs)
     return wrapper
 
@@ -86,12 +88,13 @@ class EmailBackend(ModelBackend):
             if request is not None:
                 request.login_limited = "network"
             return None
+        user = (User.objects.filter(email__iexact=username.strip()).order_by("pk").first()
+                or User.objects.filter(username__iexact=username.strip()).first())
+        name = f"user-{user.pk}" if user is not None else name  # email or username: one account, one count
         if limits_on and cache.get(f"login-pause:{name}"):
             if request is not None:
                 request.login_limited = "pause"
             return None
-        user = (User.objects.filter(email__iexact=username.strip()).order_by("pk").first()
-                or User.objects.filter(username__iexact=username.strip()).first())
         if user and user.check_password(password) and self.user_can_authenticate(user):
             cache.delete(f"login-streak:{name}")  # only wrong tries *in a row* count
             return user
@@ -112,8 +115,8 @@ class EmailBackend(ModelBackend):
             cache.delete(streak_key)
             if request is not None:
                 request.login_limited = "pause"
-            if user is not None and user.email:
-                _warn_owner(user, ip)
+            if user is not None and user.email and cache.add(f"login-warned:{user.pk}", 1, 3600):
+                _warn_owner(user, ip)  # at most once an hour, so nobody can flood an inbox with these
         return None
 
 
@@ -178,13 +181,11 @@ def signup(request):
         if not errors:
             with transaction.atomic():
                 user = request.user if finishing else _new_user(data["email"], password, data["name"])
-                business = Business.objects.create(name=data["business"][:80])
+                business = Business.objects.create(name=" ".join(data["business"].split())[:80])
                 Manager.objects.create(user=user, business=business, is_owner=True)
-                from .platform import has_operator
-                if not has_operator():
-                    user.is_superuser = user.is_staff = True
-                    user.save(update_fields=["is_superuser", "is_staff"])
-                location_name = data["location"] or data["business"]
+                from .platform import make_first_operator
+                make_first_operator(user, business)
+                location_name = " ".join((data["location"] or data["business"]).split())
                 location = Location.objects.create(
                     business=business, name=location_name[:80], slug=Location.new_slug(location_name),
                     business_type=data["business_type"], timezone=data["timezone"],
@@ -379,7 +380,13 @@ def payment_settings(request):
     connected_now = False
     if client_id and (secret or client_id != business.paypal_client_id):
         secret = secret or business.paypal_secret
-        live = detect_mode(client_id, secret)  # real-money keys or test keys: PayPal tells us
+        try:
+            live = detect_mode(client_id, secret)  # real-money keys or test keys: PayPal tells us
+        except PayPalError:
+            business.save()
+            messages.error(request, "Your other payment settings were saved, but PayPal couldn't be reached just now. "
+                                    "Try connecting again in a minute.")
+            return redirect(f"{reverse('settings')}#payments")
         if live is None:
             business.save()  # everything else in the form is kept
             messages.error(request, "Your other payment settings were saved, but PayPal didn't accept those two codes. "
@@ -560,8 +567,8 @@ def cron_tick(request):
     from . import autoclose, demo, digest, watch
     from . import platform
     from .models import PlatformConfig
-    secret = platform.cron_secret()
-    if not secret or not hmac.compare_digest(request.GET.get("key", ""), secret):
+    given = request.GET.get("key", "")
+    if not any(hmac.compare_digest(given, key) for key in platform.cron_secrets()):
         raise Http404()
     PlatformConfig.objects.filter(pk=1).update(last_tick_at=timezone.now())  # shown on Platform settings
     done = autoclose.run()
@@ -615,7 +622,10 @@ def freeze_payouts(request):
     Change.log(request, text)
     email_managers(business, "Payouts frozen" if business.payouts_frozen else "Payouts are back on", text)
     messages.warning(request, text) if business.payouts_frozen else messages.success(request, text)
-    return redirect(request.POST.get("next") if request.POST.get("next", "").startswith("/") else f"{reverse('settings')}#owner")
+    from django.utils.http import url_has_allowed_host_and_scheme
+    nxt = request.POST.get("next", "")
+    safe = nxt.startswith("/") and url_has_allowed_host_and_scheme(nxt, {request.get_host()}, request.is_secure())
+    return redirect(nxt if safe else f"{reverse('settings')}#owner")
 
 
 @require_POST
