@@ -84,7 +84,7 @@
     const r = select.getBoundingClientRect();
     const below = window.innerHeight - r.bottom - 12, above = r.top - 12;
     list.style.minWidth = `${r.width}px`;
-    list.style.maxWidth = `${Math.max(r.width, Math.min(420, window.innerWidth - 16))}px`;
+    list.style.maxWidth = `${Math.max(Math.min(r.width, window.innerWidth - 16), Math.min(480, window.innerWidth - 16))}px`;
     const upward = below < 220 && above > below;
     list.style.maxHeight = `${Math.min(320, upward ? above : below)}px`;
     if (upward) list.style.bottom = `${window.innerHeight - r.top + 4}px`;
@@ -162,6 +162,18 @@
       typeAhead(e.key);
     }
   }, true);
+
+  // a box too narrow for its choice cuts it short with "…": hovering shows the whole text
+  const showFull = (s) => {
+    if (!(s instanceof HTMLSelectElement)) return;
+    const text = s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : "";
+    if (s.scrollWidth > s.clientWidth + 1 || text.length > 28) s.title = text;
+    else s.removeAttribute("title");
+  };
+  document.addEventListener("change", (e) => showFull(e.target), true);
+  const titleAll = () => document.querySelectorAll("select").forEach(showFull);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", titleAll);
+  else titleAll();
 
   window.addEventListener("resize", () => close());
   window.addEventListener("scroll", (e) => { if (open && !open.list.contains(e.target)) close(); }, true);

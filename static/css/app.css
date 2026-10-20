@@ -1140,8 +1140,9 @@ body.menu-open .tour { display: none; }
   box-shadow: 0 16px 34px -14px rgba(0,0,0,.45), 0 2px 0 var(--hair-soft); font-family: var(--body);
   animation: pick-in .12s ease-out; }
 @keyframes pick-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-.pick-opt { position: relative; padding: 8px 14px 8px 32px; border-radius: 3px; cursor: pointer; line-height: 1.35; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
+/* the list can be wider than its box; an option longer than the list wraps instead of being cut off */
+.pick-opt { position: relative; padding: 8px 14px 8px 32px; border-radius: 3px; cursor: pointer; line-height: 1.35;
+  white-space: normal; overflow-wrap: anywhere; }
 .pick-opt.active { background: var(--marker-soft); }
 .pick-opt[aria-selected="true"] { font-weight: 700; }
 .pick-opt[aria-selected="true"]::before { content: ""; position: absolute; left: 11px; top: 50%; width: 12px; height: 12px; margin-top: -6px;
@@ -1149,3 +1150,7 @@ body.menu-open .tour { display: none; }
 .pick-opt[aria-disabled="true"] { opacity: .45; cursor: default; }
 .pick-group { padding: 8px 14px 4px; font: 700 .7rem var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--graphite); }
 select.pick-open { border-color: var(--ink); box-shadow: 0 0 0 3px var(--marker); }
+/* compact dropdowns keep their size whatever their longest option; the open list can be wider */
+.role-pick select { max-width: 190px; }
+.role-preset select { max-width: 230px; }
+.page-head .report-filter select, .activity-filter select { max-width: 240px; }
