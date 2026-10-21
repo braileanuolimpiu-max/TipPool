@@ -67,6 +67,7 @@ def platform_settings(request):
         "cfg": cfg, "providers": PlatformConfig.EmailProvider.choices, "models": platform.CLAUDE_MODELS,
         "email_on": platform.email_settings() is not None, "ai_on": platform.ai_mode() == "claude",
         "paypal_on": bool(cfg.paypal_client_id), "tick_url": tick, "minutes_since_tick": minutes_since_tick,
+        "up_url": request.build_absolute_uri("/up/"),
         "demo_staff": [(name, typed.get(f"staff_{name}", (cfg.demo_staff or {}).get(name, ""))) for name in DEMO_STAFF],
         "form": form,
         "https": request.is_secure(),

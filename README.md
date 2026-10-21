@@ -174,7 +174,7 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 314 tests and a lint check, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 315 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -224,9 +224,10 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
    - **TipPool's PayPal:** two codes from PayPal, for the demo and for businesses not connected yet.
      PayPal's update address (webhook) is registered automatically.
    - **The demo:** a test buyer login and the demo team's test payout emails.
-   - **Scheduler:** copy the ready-made address into a free [cron-job.org](https://cron-job.org) job every
-     10 minutes. It runs automatic close-outs, smart alerts and summaries, and keeps the free server awake.
-     The page shows when it last checked in.
+   - **Scheduler:** two free [cron-job.org](https://cron-job.org) jobs with the ready-made addresses: the work
+     (automatic close-outs, smart alerts, summaries) every 30 minutes, and a keep-awake ping (`/up/`, which
+     never touches the database) every 10 minutes. The free server stays awake while the free database can
+     still sleep and stay within its monthly hours. The page shows when it last checked in.
 4. Each business connects its own PayPal in **Settings → Payments** (4 plain steps, no technical fields).
 
 `.env` still works for local development (see `.env.example`); anything saved on the website comes first.
@@ -237,7 +238,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-314 tests cover:
+315 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes

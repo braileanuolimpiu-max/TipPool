@@ -250,3 +250,10 @@ class LiveUpdatesTests(CleanCache):
         self.client.force_login(make_manager("owner"))
         self.client.get(reverse("messages_page") + "?at=uptown")
         self.assertEqual(self.client.get(reverse("dashboard")).context["location"], uptown)
+
+
+class UpTests(CleanCache):
+    def test_up_never_touches_the_database(self):
+        with self.assertNumQueries(0):
+            res = self.client.get("/up/")
+        self.assertEqual((res.status_code, res.content), (200, b"ok"))

@@ -10,7 +10,7 @@
   <a href="#email" class="{% if email_on %}ok{% endif %}"><b>Email</b><span>{% if email_on %}Connected{% else %}Not connected{% endif %}</span></a>
   <a href="#ai" class="{% if ai_on %}ok{% endif %}"><b>AI (Claude)</b><span>{% if ai_on %}On{% else %}Built-in assistant{% endif %}</span></a>
   <a href="#paypal" class="{% if paypal_on %}ok{% endif %}"><b>TipPool's PayPal</b><span>{% if paypal_on %}{% if cfg.paypal_live %}Real money{% else %}Test money{% endif %}{% else %}Not connected{% endif %}</span></a>
-  <a href="#scheduler" class="{% if minutes_since_tick is not None and minutes_since_tick < 30 %}ok{% endif %}"><b>Scheduler</b><span>{% if minutes_since_tick is None %}Never checked in{% elif minutes_since_tick < 2 %}Checked in just now{% else %}Last check-in {{ minutes_since_tick }} min ago{% endif %}</span></a>
+  <a href="#scheduler" class="{% if minutes_since_tick is not None and minutes_since_tick < 45 %}ok{% endif %}"><b>Scheduler</b><span>{% if minutes_since_tick is None %}Never checked in{% elif minutes_since_tick < 2 %}Checked in just now{% else %}Last check-in {{ minutes_since_tick }} min ago{% endif %}</span></a>
 </section>
 
 <div class="stack" style="gap:18px">
@@ -108,18 +108,25 @@
 
 <section class="panel setting" id="scheduler">
   <div class="setting-intro"><span class="setting-no">05</span><h2>Scheduler</h2>
-    <p>Every few minutes, a free outside service opens this address. That runs automatic close-outs, smart alerts and summary emails, and keeps a free server awake.</p>
-    {% if minutes_since_tick is not None and minutes_since_tick < 30 %}<span class="pill ok">Working</span>{% else %}<span class="pill wait">Not running yet</span>{% endif %}</div>
+    <p>A free outside service opens two addresses on a timer: one runs automatic close-outs, smart alerts and summary emails; the other keeps a free server awake, so nobody waits for it to start.</p>
+    {% if minutes_since_tick is not None and minutes_since_tick < 45 %}<span class="pill ok">Working</span>{% else %}<span class="pill wait">Not running yet</span>{% endif %}</div>
   <div class="setting-body stack">
     <ol class="guide-steps">
       <li><span>Make a free account on <a href="https://cron-job.org" target="_blank" rel="noopener">cron-job.org</a>.</span></li>
-      <li><span>Click <strong>Create cronjob</strong>, paste the address below, choose <strong>every 10 minutes</strong>, and save.</span></li>
-      <li><span>Come back here: within 10 minutes it says "Checked in".</span></li>
+      <li><span><strong>Create cronjob</strong> with the first address below, <strong>every 30 minutes</strong>.</span></li>
+      <li><span><strong>Create cronjob</strong> again with the second address, <strong>every 10 minutes</strong>.</span></li>
+      <li><span>Come back here: within 30 minutes it says "Checked in".</span></li>
     </ol>
+    <p class="small muted" style="margin:0"><strong>1. The work</strong> (every 30 minutes)</p>
     <div class="link-tools"><input class="copy-link" type="text" readonly value="{{ tick_url }}" aria-label="Scheduler address" onclick="this.select()">
       <button type="button" class="icon-btn" data-copy aria-label="Copy the address" title="Copy">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
-    <p class="hint tight">Keep it private: it contains a key. {% if not https %}This only works on your live site (https), not on your computer.{% endif %}</p>
+    <p class="hint tight">Keep it private: it contains a key.</p>
+    <p class="small muted" style="margin:0"><strong>2. Keep awake</strong> (every 10 minutes)</p>
+    <div class="link-tools"><input class="copy-link" type="text" readonly value="{{ up_url }}" aria-label="Keep-awake address" onclick="this.select()">
+      <button type="button" class="icon-btn" data-copy aria-label="Copy the address" title="Copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+    <p class="hint tight">It never touches the database, so the free database can still sleep and stay within its monthly hours. {% if not https %}Both only work on your live site (https), not on your computer.{% endif %}</p>
     <form method="post" data-confirm="Make a new address? The old one stops working, so paste the new one into cron-job.org." data-confirm-yes="Make a new address">{% csrf_token %}
       <input type="hidden" name="section" value="cron_new"><button class="btn btn-quiet small">Make a new address</button></form>
   </div>

@@ -62,6 +62,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'tips.middleware.UpMiddleware',  # first: /up/ never touches the database
     'django.middleware.security.SecurityMiddleware',
     'tips.middleware.SizeLimitMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # serves the CSS and icons in production
@@ -103,7 +104,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Payouts rely on row locks (select_for_update), which SQLite doesn't really have.
 if os.environ.get("DATABASE_URL"):
     import dj_database_url
-    DATABASES = {"default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=60,
+    DATABASES = {"default": dj_database_url.parse(os.environ["DATABASE_URL"], conn_max_age=0,
                                                   ssl_require=not DEBUG and os.environ["DATABASE_URL"].startswith("postgres"))}
 else:
     if not (DEBUG or TESTING):

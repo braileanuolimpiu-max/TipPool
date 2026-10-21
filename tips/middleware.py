@@ -47,6 +47,20 @@ def public_location(request):
 MAX_REQUEST_BYTES = 12 * 1024 * 1024  # the largest upload is an 8 MB schedule photo
 
 
+class UpMiddleware:
+    """/up/ answers at once, without the database: Render's health check and the keep-awake ping use it,
+    so the free database can still sleep between real visits."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path == "/up/":
+            from django.http import HttpResponse
+            return HttpResponse("ok", content_type="text/plain")
+        return self.get_response(request)
+
+
 class SizeLimitMiddleware:
     """Refuse a request body bigger than any form needs, before it's read or saved to disk."""
 
