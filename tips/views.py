@@ -1096,18 +1096,8 @@ def payout_action(request, pk):
             if not cache.add(f"payout-remind:{item.pk}", 1, 86400):
                 messages.info(request, f"{staff.name} was already reminded today.")
                 return redirect("payout_status", night.pk)
-            link = request.build_absolute_uri(reverse("my_tips", args=[staff.access_token]))
             from . import emails
-            emails.send(staff.paypal_email, f"{request.business.symbol}{item.share.amount} in tips is waiting for you",
-                        eyebrow=night.location.display_name,
-                        heading=f"{request.business.symbol}{item.share.amount} is waiting for you",
-                        greeting=f"Hi {staff.name},",
-                        paragraphs=[f"Your tips for the {night} were sent with PayPal, but nobody has accepted them "
-                                    "yet. Open PayPal (or sign up with that email) to accept them."],
-                        details=[("Sent to", item.receiver), ("Shift", str(night)),
-                                 ("Amount", f"{request.business.symbol}{item.share.amount}")],
-                        button=("Open PayPal", "https://www.paypal.com/"),
-                        links=[("Wrong address? Change it on your tips page", link)])
+            emails.payout_reminder(item, request.build_absolute_uri(reverse("my_tips", args=[staff.access_token])))
             if platform.email_enabled():
                 messages.success(request, f"Reminder emailed to {staff.paypal_email}.")
             else:
@@ -1349,6 +1339,8 @@ def ask_confirm(request):
     from . import actions
     try:
         messages.success(request, actions.execute(request.POST.get("token", ""), request))
+    except actions.PartlyDone as exc:
+        messages.warning(request, str(exc))
     except actions.ActionError as exc:
         messages.error(request, str(exc))
     return redirect("reports")

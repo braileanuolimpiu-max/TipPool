@@ -30,6 +30,7 @@
     </div>
     {% if asked %}
     <div class="answer" role="status"><p>{{ asked.answer|linebreaksbr }}</p><span class="small muted" style="display:block">{% if asked.proposal %}Nothing happens until you confirm.{% elif asked.by == "Claude" %}Claude, from your numbers{% else %}Calculated from your numbers{% endif %}</span>
+      {% if asked.proposal.steps %}<ol class="plan-steps">{% for step in asked.proposal.steps %}<li>{{ step }}</li>{% endfor %}</ol>{% endif %}
       {% if asked.proposal %}
       <form method="post" action="{% url 'ask_confirm' %}" class="actions" style="margin-top:12px;display:flex;width:100%">{% csrf_token %}
         <input type="hidden" name="token" value="{{ asked.proposal.token }}">

@@ -34,7 +34,7 @@ card in the corner ticks off each step as you go:
 4. **Tip as a guest.** The page the QR code opens, with PayPal and Venmo buttons. It's in 7 languages, and
    PayPal's own window follows the guest's language too. Demo tip pages show a sandbox buyer login to pay with.
 5. **Ask about your tips**, e.g. *"Who earned the most last week?"* Claude answers from your numbers, and
-   can act ("pay yesterday's shift") once you confirm.
+   acts once you confirm: *"Close out tonight, add $40 cash and pay everyone"* is one plan, done in order.
 6. **Change the rules in plain words.** AI reads them into structured rules and warns about anything that
    breaks tip law (e.g. managers taking from the pool, which the US FLSA doesn't allow).
 
@@ -145,7 +145,12 @@ Shift status: paid.
 - **Explaining each person's share** in one or two sentences.
 - **The close-out check** before any payout: rule findings (a 15-hour shift, a forgotten clock-out, an
   unconfirmed address, a flagged problem, a total far from normal) plus Claude's review and suggested fixes.
-- **Ask about your tips:** answers from the business's own numbers, and proposed actions.
+- **Ask about your tips, an agent that moves money:** answers from the business's own numbers, and does
+  things in plain words: *"Close out tonight, add $40 cash and pay everyone"* becomes a 3-step plan (close
+  out from clock-ins, split, add the cash, pay through PayPal Payouts) confirmed once and done in order.
+  *"Fix the payouts that didn't arrive"* sends failed payouts again to the corrected address and reminds
+  people with unclaimed ones. Every step is checked again when it runs (the close-out check, the payout
+  freeze, the owner's approval limit), and a plan stops before any money moves if a step can't be done.
 
 **Guardrails.** The AI never decides amounts (exact-cent Python does). It can **stop** a payout but never
 start one. Every action it proposes needs the manager's confirmation, through a signed, expiring,
@@ -174,7 +179,7 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 316 tests and a lint check, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 321 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -238,7 +243,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-316 tests cover:
+321 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes

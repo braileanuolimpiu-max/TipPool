@@ -21,7 +21,8 @@ EXAMPLES = [
     "How much did servers make last week?",
     "What were our total tips this year?",
     "Pay yesterday's shift",
-    "Add $40 cash tips",
+    "Close out tonight, add $40 cash and pay everyone",
+    "Fix the payouts that didn't arrive",
 ]
 
 MONTHS = {name.lower(): i for i, name in enumerate(calendar.month_name) if name}
@@ -29,7 +30,7 @@ MONTHS.update({name.lower(): i for i, name in enumerate(calendar.month_abbr) if 
 
 
 class ActionOut(BaseModel):
-    kind: Literal["pay_shift", "set_week", "add_tip"]
+    kind: Literal["pay_shift", "set_week", "add_tip", "close_shift", "fix_payouts"]
     shift_date: Optional[str] = Field(default=None, description="YYYY-MM-DD of the shift, if one is meant")
     person: Optional[str] = Field(default=None, description="For set_week: the person's name")
     week: Optional[dict[str, float]] = Field(default=None, description="For set_week: hours per weekday, "
@@ -42,6 +43,9 @@ class AnswerOut(BaseModel):
     answer: str = Field(description="The answer in 1-4 short plain sentences, or a short list. Exact numbers.")
     action: Optional[ActionOut] = Field(default=None, description="Only when the manager asks you to DO one of "
                                         "the actions. It is shown to them to confirm; never say it's done.")
+    steps: Optional[list[ActionOut]] = Field(default=None, description="When the manager asks for SEVERAL "
+                                             "things at once: the actions in the order to do them (2-4). Shown "
+                                             "to them as one plan to confirm; never say it's done.")
 
 
 ASK_SYSTEM = """You answer a manager's questions about their team's tips, using ONLY the data given.
@@ -50,8 +54,13 @@ ASK_SYSTEM = """You answer a manager's questions about their team's tips, using 
 - Be short: 1-4 plain sentences, or a short list of up to 6 lines.
 - "Shared" = from the tip pool under the rules; "personal" = tips guests left for one person by name.
 - You may point out something notable (e.g. a big change), but don't give legal or tax advice.
-- You can propose ONE action when asked to do something: pay a shift that is ready, set someone's usual
-  week, or add card/cash tips. Fill "action" and say in "answer" what will happen once they confirm."""
+- You can act when asked to do something: pay a shift that is ready (pay_shift), set someone's usual week
+  (set_week), add card/cash tips (add_tip), close out an open shift so it's split and checked (close_shift),
+  or fix payouts that didn't arrive (fix_payouts: send failed ones again, remind people to accept).
+  One thing: fill "action". Several things ("close tonight and pay everyone"): fill "steps" in the order to
+  do them, e.g. close_shift, add_tip, pay_shift. Say in "answer" what will happen once they confirm.
+- You never move money yourself: the manager confirms, and every step is checked again when it runs
+  (the close-out check, payout freeze, the owner's approval limit)."""
 
 
 # ---------------------------------------------------------------------------
@@ -77,13 +86,25 @@ def _answer(question, locations, today, location=None, user=None):
                         + (_waiting(location) if location else "") + "\n\nQuestion: " + question}]
             out = ai._claude_parse(ASK_SYSTEM, content, AnswerOut, effort="low")
             result = {"answer": out.answer, "by": "Claude"}
-            if out.action and location and user:
-                result.update(_proposal(out.action.kind, out.action.model_dump(exclude_none=True), location, user))
+            if out.steps and len(out.steps) > 1 and location and user:
+                result.update(_plan([(s.kind, s.model_dump(exclude_none=True)) for s in out.steps], location, user))
+            elif (out.action or out.steps) and location and user:
+                one = out.action or out.steps[0]
+                result.update(_proposal(one.kind, one.model_dump(exclude_none=True), location, user))
             return result
         except ai.AIError:
             return {"answer": "Claude couldn't answer just now, so here's what I can work out from your numbers: "
                               + _offline(question, locations, today), "by": "offline"}
+    plan = actions.parse_plan(question, today) if location and user else None
+    if plan:
+        return {"by": "offline", **_plan(plan, location, user)}
     parsed = actions.parse(question, today) if location and user else None
+    if parsed is None and location and user:
+        if re.search(actions.CLOSE_ASKED, question.lower().strip()):
+            day = actions._date_in(question.lower(), today)
+            parsed = ("close_shift", {"shift_date": day.isoformat() if day else None})
+        elif re.search(r"\b(fix|resend|remind)\b.*\bpayouts?\b|\bpayouts?\b.*\b(didn.?t|not|never)", question.lower()):
+            parsed = ("fix_payouts", {})
     if parsed:
         return {"by": "offline", **_proposal(parsed[0], parsed[1], location, user)}
     return {"answer": _offline(question, locations, today), "by": "offline"}
@@ -93,6 +114,14 @@ def _proposal(kind, params, location, user):
     try:
         proposal = actions.propose(kind, params, location, user)
         return {"answer": f"{proposal['text']} Confirm below to do it.", "proposal": proposal}
+    except actions.ActionError as exc:
+        return {"answer": str(exc)}
+
+
+def _plan(steps, location, user):
+    try:
+        plan = actions.propose_plan(steps, location, user)
+        return {"answer": f"{plan['text']}", "proposal": plan}
     except actions.ActionError as exc:
         return {"answer": str(exc)}
 

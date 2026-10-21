@@ -65,6 +65,20 @@ def build(to, subject, *, heading, eyebrow="", greeting="", paragraphs=(), quote
     return message
 
 
+def payout_reminder(item, link):
+    """Remind someone to accept a payout waiting for them (UNCLAIMED). `link`: their private tips page."""
+    staff, night = item.share.staff, item.share.night
+    symbol = night.location.business.symbol
+    return send(staff.paypal_email, f"{symbol}{item.share.amount} in tips is waiting for you",
+                eyebrow=night.location.display_name, heading=f"{symbol}{item.share.amount} is waiting for you",
+                greeting=f"Hi {staff.name},",
+                paragraphs=[f"Your tips for the {night} were sent with PayPal, but nobody has accepted them yet. "
+                            "Open PayPal (or sign up with that email) to accept them."],
+                details=[("Sent to", item.receiver), ("Shift", str(night)), ("Amount", f"{symbol}{item.share.amount}")],
+                button=("Open PayPal", "https://www.paypal.com/"),
+                links=[("Wrong address? Change it on your tips page", link)])
+
+
 def send(to, subject, fail_silently=True, **parts):
     """Build and send one email. Returns 1 when sent."""
     try:

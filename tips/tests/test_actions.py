@@ -28,7 +28,7 @@ class ParseTests(TestCase):
 
 
 @override_settings(AI_MODE="mock")
-class ActionTests(TestCase):
+class ActionBase(TestCase):
     def setUp(self):
         self.paypal = FakePayPal()
         patcher = mock.patch("tips.services.get_client", return_value=self.paypal)
@@ -57,6 +57,9 @@ class ActionTests(TestCase):
     def confirm(self, page):
         return self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]})
 
+
+@override_settings(AI_MODE="mock")
+class ActionTests(ActionBase):
     def test_pay_shift_after_confirming(self):
         night = self.ready_night()
         page = self.ask("pay yesterday's shift")
@@ -111,3 +114,86 @@ class ActionTests(TestCase):
         with mock.patch("tips.ai._claude_parse", return_value=out):
             result = ask.answer("pay thursday", [self.location], TODAY, location=self.location, user=self.boss)
         self.assertIn("Pay the Thursday, Oct 15 shift", result["proposal"]["text"])
+
+
+@override_settings(AI_MODE="mock")
+class AgentPlanTests(ActionBase):
+    """Several things in one request, confirmed once, done in order, stopping safely."""
+
+    def open_night_with_clock_ins(self, hours=5):
+        from datetime import datetime, timedelta, timezone as tz
+        night = Night.objects.create(location=self.location, date=TODAY)
+        Tip.objects.create(night=night, amount=Decimal("100"), paypal_order_id="OPEN-1", status="completed")
+        start = datetime(2026, 10, 16, 17, 0, tzinfo=tz.utc)
+        from tips.models import ClockEntry
+        for p in (self.maria, self.john):
+            ClockEntry.objects.create(staff=p, night=night, started_at=start, ended_at=start + timedelta(hours=hours))
+        return night
+
+    def test_close_add_cash_and_pay_in_one_go(self):
+        night = self.open_night_with_clock_ins()
+        page = self.ask("Close out tonight, add $40 cash and pay everyone")
+        steps = page.context["asked"]["proposal"]["steps"]
+        self.assertEqual(len(steps), 3)
+        self.assertTrue(steps[0].startswith("Close out the"))
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.OPEN)  # nothing happens before confirming
+        res = self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]},
+                               follow=True)
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.PAYING)
+        self.assertEqual(night.tip_total, Decimal("140.00"))
+        self.assertEqual(sum(s.amount for s in night.shares.all()), Decimal("140.00"))
+        self.assertContains(res, "3. Payout for the")
+        # the same confirmation can't run twice
+        again = self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]},
+                                 follow=True)
+        self.assertContains(again, "already done")
+
+    def test_a_plan_stops_before_money_moves_when_the_check_says_no(self):
+        night = self.open_night_with_clock_ins(hours=15)  # a 15-hour shift: the check stops the payout
+        page = self.ask("close out tonight and pay everyone")
+        res = self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]},
+                               follow=True)
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.REVIEW)  # closed and split, never paid
+        self.assertEqual(self.paypal.payout_bodies, [])
+        self.assertContains(res, "Stopped at step 2")
+
+    def test_fix_payouts_sends_again_and_reminds(self):
+        from django.core import mail
+        from tips.models import PayoutBatch, PayoutItem
+        night = self.ready_night()
+        services.pay_night(night)
+        items = list(PayoutItem.objects.filter(batch__night=night).select_related("share__staff"))
+        failed = next(i for i in items if i.share.staff == self.maria)
+        unclaimed = next(i for i in items if i.share.staff == self.john)
+        PayoutItem.objects.filter(pk=failed.pk).update(status="FAILED")
+        PayoutItem.objects.filter(pk=unclaimed.pk).update(status="UNCLAIMED")
+        self.maria.paypal_email = "maria.new@example.com"
+        self.maria.save()
+        page = self.ask("fix the payouts that didn't arrive")
+        self.assertIn("send again Maria", page.context["asked"]["proposal"]["text"])
+        self.assertIn("remind John", page.context["asked"]["proposal"]["text"])
+        before = len(self.paypal.payout_bodies)
+        self.confirm(page)
+        self.assertEqual(len(self.paypal.payout_bodies), before + 1)
+        self.assertEqual(self.paypal.payout_bodies[-1][0]["receiver"], "maria.new@example.com")
+        self.assertTrue(any("waiting for you" in m.subject for m in mail.outbox))
+        self.assertTrue(PayoutBatch.objects.filter(night=night, is_retry=True).exists())
+
+    def test_questions_are_not_turned_into_actions(self):
+        self.open_night_with_clock_ins()
+        page = self.ask("when do we close?")
+        self.assertNotIn("proposal", page.context["asked"])
+
+    @override_settings(AI_MODE="claude")
+    def test_claude_plans_several_steps(self):
+        self.open_night_with_clock_ins()
+        out = ask.AnswerOut(answer="I'll close tonight, then pay everyone.",
+                            steps=[ask.ActionOut(kind="close_shift", shift_date="2026-10-16"),
+                                   ask.ActionOut(kind="pay_shift", shift_date="2026-10-16")])
+        with mock.patch("tips.ai._claude_parse", return_value=out):
+            result = ask.answer("close and pay tonight", [self.location], TODAY, location=self.location,
+                                user=self.boss)
+        self.assertEqual(len(result["proposal"]["steps"]), 2)

@@ -141,7 +141,9 @@ def hold(night, reason):
                 location=night.location, night=night, key=f"hold:{night.pk}")
 
 
-def close_night(night, location):
+def close_night(night, location, pay=True, auto=True):
+    """Close a shift: who worked (clock-ins, usual week), the split and the check. `pay`: also pay it when the
+    location pays automatically. `auto`: closed by the clock (False: a manager asked for it)."""
     try:
         services.sync_pending_tips(night)  # tips a guest approved just before closing still count
     except Exception:
@@ -159,7 +161,7 @@ def close_night(night, location):
             return f"{night}: already closed"
         night.status = Night.Status.CLOSED
         night.closed_at = timezone.now()
-        night.auto_closed = True
+        night.auto_closed = auto
         night.save()
 
     hours.finish_running_entries(night, at=night.closed_at)
@@ -176,10 +178,10 @@ def close_night(night, location):
         return f"{night}: closed, waiting for who worked"
     if night.tip_total <= 0:
         return f"{night}: closed, a guest's tip is still being confirmed"
-    return split_and_pay(night, location, needs_check)
+    return split_and_pay(night, location, needs_check, pay=pay)
 
 
-def split_and_pay(night, location, needs_check):
+def split_and_pay(night, location, needs_check, pay=True):
     """After an automatic close: split with the location's rules, check it, and pay when the location
     pays automatically (right away, or after its review window)."""
     rule_set = TipRuleSet.active(location)
@@ -200,6 +202,8 @@ def split_and_pay(night, location, needs_check):
     if needs_check:
         hold(night, "Someone forgot to clock out. Check their hours.")
         return f"{night}: closed and split; someone forgot to clock out, so check the hours before paying"
+    if not pay:
+        return f"{night}: closed and split"
     if location.after_close == Location.AfterClose.PAY and location.review_minutes:
         return f"{night}: closed and split; pays in {location.review_minutes} minutes unless someone flags a problem"
     if location.after_close == Location.AfterClose.PAY:
