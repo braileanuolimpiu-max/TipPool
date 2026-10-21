@@ -1061,6 +1061,7 @@ def payout_status(request, pk):
     paid = sum((i.share.amount for i in items if i.status == "SUCCESS" and not i.superseded), Decimal("0"))
     return render(request, "tips/payout_status.html", {
         "night": night, "batch": batch, "items": items, "paid": paid,
+        "sample": (batch.paypal_batch_id or "").startswith("DEMO"),
         "unclear": any(services.needs_recheck(b) for b in night.payout_batches.all()),
         "payout_fees": sum((i.fee for i in items), Decimal("0")),
     })

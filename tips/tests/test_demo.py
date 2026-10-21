@@ -78,3 +78,15 @@ class TourTests(TestCase):
         self.client.force_login(make_manager("real"))
         page = self.client.get(reverse("dashboard"))
         self.assertNotContains(page, "Demo tour")
+
+
+class SampleHistoryLabelTests(TestCase):
+    def test_demo_history_says_no_money_was_sent(self):
+        from tips import demo
+        from tips.models import Night
+        self.client.force_login(demo.create_demo())
+        old = Night.objects.filter(status="paid").first()
+        page = self.client.get(reverse("payout_status", args=[old.pk]))
+        self.assertContains(page, "no money was sent")
+        self.assertNotContains(page, "Check PayPal again")
+        self.assertContains(self.client.get(reverse("history")), ">Sample<")

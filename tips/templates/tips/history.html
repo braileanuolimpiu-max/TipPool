@@ -14,7 +14,8 @@
         <td>{{ row.night.date|date:"D, M j" }}</td>
         <td class="r">{{ cur }}{{ row.total|money }}</td>
         <td class="r">{{ row.people }}</td>
-        <td>{% if row.night.status == "paid" %}<span class="pill ok">Paid</span>
+        <td>{% if row.night.status == "paid" and row.batch.paypal_batch_id|slice:":4" == "DEMO" %}<span class="pill" title="Came with the demo: no money was sent">Sample</span>
+            {% elif row.night.status == "paid" %}<span class="pill ok">Paid</span>
             {% elif row.night.status == "paying" %}<span class="pill wait">Paying</span>
             {% elif row.night.status == "closed" %}<span class="pill wait">Needs who worked</span>
             {% else %}<span class="pill live">Ready to approve</span>{% endif %}</td>
