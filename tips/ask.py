@@ -10,6 +10,7 @@ import logging
 from collections import Counter
 import re
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -143,9 +144,37 @@ def _waiting(location):
     rows = Night.objects.filter(location=location, status__in=[Night.Status.CLOSED, Night.Status.REVIEW])
     team = ", ".join(m.staff.name for m in location.memberships.filter(active=True).select_related("staff"))
     lines = ["", f"## Now at {location.display_name}", f"Team: {team or 'nobody yet'}"]
-    lines += [f"- shift {n.date.isoformat()} ({n.date:%A}): {n.get_status_display()}, "
-              f"{location.business.symbol}{n.tip_total}" for n in rows]
+    cur = location.business.symbol
+    for n in rows:
+        lines.append(f"- shift {n.date.isoformat()} ({n.date:%A}): {n.get_status_display()}, {cur}{n.tip_total} in tips"
+                     + (f", ON HOLD: {n.hold}" if n.hold else ""))
+        shares = list(n.shares.select_related("staff"))
+        for s in shares:
+            lines.append(f"  - {s.staff.name} ({s.role}, {s.hours}h): {cur}{s.amount}"
+                         + ("" if s.staff.payout_confirmed_at else ", payout address not confirmed by them yet"))
+        if not shares:
+            worked = ", ".join(f"{x.staff.name} {x.hours}h" for x in n.shifts.select_related("staff"))
+            lines.append(f"  - who worked: {worked or 'not entered yet'}")
+        found = (n.review_check or {}).get("findings", [])
+        for f in found[:6]:
+            lines.append(f"  - close-out check {'STOP' if f.get('level') == 'stop' else 'note'}: {f.get('text')}")
+        if n.review_check and not found:
+            lines.append("  - close-out check: nothing unusual")
     return "\n".join(lines)
+
+
+def _by_weekday(locations, today, _money):
+    """Tips per day of the week over the last 8 weeks (closed shifts), for "which day is best" questions."""
+    from .models import Night
+    nights = Night.objects.filter(location__in=locations, date__gte=today - timedelta(weeks=8), date__lt=today) \
+        .exclude(status=Night.Status.OPEN)
+    totals, counts = [Decimal("0")] * 7, [0] * 7
+    for n in nights:
+        totals[n.date.weekday()] += n.tip_total
+        counts[n.date.weekday()] += 1
+    rows = [f"- {calendar.day_name[d]}: {counts[d]} shifts, {_money(totals[d])} in total, "
+            f"{_money(totals[d] / counts[d])} per shift" for d in range(7) if counts[d]]
+    return "\n## By day of the week, last 8 weeks\n" + ("\n".join(rows) if rows else "- no closed shifts yet")
 
 
 def _money_in(locations):
@@ -175,6 +204,7 @@ def _data_summary(locations, today):
                          f"personal {_money(p['personal'])}, total {_money(p['total'])}")
         for role in r["roles"]:
             lines.append(f"- role {role['name']}: {role['people']} people, {role['hours']}h, total {_money(role['total'])}")
+    lines.append(_by_weekday(locations, today, _money))
     week_start = today - timedelta(days=today.weekday())
     lines.append("\n## Last 8 weeks (Monday to Sunday)")
     for i in range(8):
