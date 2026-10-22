@@ -120,6 +120,11 @@ def _offline_answer(question, locations, today, location=None, user=None):
             parsed = ("fix_payouts", {})
     if parsed:
         return {"by": "offline", **_proposal(parsed[0], parsed[1], location, user)}
+    q = question.lower()
+    if re.search(WEEKDAY_ASKED, q):
+        return {"answer": _weekday_answer(locations, today), "by": "offline"}
+    if location is not None and re.search(CHECK_ASKED, q):
+        return {"answer": _check_answer(location), "by": "offline"}
     return {"answer": _offline(question, locations, today), "by": "offline"}
 
 
@@ -163,18 +168,74 @@ def _waiting(location):
     return "\n".join(lines)
 
 
-def _by_weekday(locations, today, _money):
-    """Tips per day of the week over the last 8 weeks (closed shifts), for "which day is best" questions."""
+def _weekday_totals(locations, today):
+    """[(weekday number, shifts, total)] over the last 8 weeks of closed shifts, days with shifts only."""
     from .models import Night
-    nights = Night.objects.filter(location__in=locations, date__gte=today - timedelta(weeks=8), date__lt=today) \
-        .exclude(status=Night.Status.OPEN)
+    nights = Night.objects.filter(location__in=locations, date__gte=today - timedelta(weeks=8), date__lt=today)         .exclude(status=Night.Status.OPEN)
     totals, counts = [Decimal("0")] * 7, [0] * 7
     for n in nights:
         totals[n.date.weekday()] += n.tip_total
         counts[n.date.weekday()] += 1
-    rows = [f"- {calendar.day_name[d]}: {counts[d]} shifts, {_money(totals[d])} in total, "
-            f"{_money(totals[d] / counts[d])} per shift" for d in range(7) if counts[d]]
+    return [(d, counts[d], totals[d]) for d in range(7) if counts[d]]
+
+
+def _by_weekday(locations, today, _money):
+    """Tips per day of the week over the last 8 weeks (closed shifts), for "which day is best" questions."""
+    rows = [f"- {calendar.day_name[d]}: {n} shifts, {_money(total)} in total, {_money(total / n)} per shift"
+            for d, n, total in _weekday_totals(locations, today)]
     return "\n## By day of the week, last 8 weeks\n" + ("\n".join(rows) if rows else "- no closed shifts yet")
+
+
+WEEKDAY_ASKED = r"\b(day of the week|which day|what day|best day|busiest day|quietest day|slowest day|weekdays?|weekends?)\b"
+CHECK_ASKED = (r"\b(check|look at|watch|careful|worry)\b.*\b(pay|paying|payout|approv\w*|shift)\b"
+               r"|\b(ready to (pay|approve)|safe to pay|anything wrong|before (i )?pay)")
+
+
+def _weekday_answer(locations, today):
+    _money = _money_in(locations)
+    days = _weekday_totals(locations, today)
+    if not days:
+        return "There are no closed shifts in the last 8 weeks yet."
+    per_shift = sorted(((total / n, d, n, total) for d, n, total in days), reverse=True)
+    best, worst = per_shift[0], per_shift[-1]
+    text = (f"Over the last 8 weeks, {calendar.day_name[best[1]]} brings the most: {_money(best[0])} per shift "
+            f"({_money(best[3])} over {best[2]} shifts).")
+    if worst[1] != best[1]:
+        text += (f" The quietest is {calendar.day_name[worst[1]]} at {_money(worst[0])} per shift, so "
+                 f"{calendar.day_name[best[1]]} brings {_money(best[0] - worst[0])} more per shift.")
+    return text
+
+
+def _check_answer(location):
+    """What to look at before paying the shifts waiting at this location, from the close-out check."""
+    from .models import Night
+    cur = location.business.symbol
+    waiting = list(Night.objects.filter(location=location, status=Night.Status.REVIEW).order_by("-date"))
+    if not waiting:
+        closed = Night.objects.filter(location=location, status=Night.Status.CLOSED).count()
+        return ("No shift is waiting to be paid right now." +
+                (f" {closed} closed shift{'s' if closed != 1 else ''} still need who worked." if closed else ""))
+    parts = []
+    for n in waiting[:3]:
+        shares = list(n.shares.select_related("staff"))
+        people = sum(1 for x in shares if x.amount > 0)
+        unconfirmed = [x.staff.name for x in shares if x.amount > 0 and not x.staff.payout_confirmed_at]
+        found = (n.review_check or {}).get("findings", [])
+        stops = [f["text"] for f in found if f.get("level") == "stop"]
+        notes = [f["text"] for f in found if f.get("level") != "stop"]
+        line = f"The {n}: {cur}{n.tip_total} for {people} {'person' if people == 1 else 'people'}."
+        if n.hold:
+            line += f" It's on hold: {n.hold}"
+        if stops:
+            line += " The check stops it: " + " ".join(stops[:2])
+        elif notes:
+            line += " Worth a look: " + " ".join(notes[:2])
+        else:
+            line += " The close-out check found nothing unusual."
+        if unconfirmed:
+            line += " Not confirmed where they're paid yet: " + ", ".join(unconfirmed[:4]) + "."
+        parts.append(line)
+    return " ".join(parts)
 
 
 def _money_in(locations):
