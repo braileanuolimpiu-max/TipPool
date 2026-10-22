@@ -318,6 +318,8 @@ def _run(data, request):
             from .models import Change as _Change
             night = Night.objects.get(pk=params["night"], location=location)
             if night.status == Night.Status.OPEN:
+                # the manager is closing now: whoever is still on the clock finishes now (they didn't forget)
+                hours.finish_running_entries(night, mark_forgotten=False)
                 autoclose.close_night(night, location, pay=False, auto=False)
             elif night.status == Night.Status.CLOSED:
                 needs_check = False

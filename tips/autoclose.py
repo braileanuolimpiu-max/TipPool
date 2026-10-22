@@ -133,9 +133,18 @@ def pay_after_review(location, now):
     return results
 
 
+def _short(text, limit):
+    """At most `limit` characters, ending at a whole sentence (or word) with "…" when cut."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1]
+    end = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
+    return (cut[:end + 1] if end > limit // 3 else cut.rsplit(" ", 1)[0]) + " …"
+
+
 def hold(night, reason):
     """Stop the automatic payout of a shift and tell the managers why."""
-    night.hold = reason[:200]
+    night.hold = _short(reason, 200)
     night.save(update_fields=["hold"])
     raise_alert(night.location.business, f"The {night} at {night.location.display_name} is waiting for you: {reason}",
                 location=night.location, night=night, key=f"hold:{night.pk}")

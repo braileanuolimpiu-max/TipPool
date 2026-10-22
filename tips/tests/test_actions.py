@@ -197,3 +197,16 @@ class AgentPlanTests(ActionBase):
             result = ask.answer("close and pay tonight", [self.location], TODAY, location=self.location,
                                 user=self.boss)
         self.assertEqual(len(result["proposal"]["steps"]), 2)
+
+    def test_closing_now_ends_running_clock_ins_without_a_forgot_flag(self):
+        from tips.models import ClockEntry
+        night = self.open_night_with_clock_ins()
+        from datetime import timedelta
+        from django.utils import timezone
+        # still on the clock, for 5 hours so far
+        ClockEntry.objects.filter(night=night).update(ended_at=None, started_at=timezone.now() - timedelta(hours=5))
+        page = self.ask("close out tonight and pay everyone")
+        self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]})
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.PAYING)
+        self.assertFalse(ClockEntry.objects.filter(night=night, auto_ended=True).exists())
