@@ -66,7 +66,7 @@ def platform_settings(request):
     return render(request, "tips/platform.html", {
         "cfg": cfg, "providers": PlatformConfig.EmailProvider.choices, "models": platform.CLAUDE_MODELS,
         "email_on": platform.email_settings() is not None, "ai_on": platform.ai_mode() == "claude",
-        "ai_name": platform.ai_name(), "ai_used_today": _ai().used_today(),
+        "ai_name": platform.ai_name(), "ai_used_today": _ai().used_today(), "other_ai": _other_ai(cfg),
         "demo_daily": _ai().DEMO_DAILY, "business_daily": _ai().BUSINESS_DAILY,
         "paypal_on": bool(cfg.paypal_client_id), "tick_url": tick, "minutes_since_tick": minutes_since_tick,
         "up_url": request.build_absolute_uri("/up/"),
@@ -215,6 +215,15 @@ def _test_email(request, cfg):
 
 
 # --- AI ---------------------------------------------------------------------------------------
+def _other_ai(cfg):
+    """The OpenAI-compatible services for the AI section: key saved? model in use?"""
+    from .openai_compat import PROVIDERS
+    return [{"value": value, "label": label, "key_url": key_url, "key_hint": prefix + "…" if prefix else "",
+             "saved": bool((cfg.other_ai_keys or {}).get(value)),
+             "model": (cfg.other_ai_models or {}).get(value, ""), "recommended": preferred[0]}
+            for value, (label, _, key_url, prefix, preferred) in PROVIDERS.items()]
+
+
 def _ai():
     from . import ai
     return ai
@@ -226,6 +235,8 @@ def _save_ai(request, cfg):
         cfg.ai_daily_limit = min(int(raw), 100000)
     if request.POST.get("ai_provider") == "gemini":
         return _save_gemini(request, cfg)
+    if request.POST.get("ai_provider") in platform.OTHER_AI:
+        return _save_other_ai(request, cfg, request.POST["ai_provider"])
     cfg.ai_provider = "claude"
     key = request.POST.get("anthropic_key", "").strip()
     model = request.POST.get("claude_model", "")
@@ -245,6 +256,36 @@ def _save_ai(request, cfg):
         messages.warning(request, "Paste a Claude key to switch Claude on. Until then the built-in assistant is used.")
         return redirect(f"{reverse('platform_settings')}#ai")
     return _done(request, "Claude is " + ("on" if cfg.ai_enabled else "off (the built-in assistant is used)"), "ai")
+
+
+def _save_other_ai(request, cfg, provider):
+    """ChatGPT, DeepSeek, Kimi or Mistral: check the key, pick (or check) the model, test it once."""
+    from . import openai_compat
+    from .vault import decrypt
+    label = openai_compat.name(provider)
+    keys, models_ = dict(cfg.other_ai_keys or {}), dict(cfg.other_ai_models or {})
+    typed = request.POST.get(f"key_{provider}", "").strip()
+    key = typed or (decrypt(keys[provider]) if keys.get(provider) else "")
+    enable = bool(request.POST.get("ai_enabled"))
+    if not key:
+        if enable:
+            messages.error(request, f"Paste your {label} API key ({openai_compat.PROVIDERS[provider][2]}).")
+            return redirect(f"{reverse('platform_settings')}#ai")
+        cfg.ai_provider, cfg.ai_enabled = provider, False
+        cfg.save()
+        return _done(request, f"{label} is off (the built-in assistant is used)", "ai")
+    wanted = request.POST.get(f"model_{provider}", "").strip()[:80]
+    model, problem = openai_compat.best_model(provider, key, wanted)
+    if model and not problem:
+        problem = openai_compat.check(provider, key, model)
+    if problem:
+        messages.error(request, problem)
+        return redirect(f"{reverse('platform_settings')}#ai")
+    keys[provider], models_[provider] = encrypt(key), model
+    cfg.other_ai_keys, cfg.other_ai_models = keys, models_
+    cfg.ai_provider, cfg.ai_enabled = provider, enable
+    cfg.save()
+    return _done(request, f"{label} ({model}) is " + ("on" if enable else "saved, but switched off"), "ai")
 
 
 def _save_gemini(request, cfg):

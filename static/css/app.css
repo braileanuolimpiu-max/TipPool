@@ -1,6 +1,7 @@
 /* TipPool: the restaurant back office at closing time.
    White paper, black ink, a manager's yellow highlighter, receipts on a steel tray,
    navigation clipped to a kitchen ticket rail. */
+[hidden] { display: none !important; }
 :root {
   --paper: #ffffff;
   --ink: #141414;

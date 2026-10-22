@@ -756,11 +756,16 @@ class PlatformConfig(models.Model):
     # AI
     ai_enabled = models.BooleanField(default=False)
     ai_provider = models.CharField(max_length=10, default="claude",
-                                   choices=[("claude", "Claude (Anthropic)"), ("gemini", "Gemini (Google, free tier)")])
+                                   choices=[("claude", "Claude (Anthropic)"), ("gemini", "Gemini (Google, free tier)"),
+                                            ("openai", "ChatGPT (OpenAI)"), ("deepseek", "DeepSeek"),
+                                            ("kimi", "Kimi (Moonshot)"), ("mistral", "Mistral")])
     anthropic_key_encrypted = models.TextField(blank=True)
     claude_model = models.CharField(max_length=60, blank=True)
     gemini_key_encrypted = models.TextField(blank=True)
     gemini_model = models.CharField(max_length=80, blank=True)
+    # ChatGPT, DeepSeek, Kimi, Mistral: {"deepseek": "<encrypted key>"} and {"deepseek": "deepseek-flash"}
+    other_ai_keys = models.JSONField(default=dict, blank=True)
+    other_ai_models = models.JSONField(default=dict, blank=True)
     # AI answers per day for the whole site (0 = no limit): a ceiling on cost and free quota, whatever happens
     ai_daily_limit = models.PositiveIntegerField(default=500)
     # TipPool's own PayPal (the demo and businesses that haven't connected theirs yet)

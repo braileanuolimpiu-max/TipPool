@@ -139,9 +139,11 @@ Shift status: paid.
 
 ## AI used
 
-**Claude API** (`claude-opus-5-5`, structured outputs), or **Google's Gemini API** (free tier, newest Flash
-model, JSON-schema outputs) as a no-cost alternative. The operator picks one in Platform settings; every AI
-feature works the same with either, and the free built-in assistant takes over when neither is on. Used for:
+**Claude API** (`claude-opus-5-5`, structured outputs) by default, or any of **Gemini** (Google, free tier),
+**ChatGPT** (OpenAI), **DeepSeek**, **Kimi** (Moonshot) or **Mistral**: the operator picks one in Platform
+settings and pastes a key; TipPool checks it, picks a model and tests it. Every AI feature gets the same
+instructions, data and answer format (a JSON schema, checked on arrival) whichever service answers, and the
+free built-in assistant takes over when none is on or a limit is reached. Used for:
 - **Reading tip rules** written in plain words, with legal warnings.
 - **Reading a photo of the schedule** (vision) to fill in who worked.
 - **Explaining each person's share** in one or two sentences.
@@ -184,7 +186,7 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 343 tests and a lint check, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 350 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -248,7 +250,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-343 tests cover:
+350 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes

@@ -408,9 +408,13 @@ def _claude_parse(system, content, output_model, effort="medium"):
     """Ask the site's AI service (Claude or Gemini) and get back a validated `output_model`."""
     from .platform import ai_provider
     _spend()
-    if ai_provider() == "gemini":
+    provider = ai_provider()
+    if provider == "gemini":
         from . import gemini
         return gemini.parse(system, content, output_model)
+    if provider != "claude":
+        from . import openai_compat
+        return openai_compat.parse(provider, system, content, output_model)
     return _anthropic_parse(system, content, output_model, effort)
 
 

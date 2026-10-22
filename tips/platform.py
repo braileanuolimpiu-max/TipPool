@@ -51,18 +51,39 @@ def ai_mode():
     cfg = config()
     if cfg.ai_provider == "gemini":
         return "claude" if (cfg.ai_enabled and cfg.gemini_key_encrypted) else "mock"
+    if cfg.ai_provider in OTHER_AI:
+        return "claude" if (cfg.ai_enabled and (cfg.other_ai_keys or {}).get(cfg.ai_provider)) else "mock"
     if cfg.anthropic_key_encrypted:
         return "claude" if cfg.ai_enabled else "mock"
     return settings.AI_MODE
 
 
+OTHER_AI = ("openai", "deepseek", "kimi", "mistral")
+
+
 def ai_provider():
-    return "gemini" if config().ai_provider == "gemini" else "claude"
+    provider = config().ai_provider
+    return provider if provider == "gemini" or provider in OTHER_AI else "claude"
 
 
 def ai_name():
     """What people see: "Gemini" or "Claude"."""
-    return "Gemini" if ai_provider() == "gemini" else "Claude"
+    provider = ai_provider()
+    if provider in OTHER_AI:
+        from .openai_compat import name
+        return name(provider)
+    return "Gemini" if provider == "gemini" else "Claude"
+
+
+def other_ai_key(provider):
+    from .vault import decrypt
+    stored = (config().other_ai_keys or {}).get(provider, "")
+    return decrypt(stored) if stored else ""
+
+
+def other_ai_model(provider):
+    from .openai_compat import PROVIDERS
+    return (config().other_ai_models or {}).get(provider) or PROVIDERS[provider][4][0]
 
 
 def gemini_key():
