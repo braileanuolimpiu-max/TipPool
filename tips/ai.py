@@ -272,7 +272,7 @@ Never guess numbers you cannot read: leave the person out and explain it in "not
 def read_schedule(image_bytes, media_type, staff_names, location):
     """Returns dict: shifts [{name, role, hours}], notes []."""
     if mode() != "claude":
-        raise AIError("Reading a photo needs Claude, which isn't switched on. For now, enter the hours below.")
+        raise AIError("Reading a photo needs the AI service, which isn't switched on. For now, enter the hours below.")
     content = [
         {"type": "image", "source": {"type": "base64", "media_type": media_type,
                                      "data": base64.standard_b64encode(image_bytes).decode("utf-8")}},
@@ -339,7 +339,22 @@ def _template_explanation(share, role, cur="$"):
 # ---------------------------------------------------------------------------
 # Claude call
 # ---------------------------------------------------------------------------
+def name():
+    """The AI service answering on this site, as people see it: "Claude" or "Gemini"."""
+    from .platform import ai_name
+    return ai_name()
+
+
 def _claude_parse(system, content, output_model, effort="medium"):
+    """Ask the site's AI service (Claude or Gemini) and get back a validated `output_model`."""
+    from .platform import ai_provider
+    if ai_provider() == "gemini":
+        from . import gemini
+        return gemini.parse(system, content, output_model)
+    return _anthropic_parse(system, content, output_model, effort)
+
+
+def _anthropic_parse(system, content, output_model, effort="medium"):
     try:
         import anthropic
     except ImportError as exc:  # pragma: no cover

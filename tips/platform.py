@@ -47,10 +47,32 @@ def email_enabled():
 
 # --- AI ---------------------------------------------------------------------------------
 def ai_mode():
+    """"claude" when a real AI service answers (Claude or Gemini, see ai_provider()), else "mock"."""
     cfg = config()
+    if cfg.ai_provider == "gemini":
+        return "claude" if (cfg.ai_enabled and cfg.gemini_key_encrypted) else "mock"
     if cfg.anthropic_key_encrypted:
         return "claude" if cfg.ai_enabled else "mock"
     return settings.AI_MODE
+
+
+def ai_provider():
+    return "gemini" if config().ai_provider == "gemini" else "claude"
+
+
+def ai_name():
+    """What people see: "Gemini" or "Claude"."""
+    return "Gemini" if ai_provider() == "gemini" else "Claude"
+
+
+def gemini_key():
+    import os
+    cfg = config()
+    return (cfg.gemini_key if cfg.gemini_key_encrypted else "") or os.environ.get("GEMINI_API_KEY", "")
+
+
+def gemini_model():
+    return config().gemini_model or "gemini-flash-latest"
 
 
 def anthropic_key():

@@ -66,6 +66,7 @@ def platform_settings(request):
     return render(request, "tips/platform.html", {
         "cfg": cfg, "providers": PlatformConfig.EmailProvider.choices, "models": platform.CLAUDE_MODELS,
         "email_on": platform.email_settings() is not None, "ai_on": platform.ai_mode() == "claude",
+        "ai_name": platform.ai_name(),
         "paypal_on": bool(cfg.paypal_client_id), "tick_url": tick, "minutes_since_tick": minutes_since_tick,
         "up_url": request.build_absolute_uri("/up/"),
         "demo_staff": [(name, typed.get(f"staff_{name}", (cfg.demo_staff or {}).get(name, ""))) for name in DEMO_STAFF],
@@ -214,6 +215,9 @@ def _test_email(request, cfg):
 
 # --- AI ---------------------------------------------------------------------------------------
 def _save_ai(request, cfg):
+    if request.POST.get("ai_provider") == "gemini":
+        return _save_gemini(request, cfg)
+    cfg.ai_provider = "claude"
     key = request.POST.get("anthropic_key", "").strip()
     model = request.POST.get("claude_model", "")
     if key:
@@ -232,6 +236,29 @@ def _save_ai(request, cfg):
         messages.warning(request, "Paste a Claude key to switch Claude on. Until then the built-in assistant is used.")
         return redirect(f"{reverse('platform_settings')}#ai")
     return _done(request, "Claude is " + ("on" if cfg.ai_enabled else "off (the built-in assistant is used)"), "ai")
+
+
+def _save_gemini(request, cfg):
+    from . import gemini
+    key = request.POST.get("gemini_key", "").strip() or (cfg.gemini_key if cfg.gemini_key_encrypted else "")
+    enable = bool(request.POST.get("ai_enabled"))
+    if not key:
+        if enable:
+            messages.error(request, "Paste your Gemini API key (from aistudio.google.com → Get API key).")
+            return redirect(f"{reverse('platform_settings')}#ai")
+        cfg.ai_provider, cfg.ai_enabled = "gemini", False
+        cfg.save()
+        return _done(request, "Gemini is off (the built-in assistant is used)", "ai")
+    model, problem = gemini.best_model(key)
+    if model and not problem:
+        problem = gemini.check(key, model)
+    if problem:
+        messages.error(request, problem)
+        return redirect(f"{reverse('platform_settings')}#ai")
+    cfg.ai_provider, cfg.gemini_model, cfg.ai_enabled = "gemini", model, enable
+    cfg.gemini_key_encrypted = encrypt(key)
+    cfg.save()
+    return _done(request, f"Gemini ({model}) is " + ("on" if enable else "saved, but switched off"), "ai")
 
 
 # --- TipPool's own PayPal ----------------------------------------------------------------------------

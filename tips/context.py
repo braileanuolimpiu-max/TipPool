@@ -36,6 +36,7 @@ def app_context(request):
         "demo_tour": demo_tour,
         "is_lead": bool(profile and profile.is_lead),
         "email_enabled": platform.email_enabled(),
+        "ai_name": platform.ai_name(),
         "email_to_terminal": settings.DEBUG and platform.email_settings() is None
                              and settings.EMAIL_FALLBACK_BACKEND.endswith("console.EmailBackend"),
         "is_operator": platform.is_operator(user),

@@ -49,7 +49,7 @@
   <div class="stack">
     {% if check.summary %}
     <section class="panel check-panel{% if stops %} stop{% elif check.findings %} warn{% else %} ok{% endif %}">
-      <div class="panel-head"><h2>Close-out check</h2><span class="small muted">{% if check.by == "Claude" %}by Claude, with the rules{% else %}by the rules{% endif %}</span></div>
+      <div class="panel-head"><h2>Close-out check</h2><span class="small muted">{% if check.by and check.by != "rules" %}by {{ check.by }}, with the rules{% else %}by the rules{% endif %}</span></div>
       <div class="panel-body stack">
         <p class="check-summary">{{ check.summary }}</p>
         {% if check.findings %}

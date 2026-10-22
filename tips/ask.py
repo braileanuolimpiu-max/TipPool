@@ -74,7 +74,7 @@ def answer(question, locations, today, location=None, user=None, named_from=None
     if named:
         locations = named
     result = _answer(question, locations, today, location, user)
-    if result and named and result.get("by") != "Claude":
+    if result and named and result.get("by") == "offline":
         result["answer"] = f"{', '.join(loc.display_name for loc in named)}: {result['answer']}"
     return result
 
@@ -85,7 +85,7 @@ def _answer(question, locations, today, location=None, user=None):
             content = [{"type": "text", "text": _data_summary(locations, today)
                         + (_waiting(location) if location else "") + "\n\nQuestion: " + question}]
             out = ai._claude_parse(ASK_SYSTEM, content, AnswerOut, effort="low")
-            result = {"answer": out.answer, "by": "Claude"}
+            result = {"answer": out.answer, "by": ai.name()}
             if out.steps and len(out.steps) > 1 and location and user:
                 result.update(_plan([(s.kind, s.model_dump(exclude_none=True)) for s in out.steps], location, user))
             elif (out.action or out.steps) and location and user:

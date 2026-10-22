@@ -8,7 +8,7 @@
 
 <section class="setup-status" aria-label="What's set up">
   <a href="#email" class="{% if email_on %}ok{% endif %}"><b>Email</b><span>{% if email_on %}Connected{% else %}Not connected{% endif %}</span></a>
-  <a href="#ai" class="{% if ai_on %}ok{% endif %}"><b>AI (Claude)</b><span>{% if ai_on %}On{% else %}Built-in assistant{% endif %}</span></a>
+  <a href="#ai" class="{% if ai_on %}ok{% endif %}"><b>AI</b><span>{% if ai_on %}{{ ai_name }} is on{% else %}Built-in assistant{% endif %}</span></a>
   <a href="#paypal" class="{% if paypal_on %}ok{% endif %}"><b>TipPool's PayPal</b><span>{% if paypal_on %}{% if cfg.paypal_live %}Real money{% else %}Test money{% endif %}{% else %}Not connected{% endif %}</span></a>
   <a href="#scheduler" class="{% if minutes_since_tick is not None and minutes_since_tick < 45 %}ok{% endif %}"><b>Scheduler</b><span>{% if minutes_since_tick is None %}Never checked in{% elif minutes_since_tick < 2 %}Checked in just now{% else %}Last check-in {{ minutes_since_tick }} min ago{% endif %}</span></a>
 </section>
@@ -53,12 +53,26 @@
 </form>
 
 <form method="post" class="panel setting" id="ai">{% csrf_token %}<input type="hidden" name="section" value="ai">
-  <div class="setting-intro"><span class="setting-no">02</span><h2>AI (Claude)</h2>
-    <p>Reads tip rules, explains shares, checks close-outs, answers questions and reads schedule photos. Without it, a free built-in assistant does the basics.</p>
-    {% if ai_on %}<span class="pill ok">On</span>{% else %}<span class="pill wait">Built-in assistant</span>{% endif %}</div>
+  <div class="setting-intro"><span class="setting-no">02</span><h2>AI</h2>
+    <p>Reads tip rules, explains shares, checks close-outs, answers questions, runs the Ask agent and reads schedule photos. Without it, a free built-in assistant does the basics.</p>
+    {% if ai_on %}<span class="pill ok">{{ ai_name }} is on</span>{% else %}<span class="pill wait">Built-in assistant</span>{% endif %}</div>
   <div class="setting-body stack">
-    <label class="switch-row"><span class="switch"><input type="checkbox" name="ai_enabled" {% if cfg.ai_enabled %}checked{% endif %}><span></span></span> Use Claude</label>
-    <div class="form-grid">
+    <div><label for="ai_provider">AI service</label>
+      <select id="ai_provider" name="ai_provider">
+        <option value="claude" {% if cfg.ai_provider != "gemini" %}selected{% endif %}>Claude (Anthropic): paid per use, best answers</option>
+        <option value="gemini" {% if cfg.ai_provider == "gemini" %}selected{% endif %}>Gemini (Google): free tier with daily limits</option>
+      </select></div>
+    <label class="switch-row"><span class="switch"><input type="checkbox" name="ai_enabled" {% if cfg.ai_enabled %}checked{% endif %}><span></span></span> Use the AI service</label>
+    <div class="ai-help" data-for="gemini">
+      <ol class="guide-steps">
+        <li><span>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio → API keys</a> and sign in with a Google account.</span></li>
+        <li><span>Click <strong>Create API key</strong> and copy it. No card needed for the free tier.</span></li>
+        <li><span>Paste it below and save: TipPool picks Google's newest free Flash model and tests it.</span></li>
+      </ol>
+      <div><label for="gemini_key">Gemini API key</label><input type="password" id="gemini_key" name="gemini_key" autocomplete="new-password" placeholder="{% if cfg.gemini_key_encrypted %}Saved and hidden{% else %}AIza…{% endif %}">
+        <p class="hint">{% if cfg.gemini_model %}Model in use: {{ cfg.gemini_model }}. {% endif %}On the free tier Google may use what it receives to improve its products, and there's a daily limit; when it's reached, the built-in assistant answers until it resets.</p></div>
+    </div>
+    <div class="form-grid ai-help" data-for="claude">
       <div><label for="anthropic_key">Claude API key</label><input type="password" id="anthropic_key" name="anthropic_key" autocomplete="new-password" placeholder="{% if cfg.anthropic_key_encrypted %}Saved and hidden{% else %}sk-ant-…{% endif %}">
         <p class="hint">From <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com → API keys</a>.</p></div>
       <div><label for="claude_model">Model</label>
@@ -155,6 +169,12 @@
   };
   provider.addEventListener("change", showHelp);
   showHelp();
+  // the AI section shows what the chosen service needs
+  const aiProvider = document.getElementById("ai_provider");
+  const aiHelps = document.querySelectorAll(".ai-help");
+  const showAi = () => aiHelps.forEach((h) => { h.hidden = h.dataset.for !== aiProvider.value; });
+  aiProvider.addEventListener("change", showAi);
+  showAi();
   document.querySelectorAll("[data-copy]").forEach((btn) => btn.addEventListener("click", async () => {
     const input = btn.parentElement.querySelector("input");
     try { await navigator.clipboard.writeText(input.value); btn.dataset.tooltip = "Copied"; } catch (e) { input.select(); }

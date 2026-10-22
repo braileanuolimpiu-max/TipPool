@@ -136,7 +136,7 @@ def run(night):
         try:
             out = ai._claude_parse(CHECK_SYSTEM, [{"type": "text", "text": _describe(night, found)}], CheckOut,
                                    effort="low")
-            result.update(summary=out.summary, suggestions=out.suggestions[:4], by="Claude")
+            result.update(summary=out.summary, suggestions=out.suggestions[:4], by=ai.name())
             for concern in out.extra_concerns[:3]:
                 found.append({"level": WARN, "text": concern, "ai": True})
             if out.hold:

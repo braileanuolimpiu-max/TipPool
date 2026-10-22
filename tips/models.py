@@ -755,8 +755,12 @@ class PlatformConfig(models.Model):
     email_from = models.CharField(max_length=200, blank=True)
     # AI
     ai_enabled = models.BooleanField(default=False)
+    ai_provider = models.CharField(max_length=10, default="claude",
+                                   choices=[("claude", "Claude (Anthropic)"), ("gemini", "Gemini (Google, free tier)")])
     anthropic_key_encrypted = models.TextField(blank=True)
     claude_model = models.CharField(max_length=60, blank=True)
+    gemini_key_encrypted = models.TextField(blank=True)
+    gemini_model = models.CharField(max_length=80, blank=True)
     # TipPool's own PayPal (the demo and businesses that haven't connected theirs yet)
     paypal_client_id = models.CharField(max_length=200, blank=True)
     paypal_secret_encrypted = models.TextField(blank=True)
@@ -788,6 +792,11 @@ class PlatformConfig(models.Model):
     def email_password(self):
         from .vault import decrypt
         return decrypt(self.email_password_encrypted)
+
+    @property
+    def gemini_key(self):
+        from .vault import decrypt
+        return decrypt(self.gemini_key_encrypted)
 
     @property
     def anthropic_key(self):
