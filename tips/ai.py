@@ -41,6 +41,55 @@ def mode():
     return "mock" if getattr(_local, "offline", False) else ai_mode()
 
 
+# AI answers per business per day: one account (or a script) can't use up the site's allowance
+DEMO_DAILY = 30
+BUSINESS_DAILY = 150
+
+
+def for_business(business):
+    """The business the current request works for (set by the middleware), so its AI use is counted."""
+    _local.business = business
+
+
+def _count(key):
+    from django.core.cache import cache
+    if cache.add(key, 1, 2 * 24 * 3600):
+        return 1
+    try:
+        return cache.incr(key)
+    except ValueError:
+        cache.add(key, 1, 2 * 24 * 3600)
+        return 1
+
+
+def _spend():
+    """Count one AI answer. AIError when today's allowance (this business's, or the whole site's) is used up;
+    the callers then use the built-in assistant, so nothing stops working."""
+    from django.conf import settings
+    from django.utils import timezone
+
+    from .platform import config
+    if not getattr(settings, "RATELIMIT_ENABLED", True):
+        return
+    day = timezone.now().date().isoformat()
+    business = getattr(_local, "business", None)
+    if business is not None:
+        limit = DEMO_DAILY if business.is_demo else BUSINESS_DAILY
+        if _count(f"ai:{day}:biz:{business.pk}") > limit:
+            raise AIError("Today's AI allowance for this business is used up, so the built-in assistant "
+                          "answers until tomorrow.")
+    site_limit = config().ai_daily_limit
+    if site_limit and _count(f"ai:{day}:site") > site_limit:
+        raise AIError("Today's AI allowance for this site is used up, so the built-in assistant answers until "
+                      "tomorrow.")
+
+
+def used_today():
+    from django.core.cache import cache
+    from django.utils import timezone
+    return cache.get(f"ai:{timezone.now().date().isoformat()}:site") or 0
+
+
 @contextmanager
 def offline():
     """Use the free built-in AI for a moment (e.g. while generating demo history)."""
@@ -159,7 +208,15 @@ def parse_rules(text, location):
     no_tips = {r.key for r in roles if r.no_tips}
     if mode() == "claude":
         content = [{"type": "text", "text": _role_list_text(roles) + "\n\nThe manager's rules:\n" + text}]
-        out = _claude_parse(RULES_SYSTEM, content, RulesOut, effort="medium")
+        try:
+            out = _claude_parse(RULES_SYSTEM, content, RulesOut, effort="medium")
+        except AIError as exc:  # the AI isn't available right now: the built-in reader does it instead
+            out = None
+            rules, summary, warnings = _mock_parse_rules(text, roles)
+            warnings = [f"{exc} The built-in rule reader read these rules instead."] + list(warnings)
+    else:
+        out = None
+    if out is not None:
         warnings = list(out.warnings)
         pools = []
         for pool in out.pools:
@@ -175,7 +232,7 @@ def parse_rules(text, location):
         rules = {"pools": pools, "remainder": remainder,
                  "excluded_roles": sorted(set(_keep_known(out.excluded_roles, known, warnings)) | no_tips)}
         summary = out.summary
-    else:
+    elif mode() != "claude":
         rules, summary, warnings = _mock_parse_rules(text, roles)
 
     try:
@@ -348,6 +405,7 @@ def name():
 def _claude_parse(system, content, output_model, effort="medium"):
     """Ask the site's AI service (Claude or Gemini) and get back a validated `output_model`."""
     from .platform import ai_provider
+    _spend()
     if ai_provider() == "gemini":
         from . import gemini
         return gemini.parse(system, content, output_model)

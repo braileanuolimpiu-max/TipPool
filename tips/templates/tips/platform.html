@@ -72,6 +72,9 @@
       <div><label for="gemini_key">Gemini API key</label><input type="password" id="gemini_key" name="gemini_key" autocomplete="new-password" placeholder="{% if cfg.gemini_key_encrypted %}Saved and hidden{% else %}AIza…{% endif %}">
         <p class="hint">{% if cfg.gemini_model %}Model in use: {{ cfg.gemini_model }}. {% endif %}On the free tier Google may use what it receives to improve its products, and there's a daily limit; when it's reached, the built-in assistant answers until it resets.</p></div>
     </div>
+    <div><label for="ai_daily_limit">Daily AI limit for the whole site</label>
+      <input type="number" id="ai_daily_limit" name="ai_daily_limit" min="0" max="100000" value="{{ cfg.ai_daily_limit }}" style="max-width:12rem">
+      <p class="hint">AI answers per day across every business ({{ ai_used_today }} used today; 0 = no limit). Each business also has its own daily share (demos {{ demo_daily }}, others {{ business_daily }}), so accounts made just to use the AI can't run up costs or use up the free quota. Past a limit, the built-in assistant answers.</p></div>
     <div class="form-grid ai-help" data-for="claude">
       <div><label for="anthropic_key">Claude API key</label><input type="password" id="anthropic_key" name="anthropic_key" autocomplete="new-password" placeholder="{% if cfg.anthropic_key_encrypted %}Saved and hidden{% else %}sk-ant-…{% endif %}">
         <p class="hint">From <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com → API keys</a>.</p></div>

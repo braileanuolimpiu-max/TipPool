@@ -1320,9 +1320,15 @@ def reports_page(request):
         return response
     from . import ask
     question = request.GET.get("q", "").strip()
-    asked = ask.answer(question, reports.scope_locations(request, scope), today,
-                       location=request.location, user=request.user,
-                       named_from=list(request.allowed_locations)) if question else None
+    if question and not hit(f"ask:{request.user.pk}", 20, 600):
+        asked = {"answer": "You've asked a lot in a few minutes. Wait a little, then ask again.", "by": "offline"}
+        question = ""  # nothing more is asked this time
+    else:
+        asked = None
+    if question:
+        asked = ask.answer(question, reports.scope_locations(request, scope), today,
+                           location=request.location, user=request.user,
+                           named_from=list(request.allowed_locations))
     params = request.GET.copy()
     params.pop("q", None)
     return render(request, "tips/reports.html", {

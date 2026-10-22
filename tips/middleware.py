@@ -96,6 +96,8 @@ class LocationMiddleware:
             request.allowed_locations = Location.objects.none()
         if request.location is not None:
             timezone.activate(autoclose.location_tz(request.location))
+        from . import ai
+        ai.for_business(request.business)  # its AI use counts against its daily allowance
         try:  # the address the site is opened at (the host is already checked against ALLOWED_HOSTS)
             if settings.DEBUG or request.get_host().split(":")[0] not in ("localhost", "127.0.0.1"):
                 cache.add("site-url", request.build_absolute_uri("/"), 24 * 3600)
@@ -109,6 +111,9 @@ class LocationMiddleware:
                 watch.run()
             except Exception:
                 pass
-        response = self.get_response(request)
+        try:
+            response = self.get_response(request)
+        finally:
+            ai.for_business(None)
         timezone.deactivate()
         return response

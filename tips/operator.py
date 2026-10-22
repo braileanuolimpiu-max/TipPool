@@ -66,7 +66,8 @@ def platform_settings(request):
     return render(request, "tips/platform.html", {
         "cfg": cfg, "providers": PlatformConfig.EmailProvider.choices, "models": platform.CLAUDE_MODELS,
         "email_on": platform.email_settings() is not None, "ai_on": platform.ai_mode() == "claude",
-        "ai_name": platform.ai_name(),
+        "ai_name": platform.ai_name(), "ai_used_today": _ai().used_today(),
+        "demo_daily": _ai().DEMO_DAILY, "business_daily": _ai().BUSINESS_DAILY,
         "paypal_on": bool(cfg.paypal_client_id), "tick_url": tick, "minutes_since_tick": minutes_since_tick,
         "up_url": request.build_absolute_uri("/up/"),
         "demo_staff": [(name, typed.get(f"staff_{name}", (cfg.demo_staff or {}).get(name, ""))) for name in DEMO_STAFF],
@@ -214,7 +215,15 @@ def _test_email(request, cfg):
 
 
 # --- AI ---------------------------------------------------------------------------------------
+def _ai():
+    from . import ai
+    return ai
+
+
 def _save_ai(request, cfg):
+    raw = request.POST.get("ai_daily_limit", "").strip()
+    if raw.isdigit():
+        cfg.ai_daily_limit = min(int(raw), 100000)
     if request.POST.get("ai_provider") == "gemini":
         return _save_gemini(request, cfg)
     cfg.ai_provider = "claude"

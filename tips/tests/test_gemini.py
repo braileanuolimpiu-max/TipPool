@@ -109,3 +109,65 @@ class GeminiSetupTests(TestCase):
         with mock.patch("tips.gemini.requests.get",
                         return_value=self.models_list(["gemini-3.8-flash", "gemini-flash-latest"])):
             self.assertEqual(gemini.best_model("k"), ("gemini-flash-latest", ""))
+
+
+from django.core.cache import cache  # noqa: E402
+from django.test import override_settings  # noqa: E402
+
+
+@override_settings(RATELIMIT_ENABLED=True)
+class AIAllowanceTests(TestCase):
+    """Accounts made just to use the AI can't run up costs or use up the free quota."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        cfg = PlatformConfig.load()
+        cfg.ai_provider, cfg.ai_enabled, cfg.gemini_model = "gemini", True, "gemini-flash-latest"
+        cfg.gemini_key_encrypted = encrypt("AIza-test")
+        cfg.ai_daily_limit = 3
+        cfg.save()
+        platform.forget()
+        self.location = Location.default()
+
+    def call(self):
+        return ai._claude_parse("s", [{"type": "text", "text": "q"}], ask.AnswerOut)
+
+    def test_the_site_limit_stops_ai_calls(self):
+        with mock.patch("tips.gemini.requests.post", return_value=answer_with({"answer": "ok"})) as post:
+            for _ in range(3):
+                self.call()
+            with self.assertRaisesMessage(ai.AIError, "allowance for this site"):
+                self.call()
+        self.assertEqual(post.call_count, 3)
+        self.assertEqual(ai.used_today(), 4)
+
+    def test_each_business_has_its_own_share(self):
+        cfg = PlatformConfig.load()
+        cfg.ai_daily_limit = 0  # no site limit: only the business's own share
+        cfg.save()
+        business = self.location.business
+        business.is_demo = True
+        ai.for_business(business)
+        self.addCleanup(ai.for_business, None)
+        with mock.patch("tips.gemini.requests.post", return_value=answer_with({"answer": "ok"})):
+            for _ in range(ai.DEMO_DAILY):
+                self.call()
+            with self.assertRaisesMessage(ai.AIError, "allowance for this business"):
+                self.call()
+
+    def test_rules_fall_back_to_the_built_in_reader(self):
+        from tips.tests.helpers import hire
+        hire("Ana", "server", self.location)
+        with mock.patch("tips.gemini.requests.post", return_value=reply(429, {"error": {}})):
+            parsed = ai.parse_rules("Everyone shares the tips by hours worked.", self.location)
+        self.assertTrue(parsed["rules"]["remainder"])
+        self.assertIn("built-in rule reader read these rules instead", parsed["warnings"][0])
+
+    def test_ask_is_limited_per_person(self):
+        self.client.force_login(make_manager("boss"))
+        with mock.patch("tips.gemini.requests.post", return_value=answer_with({"answer": "ok"})):
+            for _ in range(20):
+                self.client.get(reverse("reports"), {"q": "who earned the most?"})
+            page = self.client.get(reverse("reports"), {"q": "who earned the most?"})
+        self.assertContains(page, "asked a lot")

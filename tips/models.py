@@ -761,6 +761,8 @@ class PlatformConfig(models.Model):
     claude_model = models.CharField(max_length=60, blank=True)
     gemini_key_encrypted = models.TextField(blank=True)
     gemini_model = models.CharField(max_length=80, blank=True)
+    # AI answers per day for the whole site (0 = no limit): a ceiling on cost and free quota, whatever happens
+    ai_daily_limit = models.PositiveIntegerField(default=500)
     # TipPool's own PayPal (the demo and businesses that haven't connected theirs yet)
     paypal_client_id = models.CharField(max_length=200, blank=True)
     paypal_secret_encrypted = models.TextField(blank=True)

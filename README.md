@@ -177,11 +177,14 @@ questions, so the app works without an API key (and the demo history is generate
 - Running the site (Platform settings) belongs to the first account on a new site, or needs a one-time setup
   code from the server's log. Platform secrets (email password, API keys) are encrypted and never shown again. Secure cookies, HSTS, CSRF protection, and a referrer policy that keeps private staff links from leaking to other sites.
 - CSV exports are protected against spreadsheet formula injection.
+- AI use is capped: a daily limit for the whole site (set in Platform settings), a daily share per business
+  (smaller for demos) and a per-person limit on Ask, so accounts made just to use the AI can't run up costs
+  or use up a free quota. Past a limit, the built-in assistant answers and nothing stops working.
 
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 332 tests and a lint check, run on GitHub Actions.
+Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 336 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -245,7 +248,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-332 tests cover:
+336 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes
