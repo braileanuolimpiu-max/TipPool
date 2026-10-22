@@ -171,3 +171,31 @@ class AIAllowanceTests(TestCase):
                 self.client.get(reverse("reports"), {"q": "who earned the most?"})
             page = self.client.get(reverse("reports"), {"q": "who earned the most?"})
         self.assertContains(page, "asked a lot")
+
+
+class GeminiBusyTests(TestCase):
+    def setUp(self):
+        cfg = PlatformConfig.load()
+        cfg.ai_provider, cfg.ai_enabled, cfg.gemini_model = "gemini", True, "gemini-flash-latest"
+        cfg.gemini_key_encrypted = encrypt("AIza-test")
+        cfg.save()
+        platform.forget()
+        patcher = mock.patch("tips.gemini.BUSY_WAIT", 0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_busy_once_then_answers(self):
+        busy = reply(503, {"error": {"message": "high demand"}})
+        with mock.patch("tips.gemini.requests.post", side_effect=[busy, answer_with({"answer": "ok"})]):
+            out = ai._claude_parse("s", [{"type": "text", "text": "q"}], ask.AnswerOut)
+        self.assertEqual(out.answer, "ok")
+
+    def test_still_busy_says_so(self):
+        busy = reply(503, {"error": {"message": "high demand"}})
+        with mock.patch("tips.gemini.requests.post", return_value=busy):
+            with self.assertRaisesMessage(ai.AIError, "very busy"):
+                ai._claude_parse("s", [{"type": "text", "text": "q"}], ask.AnswerOut)
+
+    def test_a_busy_model_still_saves_the_key(self):
+        with mock.patch("tips.gemini.requests.post", return_value=reply(503, {"error": {}})):
+            self.assertEqual(gemini.check("k", "gemini-flash-latest"), "")

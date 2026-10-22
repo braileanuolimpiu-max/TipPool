@@ -7,12 +7,14 @@ import base64  # noqa: F401  (images arrive already base64-encoded)
 import copy
 import json
 import logging
+import time
 
 import requests
 from pydantic import ValidationError
 
 log = logging.getLogger("tips.gemini")
 API = "https://generativelanguage.googleapis.com/v1beta"
+BUSY_WAIT = 2  # seconds before trying a busy model once more
 
 
 def _error():
@@ -70,11 +72,16 @@ def parse(system, content, output_model):
     try:
         for i, config in enumerate(shapes):
             response = _post(model, key, {**base, "generationConfig": config})
+            if response.status_code in (500, 503):  # busy for a moment (free tier at peak times): once more
+                time.sleep(BUSY_WAIT)
+                response = _post(model, key, {**base, "generationConfig": config})
             if response.status_code == 400 and i == 0 and "responseFormat" in response.text:
                 continue
             break
     except requests.RequestException as exc:
         raise AIError("Could not reach Gemini (network).") from exc
+    if response.status_code in (500, 503):
+        raise AIError("Gemini is very busy right now (Google's free tier at a peak time).")
     if response.status_code in (401, 403):
         raise AIError("Gemini didn't accept the key. Check it in Platform settings → AI.")
     if response.status_code == 429:
@@ -133,8 +140,8 @@ def check(key, model):
         response = _post(model, key, {"contents": [{"role": "user", "parts": [{"text": "Reply with OK."}]}]})
     except requests.RequestException:
         return "Couldn't reach Gemini just now. Try again in a minute."
-    if response.status_code == 429:
-        return ""  # the key works; only today's free limit is used up
+    if response.status_code in (429, 500, 503):
+        return ""  # the key works; Google is only busy, or today's free limit is used up
     if response.status_code >= 400:
         try:
             said = json.loads(response.text).get("error", {}).get("message", "")[:200]
