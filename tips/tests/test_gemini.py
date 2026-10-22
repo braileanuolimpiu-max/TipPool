@@ -199,3 +199,50 @@ class GeminiBusyTests(TestCase):
     def test_a_busy_model_still_saves_the_key(self):
         with mock.patch("tips.gemini.requests.post", return_value=reply(503, {"error": {}})):
             self.assertEqual(gemini.check("k", "gemini-flash-latest"), "")
+
+
+class FallbackWhenAIUnavailableTests(TestCase):
+    """When Gemini can't answer (limit, busy, network), actions still work and labels stay honest."""
+
+    def setUp(self):
+        cfg = PlatformConfig.load()
+        cfg.ai_provider, cfg.ai_enabled, cfg.gemini_model = "gemini", True, "gemini-flash-latest"
+        cfg.gemini_key_encrypted = encrypt("AIza-test")
+        cfg.save()
+        platform.forget()
+        self.location = Location.default()
+        self.boss = make_manager("boss")
+        patcher = mock.patch("tips.gemini.requests.post", return_value=reply(429, {"error": {}}))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_actions_still_proposed_by_the_built_in_reader(self):
+        from datetime import date
+        from tips.tests.helpers import hire
+        hire("Lea", "server", self.location)
+        result = ask.answer("set Lea to Tue-Sat 7 hours", [self.location], date.today(), location=self.location,
+                            user=self.boss)
+        self.assertIn("proposal", result)
+        self.assertIn("Lea", result["proposal"]["text"])
+
+    def test_the_note_names_the_ai_in_use(self):
+        from datetime import date
+        result = ask.answer("What were our total tips this year?", [self.location], date.today(),
+                            location=self.location, user=self.boss)
+        self.assertTrue(result["answer"].startswith("Gemini couldn't answer just now"))
+
+    def test_rules_page_says_who_really_read_them(self):
+        from tips.tests.helpers import hire
+        hire("Ana", "server", self.location)
+        self.client.force_login(self.boss)
+        page = self.client.post(reverse("rules"), {"text": "Everyone shares by hours worked.", "parse": "1"})
+        self.assertContains(page, "Read by the built-in rule reader")
+        self.assertNotContains(page, "Read by Gemini")
+
+
+class GeminiRetryAfterTests(TestCase):
+    def test_reads_googles_retry_delay(self):
+        r = reply(429, {"error": {"details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo",
+                                               "retryDelay": "7s"}]}})
+        self.assertEqual(gemini.retry_after(r), 7.0)
+        self.assertIsNone(gemini.retry_after(reply(429, {"error": {}})))

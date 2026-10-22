@@ -42,7 +42,7 @@ def parse(question, today):
     if re.search(r"\bpay\b", q) and re.search(r"\b(shift|team|night|everyone)\b", q):
         day = _date_in(q, today)
         return "pay_shift", {"shift_date": day.isoformat() if day else None}
-    m = re.search(r"\badd\s+[$€£]?\s*(\d+(?:\.\d{1,2})?)\s*(?:in\s+|of\s+)?(cash|card)", q)
+    m = re.search(r"\badd\s+[$€£]?\s*(\d+(?:\.\d{1,2})?)\s*(?:dollars?\s+|euros?\s+|pounds?\s+|bucks\s+)?(?:in\s+|of\s+|from\s+(?:the\s+)?)?(cash|card)", q)
     if m:
         day = _date_in(q, today)
         return "add_tip", {"amount": m.group(1), "source": m.group(2),
@@ -62,7 +62,7 @@ def parse_plan(question, today):
     m = re.search(CLOSE_ASKED, q.strip())
     if m:
         found.append((m.start(), "close_shift", {"shift_date": day.isoformat() if day else None}))
-    m = re.search(r"\badd\s+[$€£]?\s*(\d+(?:\.\d{1,2})?)\s*(?:in\s+|of\s+)?(cash|card)", q)
+    m = re.search(r"\badd\s+[$€£]?\s*(\d+(?:\.\d{1,2})?)\s*(?:dollars?\s+|euros?\s+|pounds?\s+|bucks\s+)?(?:in\s+|of\s+|from\s+(?:the\s+)?)?(cash|card)", q)
     if m:
         found.append((m.start(), "add_tip", {"amount": m.group(1), "source": m.group(2),
                                               "shift_date": day.isoformat() if day else None}))

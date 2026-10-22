@@ -206,6 +206,7 @@ def parse_rules(text, location):
         raise AIError("Add your team's roles first (Team page).")
     known = {r.key for r in roles}
     no_tips = {r.key for r in roles if r.no_tips}
+    read_by = name() if mode() == "claude" else "the built-in rule reader"
     if mode() == "claude":
         content = [{"type": "text", "text": _role_list_text(roles) + "\n\nThe manager's rules:\n" + text}]
         try:
@@ -214,6 +215,7 @@ def parse_rules(text, location):
             out = None
             rules, summary, warnings = _mock_parse_rules(text, roles)
             warnings = [f"{exc} The built-in rule reader read these rules instead."] + list(warnings)
+            read_by = "the built-in rule reader"
     else:
         out = None
     if out is not None:
@@ -242,7 +244,7 @@ def parse_rules(text, location):
     for warning in compliance_warnings(rules, no_tips):
         if warning not in warnings:
             warnings.append(warning)
-    return {"rules": rules, "summary": summary, "warnings": warnings}
+    return {"rules": rules, "summary": summary, "warnings": warnings, "read_by": read_by}
 
 
 def _roles_in(fragment, roles):

@@ -6,6 +6,7 @@ AI_MODE=mock   -> a small offline reader handles the common questions with exact
 The numbers always come from reports.py (plain sums). The AI only reads and explains them.
 """
 import calendar
+import logging
 from collections import Counter
 import re
 from datetime import date, timedelta
@@ -24,6 +25,8 @@ EXAMPLES = [
     "Close out tonight, add $40 cash and pay everyone",
     "Fix the payouts that didn't arrive",
 ]
+
+log = logging.getLogger("tips.ask")
 
 MONTHS = {name.lower(): i for i, name in enumerate(calendar.month_name) if name}
 MONTHS.update({name.lower(): i for i, name in enumerate(calendar.month_abbr) if name})
@@ -92,9 +95,18 @@ def _answer(question, locations, today, location=None, user=None):
                 one = out.action or out.steps[0]
                 result.update(_proposal(one.kind, one.model_dump(exclude_none=True), location, user))
             return result
-        except ai.AIError:
-            return {"answer": "Claude couldn't answer just now, so here's what I can work out from your numbers: "
-                              + _offline(question, locations, today), "by": "offline"}
+        except ai.AIError as exc:
+            log.info("AI unavailable for Ask (%s); the built-in assistant answers", exc)
+            unavailable = f"{ai.name()} couldn't answer just now, so here's what I can work out from your numbers: "
+            result = _offline_answer(question, locations, today, location, user)
+            if not result.get("proposal"):
+                result["answer"] = unavailable + result["answer"]
+            return result
+    return _offline_answer(question, locations, today, location, user)
+
+
+def _offline_answer(question, locations, today, location=None, user=None):
+    """The built-in assistant: actions it can read (plans, single actions), else an answer from the numbers."""
     plan = actions.parse_plan(question, today) if location and user else None
     if plan:
         return {"by": "offline", **_plan(plan, location, user)}

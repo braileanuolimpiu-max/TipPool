@@ -15,6 +15,7 @@ from pydantic import ValidationError
 log = logging.getLogger("tips.gemini")
 API = "https://generativelanguage.googleapis.com/v1beta"
 BUSY_WAIT = 2  # seconds before trying a busy model once more
+MAX_RETRY_WAIT = 12  # a per-minute limit that clears this soon is waited for; a daily one isn't
 
 
 def _error():
@@ -51,6 +52,22 @@ def _parts(content):
     return parts
 
 
+def retry_after(response):
+    """Seconds Google asks us to wait (RetryInfo "retryDelay": "7s"), or None."""
+    try:
+        details = response.json().get("error", {}).get("details", [])
+    except ValueError:
+        return None
+    for d in details:
+        delay = str(d.get("retryDelay", ""))
+        if delay.endswith("s"):
+            try:
+                return max(0.0, float(delay[:-1]))
+            except ValueError:
+                return None
+    return None
+
+
 def _post(model, key, body):
     return requests.post(f"{API}/models/{model}:generateContent", json=body, timeout=60,
                          headers={"x-goog-api-key": key, "content-type": "application/json"})
@@ -75,6 +92,11 @@ def parse(system, content, output_model):
             if response.status_code in (500, 503):  # busy for a moment (free tier at peak times): once more
                 time.sleep(BUSY_WAIT)
                 response = _post(model, key, {**base, "generationConfig": config})
+            elif response.status_code == 429:  # the free tier's per-minute limit: wait as long as Google asks
+                wait = retry_after(response)
+                if wait is not None and wait <= MAX_RETRY_WAIT:
+                    time.sleep(wait)
+                    response = _post(model, key, {**base, "generationConfig": config})
             if response.status_code == 400 and i == 0 and "responseFormat" in response.text:
                 continue
             break
@@ -85,7 +107,7 @@ def parse(system, content, output_model):
     if response.status_code in (401, 403):
         raise AIError("Gemini didn't accept the key. Check it in Platform settings → AI.")
     if response.status_code == 429:
-        raise AIError("Gemini's free limit is used up for now. Try again later.")
+        raise AIError("Gemini's free limit is reached for the moment.")
     if response.status_code >= 400:
         log.warning("Gemini error %s: %s", response.status_code, response.text[:300])
         raise AIError(f"Gemini API error ({response.status_code}).")
