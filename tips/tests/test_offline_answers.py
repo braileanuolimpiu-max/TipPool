@@ -37,3 +37,11 @@ class BuiltInAnswersTests(TestCase):
 
     def test_other_questions_are_unchanged(self):
         self.assertIn("earned the most this month", self.answer("Who earned the most this month?"))
+
+
+class NoShiftsYetTests(TestCase):
+    def test_a_new_business_is_told_what_to_do(self):
+        from tips.models import Location
+        text = ask._offline("How much did servers make last week?", [Location.default()], date(2026, 10, 23))
+        self.assertIn("no closed shifts last week (Oct 12 to Oct 18)", text)
+        self.assertIn("Close out tab", text)

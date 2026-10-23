@@ -305,7 +305,9 @@ def _offline(question, locations, today):
     r = reports.build(locations, first, last)
     q = question.lower()
     if not r["shift_count"]:
-        return f"There are no closed shifts {when} yet."
+        span = f"{first:%b %d}" if first == last else f"{first:%b %d} to {last:%b %d}"
+        return (f"There are no closed shifts {when} ({span}) yet, so there's nothing to add up. Once you close "
+                "out a shift (the Close out tab), ask again.")
 
     firsts = Counter(p["name"].split()[0].lower() for p in r["people"] if p["name"].split())
     for p in r["people"]:
