@@ -246,3 +246,33 @@ class GeminiRetryAfterTests(TestCase):
                                                "retryDelay": "7s"}]}})
         self.assertEqual(gemini.retry_after(r), 7.0)
         self.assertIsNone(gemini.retry_after(reply(429, {"error": {}})))
+
+
+class GeminiTimeBudgetTests(TestCase):
+    """A slow AI never holds a page: past the time budget the built-in assistant answers."""
+
+    def setUp(self):
+        cfg = PlatformConfig.load()
+        cfg.ai_provider, cfg.ai_enabled, cfg.gemini_model = "gemini", True, "gemini-flash-latest"
+        cfg.gemini_key_encrypted = encrypt("AIza-test")
+        cfg.save()
+        platform.forget()
+
+    def test_a_hanging_gemini_falls_back(self):
+        import requests
+        from datetime import date
+        location = Location.default()
+        with mock.patch("tips.gemini.requests.post", side_effect=requests.Timeout("slow")) as post:
+            result = ask.answer("Who earned the most this month?", [location], date.today(), location=location,
+                                user=make_manager("boss"))
+        self.assertEqual(result["by"], "offline")
+        self.assertLessEqual(post.call_args.kwargs["timeout"][1], ai.TIME_BUDGET)
+
+    def test_asks_for_little_thinking_and_drops_it_if_refused(self):
+        refused = reply(400, text='{"error": {"message": "Unknown name \\"thinkingConfig\\""}}')
+        with mock.patch("tips.gemini.requests.post", side_effect=[refused, answer_with({"answer": "ok"})]) as post:
+            out = ai._claude_parse("s", [{"type": "text", "text": "q"}], ask.AnswerOut)
+        self.assertEqual(out.answer, "ok")
+        first, second = (c.kwargs["json"]["generationConfig"] for c in post.call_args_list)
+        self.assertIn("thinkingConfig", first)
+        self.assertNotIn("thinkingConfig", second)

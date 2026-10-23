@@ -68,8 +68,8 @@ def retry_after(response):
     return None
 
 
-def _post(model, key, body):
-    return requests.post(f"{API}/models/{model}:generateContent", json=body, timeout=60,
+def _post(model, key, body, timeout=20):
+    return requests.post(f"{API}/models/{model}:generateContent", json=body, timeout=timeout,
                          headers={"x-goog-api-key": key, "content-type": "application/json"})
 
 
@@ -86,20 +86,37 @@ def parse(system, content, output_model):
     # the newer request shape first; the long-standing one if this API version doesn't know it
     shapes = [{"responseFormat": {"text": {"mimeType": "APPLICATION_JSON", "schema": schema}}},
               {"responseMimeType": "application/json", "responseJsonSchema": schema}]
+    from .ai import TIME_BUDGET
+    end = time.monotonic() + TIME_BUDGET
+
+    think = {"thinkingConfig": {"thinkingLevel": "low"}}  # short answers to clear questions: little thinking
+
+    def send(config):  # never past the time budget
+        left = end - time.monotonic()
+        if left < 2:
+            raise AIError("Gemini took too long to answer.")
+        response = _post(model, key, {**base, "generationConfig": {**config, **think}}, timeout=(5, left))
+        if response.status_code == 400 and think and "thinking" in response.text.lower():
+            think.clear()  # a model without that setting: ask again without it
+            return send(config)
+        return response
+
     try:
         for i, config in enumerate(shapes):
-            response = _post(model, key, {**base, "generationConfig": config})
-            if response.status_code in (500, 503):  # busy for a moment (free tier at peak times): once more
-                time.sleep(BUSY_WAIT)
-                response = _post(model, key, {**base, "generationConfig": config})
+            response = send(config)
+            if response.status_code in (500, 503) and end - time.monotonic() > BUSY_WAIT + 5:
+                time.sleep(BUSY_WAIT)  # busy for a moment (free tier at peak times): once more
+                response = send(config)
             elif response.status_code == 429:  # the free tier's per-minute limit: wait as long as Google asks
                 wait = retry_after(response)
-                if wait is not None and wait <= MAX_RETRY_WAIT:
+                if wait is not None and wait <= MAX_RETRY_WAIT and end - time.monotonic() > wait + 5:
                     time.sleep(wait)
-                    response = _post(model, key, {**base, "generationConfig": config})
+                    response = send(config)
             if response.status_code == 400 and i == 0 and "responseFormat" in response.text:
                 continue
             break
+    except requests.Timeout as exc:
+        raise AIError("Gemini took too long to answer.") from exc
     except requests.RequestException as exc:
         raise AIError("Could not reach Gemini (network).") from exc
     if response.status_code in (500, 503):

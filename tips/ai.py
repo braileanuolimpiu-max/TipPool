@@ -33,6 +33,11 @@ class AIError(Exception):
     pass
 
 
+# seconds one AI answer may take in total (retries included). Past it the built-in assistant answers, so a slow
+# AI service never holds a page until the web server gives up on it.
+TIME_BUDGET = 25
+
+
 _local = threading.local()
 
 
@@ -428,7 +433,7 @@ def _anthropic_parse(system, content, output_model, effort="medium"):
     key = anthropic_key()
     if not key:
         raise AIError("Claude isn't connected yet (Platform settings → AI).")
-    client = anthropic.Anthropic(api_key=key)
+    client = anthropic.Anthropic(api_key=key, timeout=TIME_BUDGET, max_retries=0)
     try:
         response = client.messages.parse(
             model=claude_model(),
@@ -438,6 +443,8 @@ def _anthropic_parse(system, content, output_model, effort="medium"):
             output_config={"effort": effort},
             output_format=output_model,
         )
+    except anthropic.APITimeoutError as exc:
+        raise AIError("Claude took too long to answer.") from exc
     except anthropic.AuthenticationError as exc:
         raise AIError("Claude didn't accept the key. Check it in Platform settings → AI.") from exc
     except anthropic.RateLimitError as exc:

@@ -51,8 +51,8 @@ def _messages(system, content, schema=None):
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def _post(base, key, body):
-    return requests.post(f"{base}/chat/completions", json=body, timeout=60,
+def _post(base, key, body, timeout=20):
+    return requests.post(f"{base}/chat/completions", json=body, timeout=timeout,
                          headers={"Authorization": f"Bearer {key}", "content-type": "application/json"})
 
 
@@ -72,16 +72,27 @@ def parse(provider, system, content, output_model):
                              "json_schema": {"name": output_model.__name__, "schema": schema, "strict": False}}},
         {"model": model, "messages": _messages(system, content, schema), "response_format": {"type": "json_object"}},
     ]
+    from .ai import TIME_BUDGET
+    end = time.monotonic() + TIME_BUDGET
+
+    def send(body):  # never past the time budget
+        left = end - time.monotonic()
+        if left < 2:
+            raise AIError(f"{label} took too long to answer.")
+        return _post(base, key, body, timeout=(5, left))
+
     try:
         for i, body in enumerate(tries):
-            response = _post(base, key, body)
-            if response.status_code in (500, 502, 503):  # busy for a moment: once more
-                time.sleep(BUSY_WAIT)
-                response = _post(base, key, body)
+            response = send(body)
+            if response.status_code in (500, 502, 503) and end - time.monotonic() > BUSY_WAIT + 5:
+                time.sleep(BUSY_WAIT)  # busy for a moment: once more
+                response = send(body)
             # a service that doesn't take a JSON schema gets plain JSON mode
             if response.status_code in (400, 422) and i == 0 and _about_format(response):
                 continue
             break
+    except requests.Timeout as exc:
+        raise AIError(f"{label} took too long to answer.") from exc
     except requests.RequestException as exc:
         raise AIError(f"Could not reach {label} (network).") from exc
     if response.status_code in (401, 403):
