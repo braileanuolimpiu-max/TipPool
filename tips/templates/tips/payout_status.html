@@ -9,7 +9,7 @@
     <p>{{ night.date|date:"l, F j" }}.{% if not sample %} PayPal payout {{ batch.paypal_batch_id }}{% endif %}</p>
   </div>
   <div class="actions">
-    {% if not sample %}<form method="post">{% csrf_token %}<button class="btn btn-secondary">Check PayPal again</button></form>{% endif %}
+    {% if not sample %}<form method="post">{% csrf_token %}<button class="btn btn-secondary" data-busy="Checking with PayPal…">Check PayPal again</button></form>{% endif %}
     <a class="btn btn-primary" href="{% url 'dashboard' %}">Back to current shift</a>
   </div>
 </header>
@@ -59,7 +59,7 @@
           <form method="post" action="{% url 'payout_action' item.pk %}">{% csrf_token %}<button class="btn btn-secondary small" name="action" value="remind">Remind them</button></form>
           <form method="post" action="{% url 'payout_action' item.pk %}">{% csrf_token %}<button class="btn btn-secondary small" name="action" value="cancel">Take it back</button></form>
           {% elif item.failed %}
-          <form method="post" action="{% url 'payout_action' item.pk %}">{% csrf_token %}<button class="btn btn-primary small" name="action" value="resend">Send again to {{ item.share.staff.payout_to }}</button></form>
+          <form method="post" action="{% url 'payout_action' item.pk %}">{% csrf_token %}<button class="btn btn-primary small" name="action" value="resend" data-busy="Sending through PayPal…">Send again to {{ item.share.staff.payout_to }}</button></form>
           {% endif %}
         </div>
       </div>

@@ -53,6 +53,40 @@
     f.dataset.confirmed = "1";
     if (e.submitter) f.requestSubmit(e.submitter); else f.requestSubmit();  // keeps the clicked button's value
   }));
+  // a form that was sent: its button says what's happening and can't be pressed twice
+  // (runs after the confirm question above; a form whose sending was stopped is left alone)
+  document.addEventListener("submit", (e) => {
+    const form = e.target;
+    if (e.defaultPrevented || form.hasAttribute("data-no-busy")) return;
+    if (form.dataset.sending) { e.preventDefault(); return; }  // a second click while the first is on its way
+    form.dataset.sending = "1";
+    const button = e.submitter || form.querySelector("button:not([type=button])");
+    if (!button) return;
+    const label = button.dataset.busy || form.dataset.busy || "Working…";
+    setTimeout(() => {  // after the browser has taken the clicked button's value
+      button.dataset.idle = button.innerHTML;
+      button.classList.add("is-busy");
+      button.setAttribute("aria-busy", "true");
+      button.disabled = true;
+      button.innerHTML = '<span class="busy-spin" aria-hidden="true"></span> ';
+      button.append(label);
+    }, 0);
+    // a download or anything that doesn't leave the page: the button comes back
+    setTimeout(() => { if (document.contains(button)) restore(form, button); }, 20000);
+  });
+  const restore = (form, button) => {
+    delete form.dataset.sending;
+    if (button.dataset.idle !== undefined) { button.innerHTML = button.dataset.idle; delete button.dataset.idle; }
+    button.classList.remove("is-busy");
+    button.removeAttribute("aria-busy");
+    button.disabled = false;
+  };
+  // back to a page from the browser's history: nothing is still "sending"
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    document.querySelectorAll("form[data-sending]").forEach((f) =>
+      f.querySelectorAll("button.is-busy").forEach((b) => restore(f, b)));
+  });
   // copyable links show their end, the part that differs between people
   document.querySelectorAll("input.copy-link").forEach((input) => { input.scrollLeft = input.scrollWidth; });
   // tables become labelled cards on phones: each cell gets its column's name

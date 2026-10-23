@@ -18,31 +18,19 @@
 </form>
 </header>
 
-<form method="get" class="panel ask" role="search">
-  <div class="panel-head"><h2>Ask about your tips</h2><span class="small muted">{% if ai_mode == "claude" %}Answered by {{ ai_name }} from your numbers{% else %}Answers to common questions, from your numbers{% endif %}</span></div>
+<section class="panel ask" aria-labelledby="ask-title">
+  <div class="panel-head"><h2 id="ask-title">Ask about your tips</h2><span class="small muted">{% if ai_mode == "claude" %}Answered by {{ ai_name }} from your numbers{% else %}Answers to common questions, from your numbers{% endif %}</span></div>
   <div class="panel-body stack">
-    <div class="ask-row">
-      <input type="search" name="q" value="{{ question }}" maxlength="300" placeholder="e.g. How much did servers make last week?" aria-label="Your question">
+    <form method="get" class="ask-row" id="ask-form" role="search">
+      <input type="search" name="q" value="{{ question }}" maxlength="300" placeholder="e.g. How much did servers make last week?" aria-label="Your question" id="ask-q">
       {% if scope == "all" %}<input type="hidden" name="scope" value="all">{% endif %}
       <input type="hidden" name="period" value="{{ period }}">
       {% if period == "custom" %}<input type="hidden" name="from" value="{{ report.first|date:'Y-m-d' }}"><input type="hidden" name="to" value="{{ report.last|date:'Y-m-d' }}">{% endif %}
-      <button class="btn btn-primary">Ask</button>
-    </div>
-    {% if asked %}
-    <div class="answer" role="status"><p>{{ asked.answer|linebreaksbr }}</p><span class="small muted" style="display:block">{% if asked.proposal %}Nothing happens until you confirm.{% elif asked.by and asked.by != "offline" %}{{ asked.by }}, from your numbers{% else %}Calculated from your numbers{% endif %}</span>
-      {% if asked.proposal.steps %}<ol class="plan-steps">{% for step in asked.proposal.steps %}<li>{{ step }}</li>{% endfor %}</ol>{% endif %}
-      {% if asked.proposal %}
-      <form method="post" action="{% url 'ask_confirm' %}" class="actions" style="margin-top:12px;display:flex;width:100%">{% csrf_token %}
-        <input type="hidden" name="token" value="{{ asked.proposal.token }}">
-        <button class="btn btn-primary" aria-label="Confirm: {{ asked.proposal.text }}">Confirm</button>
-        <a class="btn btn-quiet" href="{% url 'reports' %}">Cancel</a>
-      </form>
-      {% endif %}</div>
-    {% else %}
-    <div class="actions">{% for e in examples %}<a class="chip-link" href="?q={{ e|urlencode }}{% if query %}&{{ query }}{% endif %}">{{ e }}</a>{% endfor %}</div>
-    {% endif %}
+      <button class="btn btn-primary" id="ask-go">Ask</button>
+    </form>
+    <div id="ask-answer" aria-live="polite" data-thinking="{% if ai_mode == "claude" %}{{ ai_name }} is thinking{% else %}Working it out{% endif %}">{% include "tips/_ask_answer.html" %}</div>
   </div>
-</form>
+</section>
 
 
 
@@ -100,6 +88,54 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  // Ask: only the answer area changes while the AI works; the rest of the page stays put
+  (() => {
+    const form = document.getElementById("ask-form"), input = document.getElementById("ask-q");
+    const box = document.getElementById("ask-answer"), go = document.getElementById("ask-go");
+    if (!form || !window.fetch) return;
+    let busy = null;
+    const thinking = () => {
+      const note = document.createElement("div");
+      note.className = "answer thinking";
+      note.setAttribute("role", "status");
+      note.innerHTML = '<span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span> <span></span>';
+      note.lastElementChild.textContent = box.dataset.thinking + "…";
+      return note;
+    };
+    async function ask(question) {
+      if (!question) return;
+      input.value = question;
+      const params = new URLSearchParams(new FormData(form));
+      params.set("q", question);
+      history.replaceState(null, "", "?" + params);  // a refresh or a shared link keeps the question
+      busy?.abort();
+      busy = new AbortController();
+      box.replaceChildren(thinking());
+      go.disabled = true;
+      try {
+        params.set("partial", "1");
+        const res = await fetch("?" + params, {signal: busy.signal, headers: {"X-Requested-With": "fetch"}});
+        if (!res.ok) throw new Error(res.status);
+        box.innerHTML = await res.text();
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        location.href = "?" + params.toString().replace(/&?partial=1/, "");  // the old way still works
+      } finally {
+        go.disabled = false;
+      }
+    }
+    form.addEventListener("submit", (e) => { e.preventDefault(); ask(input.value.trim()); });
+    box.addEventListener("click", (e) => {
+      const chip = e.target.closest("a.chip-link[data-q]");
+      if (chip) { e.preventDefault(); ask(chip.dataset.q); return; }
+      if (e.target.closest("[data-ask-cancel]")) {
+        e.preventDefault();
+        input.value = "";
+        history.replaceState(null, "", location.pathname);
+        fetch("?partial=1", {headers: {"X-Requested-With": "fetch"}}).then((r) => r.text()).then((html) => { box.innerHTML = html; });
+      }
+    });
+  })();
   const period = document.getElementById("period");
   period.addEventListener("change", () => {
     document.querySelector(".custom-dates").hidden = period.value !== "custom";

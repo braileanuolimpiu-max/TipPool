@@ -45,7 +45,7 @@
     </ul>
     <div class="sticky-bar">
       {% if night.status == "open" %}<button class="btn btn-secondary" name="save_roster">Save for later</button>{% else %}<span class="small muted">You can change this after checking the split.</span>{% endif %}
-      <button class="btn btn-primary" {% if not rows or not rule_set and night.pool_total %}disabled{% endif %}>{% if night.status == "open" %}Close out and calculate{% else %}Calculate the split{% endif %}</button>
+      <button class="btn btn-primary" data-busy="Splitting the tips and checking the shift…" {% if not rows or not rule_set and night.pool_total %}disabled{% endif %}>{% if night.status == "open" %}Close out and calculate{% else %}Calculate the split{% endif %}</button>
     </div>
   </form>
 
@@ -85,7 +85,7 @@
       <div class="panel-body stack">
         <p class="muted small" style="margin:0">Snap the schedule or the timecards. AI fills in who worked and their hours, and you check it before anything is calculated.</p>
         <input type="file" name="photo" accept="image/*" capture="environment" required aria-label="Schedule photo">
-        <button class="btn btn-secondary">Read the photo</button>
+        <button class="btn btn-secondary" data-busy="Reading the photo…">Read the photo</button>
         {% if ai_mode != "claude" %}<p class="hint tight">Reading a schedule photo isn't available on this site, so fill the list by hand.</p>{% endif %}
         {% if ai_notes %}<div class="note-warn"><strong>Check these</strong><ul>{% for n in ai_notes %}<li>{{ n }}</li>{% endfor %}</ul></div>{% endif %}
       </div>

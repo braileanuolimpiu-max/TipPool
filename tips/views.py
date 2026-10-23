@@ -1331,6 +1331,10 @@ def reports_page(request):
                            named_from=list(request.allowed_locations))
     params = request.GET.copy()
     params.pop("q", None)
+    params.pop("partial", None)
+    if request.GET.get("partial"):  # just the answer area, for the page that asked without reloading
+        return render(request, "tips/_ask_answer.html", {"asked": asked, "examples": ask.EXAMPLES,
+                                                          "query": params.urlencode()})
     return render(request, "tips/reports.html", {
         "report": report, "periods": reports.PERIODS, "period": period, "scope": scope,
         "query": params.urlencode(), "question": question, "asked": asked, "examples": ask.EXAMPLES,

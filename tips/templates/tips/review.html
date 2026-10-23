@@ -85,7 +85,7 @@
       <label class="choice"><input type="checkbox" name="checked" required>
         <span><strong>I checked these</strong><span class="small muted">{% for f in stops %}{{ f.text }}{% if not forloop.last %} · {% endif %}{% endfor %}</span></span></label>
       {% endif %}
-      <button class="btn btn-primary btn-block">Pay {{ paying_count }} {% if paying_count == 1 %}person{% else %}people{% endif %} {{ cur }}{{ paid_total|money }}</button>
+      <button class="btn btn-primary btn-block" data-busy="Paying through PayPal…">Pay {{ paying_count }} {% if paying_count == 1 %}person{% else %}people{% endif %} {{ cur }}{{ paid_total|money }}</button>
       <a class="btn btn-quiet" href="{% url 'close_night_pk' night.pk %}">Change who worked</a>
     </form>
     {% else %}

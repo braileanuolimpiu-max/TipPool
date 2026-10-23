@@ -22,7 +22,7 @@
       <p class="hint tight">Your roles: {% for r in roles %}{{ r.name }}{% if not forloop.last %}, {% endif %}{% empty %}none yet{% endfor %}.
         <a href="{% url 'staff_list' %}#roles">Change roles</a></p>
       <div class="actions">
-        <button class="btn btn-primary" name="parse">Read my rules</button>
+        <button class="btn btn-primary" name="parse" data-busy="{% if ai_mode == "claude" %}{{ ai_name }} is reading your rules…{% else %}Reading your rules…{% endif %}">Read my rules</button>
         <span class="small muted">Read by {% if preview.read_by %}{{ preview.read_by }}{% elif ai_mode == "claude" %}{{ ai_name }}{% else %}the built-in rule reader{% endif %}</span>
       </div>
     </div>

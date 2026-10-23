@@ -102,3 +102,24 @@ class AskTests(TestCase):
         self.assertIn("October 2026", sent)
         self.assertIn("Maria (Server)", sent)
         self.assertIn("Question: How did Maria do?", sent)
+
+
+class AskInPlaceTests(TestCase):
+    """The answer area is filled without reloading the page; Confirm sits in its own form."""
+
+    def setUp(self):
+        self.client.force_login(make_manager("boss"))
+
+    def test_partial_returns_only_the_answer_area(self):
+        page = self.client.get(reverse("reports"), {"q": "What were our total tips this year?", "partial": "1"})
+        self.assertNotContains(page, "<html")
+        self.assertContains(page, 'class="answer"')
+
+    def test_examples_come_back_when_nothing_is_asked(self):
+        page = self.client.get(reverse("reports"), {"partial": "1"})
+        self.assertContains(page, 'data-q="Who earned the most this month?"')
+
+    def test_confirm_is_not_inside_the_question_form(self):
+        html = self.client.get(reverse("reports")).content.decode()
+        start = html.index('id="ask-form"')
+        self.assertLess(html.index("</form>", start), html.index('id="ask-answer"'))
