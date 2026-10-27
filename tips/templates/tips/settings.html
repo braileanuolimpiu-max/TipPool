@@ -279,7 +279,7 @@
             {% if m.is_owner %}<span class="pill live">Owner</span>
             {% elif is_owner %}
             <form method="post" action="{% url 'manager_level' m.pk %}" class="role-pick">{% csrf_token %}
-              <select name="level" aria-label="Level for {{ m.user.get_full_name|default:m.user.username }}" onchange="this.form.requestSubmit()">
+              <select name="level" aria-label="Level for {{ m.user.get_full_name|default:m.user.username }}" data-autosubmit>
                 <option value="manager" {% if m.level == "manager" %}selected{% endif %}>Manager</option>
                 <option value="lead" {% if m.level == "lead" %}selected{% endif %}>Shift lead</option>
               </select></form>
@@ -303,7 +303,7 @@
           {% endfor %}
           {% for invite, link in invites %}
           <li class="invite-row"><div style="flex:1;min-width:0"><strong>{{ invite.email }}</strong> <span class="pill wait">Invited</span>
-              {% if link %}<div class="small muted">Send them this link: <input class="copy-link" type="text" readonly value="{{ link }}" aria-label="Invite link for {{ invite.email }}" onclick="this.select()"></div>{% endif %}</div>
+              {% if link %}<div class="small muted">Send them this link: <input class="copy-link" type="text" readonly value="{{ link }}" aria-label="Invite link for {{ invite.email }}"></div>{% endif %}</div>
             {% if is_owner %}<form method="post" action="{% url 'cancel_invite' invite.pk %}">{% csrf_token %}<button class="btn btn-quiet small">Cancel</button></form>{% endif %}
           </li>
           {% endfor %}
@@ -348,7 +348,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // the save bar lights up when something changed, and leaving the page asks first
   (() => {
     const form = document.getElementById("location-settings");

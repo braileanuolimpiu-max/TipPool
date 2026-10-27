@@ -93,7 +93,7 @@
 {% endblock %}
 {% block scripts %}
 {% if night.status == "paying" %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Ask PayPal every few seconds until every payment is final (for 15 minutes; then "Check with PayPal" or reload)
   const pollUntil = Date.now() + 15 * 60 * 1000;
   const poll = setInterval(async () => {

@@ -64,7 +64,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // live preview: any change redraws the pages
   const studio = document.getElementById("studio");
   let timer;

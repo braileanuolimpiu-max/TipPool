@@ -225,3 +225,13 @@
     ["mousedown", "scroll", "keydown"].forEach((type) => window.addEventListener(type, hide, true));
   }
 })();
+
+/* Small behaviours that used to be inline handlers (the Content-Security-Policy blocks those):
+   a select marked data-autosubmit sends its form when changed; a copy-link box selects itself when clicked. */
+document.addEventListener("change", (e) => {
+  const select = e.target.closest && e.target.closest("select[data-autosubmit]");
+  if (select && select.form) select.form.requestSubmit();
+});
+document.addEventListener("click", (e) => {
+  if (e.target.matches && e.target.matches("input.copy-link")) e.target.select();
+});

@@ -11,9 +11,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  <script src="{% static 'js/pick.js' %}" defer></script>
-  <script src="{% static 'js/ui.js' %}" defer></script>
-  <script>try { var t = localStorage.getItem("tp-theme"); if (t === "dark") document.documentElement.dataset.theme = "dark"; } catch (e) {}</script>
+  <script nonce="{{ csp_nonce }}" src="{% static 'js/pick.js' %}" defer></script>
+  <script nonce="{{ csp_nonce }}" src="{% static 'js/ui.js' %}" defer></script>
+  <script nonce="{{ csp_nonce }}">try { var t = localStorage.getItem("tp-theme"); if (t === "dark") document.documentElement.dataset.theme = "dark"; } catch (e) {}</script>
   {% block head %}{% endblock %}
 </head>
 <body{% block body_class %}{% endblock %}>
@@ -27,7 +27,7 @@
     </div>
   </form>
 </dialog>
-<script>
+<script nonce="{{ csp_nonce }}">
   // "Are you sure?" in TipPool's own style. tpConfirm(text, {yes, no, danger}) resolves to true or false.
   window.tpConfirm = (text, opts = {}) => new Promise((resolve) => {
     const dialog = document.getElementById("confirm-dialog");

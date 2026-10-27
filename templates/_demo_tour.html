@@ -17,7 +17,7 @@
   </ol>
   {% if demo_tour.done == demo_tour.total %}<p class="tour-end">That's the whole loop. <a href="{% url 'signup' %}">Make your own business</a></p>{% endif %}
 </details>
-<script>
+<script nonce="{{ csp_nonce }}">
   // the tour unfolds by itself once, on the first visit to the dashboard (never on phones)
   (() => {
     const tour = document.getElementById("demo-tour");

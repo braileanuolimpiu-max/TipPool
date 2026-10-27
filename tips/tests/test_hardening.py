@@ -27,9 +27,9 @@ class AdminSignInTests(CleanCache):
         user = make_manager("boss")
         user.is_staff = user.is_superuser = True
         user.save()
-        res = self.client.get("/admin/login/?next=/admin/")
-        self.assertEqual(res.status_code, 302)
-        self.assertTrue(res["Location"].startswith(reverse("login")))
+        # signed out, the admin doesn't exist: no sign-in page of its own to guess at (it would skip the two-step code)
+        for url in ("/admin/", "/admin/login/?next=/admin/"):
+            self.assertEqual(self.client.get(url).status_code, 404, url)
         self.client.post("/admin/login/?next=/admin/", {"username": "boss@example.com", "password": "pw"})
         self.assertFalse(self.client.get(reverse("dashboard")).wsgi_request.user.is_authenticated)
 
@@ -269,9 +269,8 @@ class GapFixTests(CleanCache):
         page = self.client.get(reverse("platform_settings"))
         self.assertEqual(page.status_code, 403)
         self.assertContains(page, "Turn on two-step sign-in first", status_code=403)
-        res = self.client.get("/admin/", follow=True)  # no admin either, and no redirect loop
-        self.assertLess(len(res.redirect_chain), 4)
-        self.assertNotContains(res, "Site administration")
+        res = self.client.get("/admin/", follow=True)  # no admin either: it doesn't exist for them
+        self.assertEqual((res.status_code, res.redirect_chain), (404, []))
         op.manager.totp_enabled = True
         op.manager.save()
         self.assertEqual(self.client.get(reverse("platform_settings")).status_code, 200)
@@ -290,11 +289,29 @@ class GapFixTests(CleanCache):
         user.manager.refresh_from_db()
         self.assertTrue(user.manager.totp_enabled)
 
-    def test_admin_does_not_loop_for_a_manager(self):
+    def test_admin_is_not_found_for_a_manager(self):
         self.client.force_login(make_manager("owner"))
         res = self.client.get("/admin/", follow=True)
-        self.assertLess(len(res.redirect_chain), 4)
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual((res.status_code, res.redirect_chain), (404, []))
+
+    def test_every_page_has_a_content_security_policy_and_its_scripts_the_nonce(self):
+        import re
+        self.client.force_login(make_manager("owner"))
+        for url in (reverse("dashboard"), reverse("settings"), reverse("login"),
+                    reverse("tip_page") + f"?at={Location.default().slug}"):
+            if url == reverse("login"):
+                self.client.logout()
+            res = self.client.get(url)
+            policy = res["Content-Security-Policy"]
+            nonce = re.search(r"'nonce-([^']+)'", policy).group(1)
+            self.assertIn("frame-ancestors 'none'", policy)
+            html = res.content.decode()
+            scripts = re.findall(r"<script\b[^>]*>", html)
+            self.assertTrue(scripts, url)
+            for tag in scripts:  # every script runs only with this request's nonce (JSON data blocks aren't run)
+                if 'type="application/json"' not in tag:
+                    self.assertIn(f'nonce="{nonce}"', tag, f"{url}: {tag}")
+            self.assertIsNone(re.search(r"\son[a-z]+=\"", html), f"{url}: an inline event handler")
 
 
 class LiveUpdatesTests(CleanCache):

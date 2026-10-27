@@ -87,7 +87,7 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Ask: only the answer area changes while the AI works; the rest of the page stays put
   (() => {
     const form = document.getElementById("ask-form"), input = document.getElementById("ask-q");

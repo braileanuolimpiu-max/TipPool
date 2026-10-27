@@ -33,6 +33,7 @@ def app_context(request):
         if business is not None:
             demo_tour = tour.steps(request, business, location)
     return {
+        "csp_nonce": getattr(request, "csp_nonce", ""),  # on every <script>: the Content-Security-Policy needs it
         "demo_tour": demo_tour,
         "is_lead": bool(profile and profile.is_lead),
         "email_enabled": platform.email_enabled(),

@@ -70,7 +70,7 @@
 {{ currency|json_script:"currency-data" }}
 {{ js_words|json_script:"words-data" }}
 {{ botcheck_key|json_script:"botcheck-data" }}
-<script>
+<script nonce="{{ csp_nonce }}">
   // the bot check (Cloudflare Turnstile), when the site has it on: usually invisible, one check per order
   const BOT_KEY = JSON.parse(document.getElementById("botcheck-data").textContent);
   let botToken = "", botWidget = null;
@@ -226,8 +226,14 @@
       statusEl.textContent = T.err_load;
     }
   }
-  {% if not paypal_client_id %}statusEl.textContent = T.not_ready;  // no PayPal connected yet: refreshing won't help{% endif %}
+  {% if not paypal_client_id %}statusEl.textContent = T.not_ready;  // no PayPal connected yet: refreshing won't help{% else %}
+  // PayPal's SDK, loaded from here so its "loaded" handler needs no inline attribute (the CSP blocks those)
+  const sdk = document.createElement("script");
+  sdk.src = "{{ paypal_sdk_url|escapejs }}";
+  sdk.async = true;
+  sdk.nonce = "{{ csp_nonce }}";
+  sdk.addEventListener("load", onPayPalWebSdkLoaded);
+  document.head.appendChild(sdk);{% endif %}
 </script>
-{% if paypal_client_id %}<script async src="{{ paypal_sdk_url }}" onload="onPayPalWebSdkLoaded()"></script>{% endif %}
-{% if botcheck_key %}<script async defer src="{{ botcheck_script }}"></script>{% endif %}
+{% if botcheck_key %}<script nonce="{{ csp_nonce }}" async defer src="{{ botcheck_script }}"></script>{% endif %}
 {% endblock %}

@@ -18,13 +18,13 @@
           <div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ m.staff.payout_to }}">{{ m.staff.payout_to }}</div>
         </div>
         {% if m.active %}<form method="post" action="{% url 'staff_role' m.pk %}" class="role-pick">{% csrf_token %}
-          <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" onchange="this.form.requestSubmit()">
+          <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" data-autosubmit>
             {% for r in roles %}<option value="{{ r.key }}" {% if r.key == m.default_role %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
           </select><noscript><button class="btn btn-quiet small">Save</button></noscript></form>{% endif %}
         {% if m.active %}
         <div class="link-tools">
           <span class="label">Tips link</span>
-          <input class="copy-link" type="text" readonly value="{{ base_url }}{% url 'my_tips' m.staff.access_token %}" aria-label="{{ m.staff.name }}'s private tips link" onclick="this.select()">
+          <input class="copy-link" type="text" readonly value="{{ base_url }}{% url 'my_tips' m.staff.access_token %}" aria-label="{{ m.staff.name }}'s private tips link">
           <button type="button" class="icon-btn" data-copy aria-label="Copy {{ m.staff.name }}'s link" title="Copy link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
           <form method="post" action="{% url 'staff_new_link' m.pk %}" data-confirm="Make a new link for {{ m.staff.name }}? The old link stops working right away." data-confirm-yes="Make a new link">{% csrf_token %}
@@ -142,7 +142,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // copy a person's private tips link
   document.querySelectorAll("[data-copy]").forEach((btn) => btn.addEventListener("click", async () => {
     const input = btn.parentElement.querySelector(".copy-link");

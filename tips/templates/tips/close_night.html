@@ -100,7 +100,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Dim a person's fields when they're switched off, and keep a live count
   const form = document.getElementById("roster-form");
   function update() {

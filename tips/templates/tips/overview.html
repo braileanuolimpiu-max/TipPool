@@ -7,7 +7,7 @@
 <div id="board" aria-live="polite">{% include "tips/_board.html" %}</div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // the board refreshes itself every minute while it's on screen
   setInterval(async () => {
     if (document.hidden) return;

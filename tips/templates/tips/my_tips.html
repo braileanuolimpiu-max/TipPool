@@ -129,7 +129,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // "Add to home screen": Android/Chrome gives us a prompt; on iPhone we explain the Share menu
   (function () {
     const hint = document.getElementById("install-hint");

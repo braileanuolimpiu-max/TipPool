@@ -64,12 +64,14 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'tips.middleware.UpMiddleware',  # first: /up/ never touches the database
     'django.middleware.security.SecurityMiddleware',
+    'tips.middleware.ContentSecurityPolicyMiddleware',
     'tips.middleware.SizeLimitMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # serves the CSS and icons in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'tips.middleware.HiddenAdminMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'tips.middleware.LocationMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

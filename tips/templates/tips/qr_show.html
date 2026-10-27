@@ -11,7 +11,7 @@
 </main>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // keep the phone or tablet screen on while the code is showing
   if ("wakeLock" in navigator) { navigator.wakeLock.request("screen").catch(() => {}); }
 </script>

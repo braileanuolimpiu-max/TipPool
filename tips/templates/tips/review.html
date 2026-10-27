@@ -98,7 +98,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   const pay = document.getElementById("pay-form");
   if (pay) pay.addEventListener("submit", () => {
     const b = pay.querySelector("button");

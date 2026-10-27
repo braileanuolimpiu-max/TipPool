@@ -79,6 +79,61 @@ class SizeLimitMiddleware:
         return self.get_response(request)
 
 
+PAYPAL = "https://*.paypal.com https://*.paypalobjects.com"
+TURNSTILE = "https://challenges.cloudflare.com"
+
+
+def content_security_policy(nonce):
+    """Only our own scripts (each page's inline ones carry this request's nonce), PayPal's SDK and Cloudflare's
+    bot check run. Style attributes stay allowed: the risk is in scripts, and the pages use many of them."""
+    return "; ".join([
+        "default-src 'self'",
+        f"script-src 'self' 'nonce-{nonce}' {PAYPAL} {TURNSTILE}",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        f"img-src 'self' data: {PAYPAL}",
+        f"connect-src 'self' {PAYPAL} {TURNSTILE}",
+        f"frame-src {PAYPAL} https://*.venmo.com {TURNSTILE}",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+    ])
+
+
+class ContentSecurityPolicyMiddleware:
+    """A fresh nonce per request (templates put it on every <script>), and the policy on every page."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        import secrets
+        request.csp_nonce = secrets.token_urlsafe(16)
+        response = self.get_response(request)
+        if "Content-Security-Policy" not in response and response.get("Content-Type", "").startswith("text/html"):
+            response["Content-Security-Policy"] = content_security_policy(request.csp_nonce)
+        return response
+
+
+class HiddenAdminMiddleware:
+    """The Django admin doesn't exist for anyone but the site's operator (signed in, two-step on):
+    to everyone else /admin/ is a plain "not found", so scanners and guessers find nothing to attack."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path.startswith("/admin/"):
+            from . import platform
+            user = getattr(request, "user", None)
+            if not (platform.is_operator(user) and not platform.needs_two_step(user)):
+                from django.http import Http404
+                from .errors import not_found
+                return not_found(request, Http404())
+        return self.get_response(request)
+
+
 class LocationMiddleware:
     """Set request.location, show times in its time zone, and run due auto close-outs
     (at most once a minute) while a manager is using the app."""
