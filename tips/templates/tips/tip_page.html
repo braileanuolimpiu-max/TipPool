@@ -48,6 +48,7 @@
         <venmo-button type="pay" class="venmo-blue" hidden></venmo-button>
       </div>
       <p id="status" class="status-line" role="status">{{ t.loading }}</p>
+      {% if botcheck_key %}<div id="botcheck"></div>{% endif %}
     </div>
   </div>
   {% if sandbox_buyer %}
@@ -68,7 +69,24 @@
 {{ cur|json_script:"cur-data" }}
 {{ currency|json_script:"currency-data" }}
 {{ js_words|json_script:"words-data" }}
+{{ botcheck_key|json_script:"botcheck-data" }}
 <script>
+  // the bot check (Cloudflare Turnstile), when the site has it on: usually invisible, one check per order
+  const BOT_KEY = JSON.parse(document.getElementById("botcheck-data").textContent);
+  let botToken = "", botWidget = null;
+  window.onBotCheckLoaded = () => {
+    botWidget = turnstile.render("#botcheck", {sitekey: BOT_KEY, appearance: "interaction-only",
+      callback: (token) => { botToken = token; }, "expired-callback": () => { botToken = ""; },
+      "error-callback": () => { botToken = ""; }});
+  };
+  async function botCheckToken() {
+    if (!BOT_KEY) return "";
+    for (let i = 0; i < 20 && !botToken; i++) await new Promise((r) => setTimeout(r, 200));  // up to 4 seconds
+    const token = botToken;
+    botToken = "";
+    if (window.turnstile && botWidget !== null) turnstile.reset(botWidget);  // a fresh one for the next order
+    return token;  // "" if the check couldn't load: the server still lets a few through
+  }
   const CSRF = "{{ csrf_token }}";
   const T = JSON.parse(document.getElementById("words-data").textContent);
   const TABLE = JSON.parse(document.getElementById("table-data").textContent);
@@ -134,7 +152,7 @@
     const res = await fetch("{% url 'api_create_order' %}", {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-CSRFToken": CSRF},
-      body: JSON.stringify({amount: amount, table: TABLE, at: AT, to: to}),
+      body: JSON.stringify({amount: amount, table: TABLE, at: AT, to: to, botcheck: await botCheckToken()}),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || T.err_start);
@@ -211,4 +229,5 @@
   {% if not paypal_client_id %}statusEl.textContent = T.not_ready;  // no PayPal connected yet: refreshing won't help{% endif %}
 </script>
 {% if paypal_client_id %}<script async src="{{ paypal_sdk_url }}" onload="onPayPalWebSdkLoaded()"></script>{% endif %}
+{% if botcheck_key %}<script async defer src="{{ botcheck_script }}"></script>{% endif %}
 {% endblock %}

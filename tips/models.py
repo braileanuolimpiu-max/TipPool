@@ -785,6 +785,9 @@ class PlatformConfig(models.Model):
     cron_secret = models.CharField(max_length=60, default=new_cron_secret)
     # "Make a new address" was used: the key from the environment (CRON_SECRET) stops working too
     cron_env_retired = models.BooleanField(default=False)
+    # the bot check on guest tip pages (Cloudflare Turnstile): off until both keys are saved
+    turnstile_site_key = models.CharField(max_length=100, blank=True)
+    turnstile_secret_encrypted = models.TextField(blank=True)
     last_tick_at = models.DateTimeField(null=True, blank=True)
     contact_email = models.CharField(max_length=200, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -820,3 +823,8 @@ class PlatformConfig(models.Model):
     def paypal_secret(self):
         from .vault import decrypt
         return decrypt(self.paypal_secret_encrypted)
+
+    @property
+    def turnstile_secret(self):
+        from .vault import decrypt
+        return decrypt(self.turnstile_secret_encrypted)

@@ -23,13 +23,13 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, guest_i18n, hours as hours_from, insights, platform, roles as role_presets, services
+from . import ai, autoclose, botcheck, guest_i18n, hours as hours_from, insights, platform, roles as role_presets, services
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, owner_required, two_step_setup_context
 from .check import blocking as check_blocking, live as check_live
 from .middleware import public_location
-from .ratelimit import hit, limited
+from .ratelimit import client_ip, hit, limited
 from .paypal import PayPalError, checkout_config, get_client, webhook_id_for
 
 log = logging.getLogger("tips.views")
@@ -175,13 +175,14 @@ def tip_page(request):
             "table": request.GET.get("table", "")[:20],
             "paypal_client_id": checkout_config(location.business)[0],
             "paypal_sdk_url": checkout_config(location.business)[1],
+            "botcheck_key": botcheck.site_key(), "botcheck_script": botcheck.SCRIPT_URL,
             "currency": location.business.currency,
             "cur": location.business.symbol,
         })
     return guest_i18n.remember(response, request, lang)
 
 
-LEGAL_UPDATED = "October 21, 2026"
+LEGAL_UPDATED = "October 27, 2026"
 
 
 def legal_page(request, page):
@@ -248,6 +249,9 @@ def api_create_order(request):
         location = Location.objects.filter(slug=str(data.get("at", ""))[:40], archived=False).first()
         if location is None:
             return JsonResponse({"error": "This tip page doesn't belong to a business."}, status=404)
+        if not botcheck.passed(data.get("botcheck"), client_ip(request), location.pk):
+            return JsonResponse({"error": "We couldn't check this is a real visit. Reload the page and try again."},
+                                status=403)
         # a location-wide stop for floods of orders nobody pays: only unfinished ones count, so real tips
         # (however busy the night) never use it up
         if settings.RATELIMIT_ENABLED and Tip.objects.filter(

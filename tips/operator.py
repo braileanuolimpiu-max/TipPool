@@ -15,7 +15,7 @@ from .models import Change, PlatformConfig
 from .vault import encrypt
 
 DEMO_STAFF = ["Maria", "John", "Lea", "Alex", "Sam"]
-TYPED_FIELDS = ['email_provider', 'email_host', 'email_port', 'email_user', 'email_from', 'claude_model', 'paypal_client_id', 'demo_buyer_email', 'demo_buyer_password', 'contact_email']
+TYPED_FIELDS = ['email_provider', 'email_host', 'email_port', 'email_user', 'email_from', 'claude_model', 'paypal_client_id', 'demo_buyer_email', 'demo_buyer_password', 'contact_email', 'turnstile_site_key']
 
 
 def _operator_only(request):
@@ -56,7 +56,8 @@ def platform_settings(request):
         section = request.POST.get("section", "")
         handler = {"email": _save_email, "email_test": _test_email, "ai": _save_ai, "paypal": _save_paypal,
                    "paypal_disconnect": _disconnect_paypal, "demo": _save_demo, "cron_new": _new_cron,
-                   "contact": _save_contact, "paypal_webhook": _retry_webhook}.get(section)
+                   "contact": _save_contact, "paypal_webhook": _retry_webhook, "botcheck": _save_botcheck,
+                   "botcheck_off": _botcheck_off}.get(section)
         if handler:
             return handler(request, cfg)
     typed = request.session.pop("platform_typed", {})
@@ -73,6 +74,7 @@ def platform_settings(request):
         "demo_staff": [(name, typed.get(f"staff_{name}", (cfg.demo_staff or {}).get(name, ""))) for name in DEMO_STAFF],
         "form": form,
         "https": request.is_secure(),
+        "botcheck_on": bool(cfg.turnstile_site_key and cfg.turnstile_secret_encrypted),
     })
 
 
@@ -404,6 +406,34 @@ def _new_cron(request, cfg):
     cfg.save()
     messages.warning(request, "New scheduler address made. Paste it into cron-job.org again: the old one stopped working.")
     return redirect(f"{reverse('platform_settings')}#scheduler")
+
+
+def _save_botcheck(request, cfg):
+    from . import botcheck
+    site_key = request.POST.get("turnstile_site_key", "").strip()[:100]
+    secret = request.POST.get("turnstile_secret", "").strip()[:200]
+    if not site_key or not (secret or cfg.turnstile_secret_encrypted):
+        messages.error(request, "Paste both keys from Cloudflare: the site key and the secret key.")
+        return redirect(f"{reverse('platform_settings')}#botcheck")
+    if secret:
+        works = botcheck.secret_works(secret)
+        if works is False:
+            messages.error(request, "Cloudflare didn't accept that secret key. Copy it again from Turnstile → your "
+                                    "site → Settings.")
+            return redirect(f"{reverse('platform_settings')}#botcheck")
+        cfg.turnstile_secret_encrypted = encrypt(secret)
+        if works is None:
+            messages.warning(request, "Cloudflare couldn't be reached to check the secret key, so it was saved "
+                                      "unchecked. Tips go through anyway if it's wrong.")
+    cfg.turnstile_site_key = site_key
+    cfg.save()
+    return _done(request, "the bot check on tip pages is on", "botcheck")
+
+
+def _botcheck_off(request, cfg):
+    cfg.turnstile_site_key, cfg.turnstile_secret_encrypted = "", ""
+    cfg.save()
+    return _done(request, "the bot check on tip pages is off", "botcheck")
 
 
 def _save_contact(request, cfg):
