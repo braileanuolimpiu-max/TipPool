@@ -2,7 +2,7 @@
   <summary>
     <span class="tour-title">Demo tour</span>
     <span class="tour-count num">{{ demo_tour.done }}/{{ demo_tour.total }}</span>
-    <span class="tour-bar" aria-hidden="true"><i style="width:{% widthratio demo_tour.done demo_tour.total 100 %}%"></i></span>
+    <span class="tour-bar" aria-hidden="true"><i data-css="width:{% widthratio demo_tour.done demo_tour.total 100 %}%"></i></span>
   </summary>
   <ol class="tour-steps">
     {% for s in demo_tour.steps %}

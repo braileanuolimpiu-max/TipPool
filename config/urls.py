@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.views import redirect_to_login
@@ -12,7 +13,7 @@ from tips.ratelimit import limited
 def _admin_login(request, extra_context=None):
     if request.user.is_authenticated:  # signed in but not allowed in the admin: back to TipPool, no loop
         return redirect("dashboard")
-    return redirect_to_login(request.GET.get("next") or "/admin/")
+    return redirect_to_login(request.GET.get("next") or "/" + settings.ADMIN_PATH)
 
 
 admin.site.login = _admin_login
@@ -29,7 +30,7 @@ admin.site.has_permission = _admin_permission
 
 urlpatterns = [
     path("favicon.ico", lambda request: redirect(static("icons/icon-32.png"), permanent=True)),
-    path("admin/", admin.site.urls),
+    path(settings.ADMIN_PATH, admin.site.urls),
     path("login/", TwoStepLoginView.as_view(), name="login"),
     path("login/code/", login_code, name="login_code"),
     path("password/change/", change_password, name="password_change"),

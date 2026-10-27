@@ -7,8 +7,8 @@
   <div class="right">
     <form method="post" class="stack signup">{% csrf_token %}
       <h2>{% if finishing %}Set up your business{% else %}Create your business account{% endif %}</h2>
-      <p class="muted" style="margin:0">{% if finishing %}You're signed in as {{ user.get_username }}. Add your business to continue.{% else %}Free while in sandbox. Takes a minute.{% endif %}</p>
-      {% if errors %}<div class="flash error"><ul style="margin:0;padding-left:18px">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+      <p class="muted st-20">{% if finishing %}You're signed in as {{ user.get_username }}. Add your business to continue.{% else %}Free while in sandbox. Takes a minute.{% endif %}</p>
+      {% if errors %}<div class="flash error"><ul class="st-28">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
       <div><label for="business">Business name</label>
         <input type="text" id="business" name="business" maxlength="80" required value="{{ data.business }}" placeholder="e.g. Luna Group, Studio 9" autofocus></div>
       <div><label for="business_type">Type of business</label>

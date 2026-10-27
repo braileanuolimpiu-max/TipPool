@@ -1,4 +1,4 @@
-{% load tippool %}<div class="table-wrap" style="margin:0 -20px"><table class="data">
+{% load tippool %}<div class="table-wrap st-21"><table class="data">
   <thead><tr><th>Who</th><th class="r">Gets</th><th>Shared</th></tr></thead>
   <tbody>
   {% for p in rules.pools %}
@@ -9,4 +9,4 @@
   {% endif %}
   </tbody>
 </table></div>
-{% if rules.excluded_roles %}<p class="small muted" style="margin:0">Never in the pool: {{ rules.excluded_roles|role_names:location }}</p>{% endif %}
+{% if rules.excluded_roles %}<p class="small muted st-20">Never in the pool: {{ rules.excluded_roles|role_names:location }}</p>{% endif %}

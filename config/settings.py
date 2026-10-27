@@ -216,6 +216,8 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "")
 # shown on the privacy and terms pages
 CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "")
 CSRF_FAILURE_VIEW = "tips.errors.csrf_failure"
+# where Django's admin lives: not /admin/, where scanners and guessers look (only the operator ever sees it)
+ADMIN_PATH = os.environ.get("DJANGO_ADMIN_PATH", "tippool-admin").strip("/") + "/"
 # shown on demo tip pages so people trying TipPool can pay with a PayPal sandbox buyer account
 DEMO_BUYER_EMAIL = os.environ.get("DEMO_BUYER_EMAIL", "")
 DEMO_BUYER_PASSWORD = os.environ.get("DEMO_BUYER_PASSWORD", "")

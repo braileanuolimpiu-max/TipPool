@@ -55,15 +55,15 @@
       {% if manual_tips %}
       <ul class="rows">
         {% for t in manual_tips %}
-        <li><div style="flex:1;min-width:0"><strong>{{ cur }}{{ t.amount|money }}</strong> <span class="small muted">{{ t.get_source_display }}</span>
+        <li><div class="st-7"><strong>{{ cur }}{{ t.amount|money }}</strong> <span class="small muted">{{ t.get_source_display }}</span>
           <div class="small muted">{% if t.staff %}For {{ t.staff.name }}{% else %}Shared by the team{% endif %}{% if t.note %} · {{ t.note }}{% endif %}</div></div>
           <form method="post" action="{% url 'night_tip_remove' t.pk %}">{% csrf_token %}<button class="role-x" aria-label="Remove this tip" title="Remove">&times;</button></form>
         </li>
         {% endfor %}
       </ul>
       {% endif %}
-      <form method="post" action="{% url 'night_tip_add' night.pk %}" class="panel-body stack"{% if manual_tips %} style="border-top:1px solid var(--hair-soft)"{% endif %}>{% csrf_token %}
-        <p class="muted small" style="margin:0">Tips that came through the card machine or in cash, so they're shared too. PayPal tips are already counted.</p>
+      <form method="post" action="{% url 'night_tip_add' night.pk %}" class="panel-body stack{% if manual_tips %} st-1{% endif %}">{% csrf_token %}
+        <p class="muted small st-20">Tips that came through the card machine or in cash, so they're shared too. PayPal tips are already counted.</p>
         <div class="tip-add">
           <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="{{ cur }} 0.00" required aria-label="Amount">
           <select name="source" aria-label="Card or cash"><option value="card">Card machine</option><option value="cash">Cash</option></select>
@@ -83,7 +83,7 @@
     <form method="post" enctype="multipart/form-data" class="panel">{% csrf_token %}
       <div class="panel-head"><h2>Fill it from a photo</h2></div>
       <div class="panel-body stack">
-        <p class="muted small" style="margin:0">Snap the schedule or the timecards. AI fills in who worked and their hours, and you check it before anything is calculated.</p>
+        <p class="muted small st-20">Snap the schedule or the timecards. AI fills in who worked and their hours, and you check it before anything is calculated.</p>
         <input type="file" name="photo" accept="image/*" capture="environment" required aria-label="Schedule photo">
         <button class="btn btn-secondary" data-busy="Reading the photo…">Read the photo</button>
         {% if ai_mode != "claude" %}<p class="hint tight">Reading a schedule photo isn't available on this site, so fill the list by hand.</p>{% endif %}
@@ -93,7 +93,7 @@
     {% if rule_set %}
     <section class="panel">
       <div class="panel-head"><h2>House rules</h2><a class="small" href="{% url 'rules' %}">Edit</a></div>
-      <div class="panel-body"><p style="margin:0">{{ rule_set.summary }}</p></div>
+      <div class="panel-body"><p class="st-20">{{ rule_set.summary }}</p></div>
     </section>
     {% endif %}
   </div>

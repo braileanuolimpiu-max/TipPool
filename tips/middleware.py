@@ -83,13 +83,15 @@ PAYPAL = "https://*.paypal.com https://*.paypalobjects.com"
 TURNSTILE = "https://challenges.cloudflare.com"
 
 
-def content_security_policy(nonce):
-    """Only our own scripts (each page's inline ones carry this request's nonce), PayPal's SDK and Cloudflare's
-    bot check run. Style attributes stay allowed: the risk is in scripts, and the pages use many of them."""
+def content_security_policy(nonce, inline_styles=False):
+    """Only our own scripts and styles (each page's inline ones carry this request's nonce), PayPal's SDK and
+    Cloudflare's bot check run. No 'unsafe-inline' anywhere: pages have no style attributes (static/css/inline.css
+    and data-css instead). `inline_styles`: only for the page that previews an email (emails need them)."""
+    styles = "'self' 'unsafe-inline'" if inline_styles else f"'self' 'nonce-{nonce}'"
     return "; ".join([
         "default-src 'self'",
         f"script-src 'self' 'nonce-{nonce}' {PAYPAL} {TURNSTILE}",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        f"style-src {styles} https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         f"img-src 'self' data: {PAYPAL}",
         f"connect-src 'self' {PAYPAL} {TURNSTILE}",
@@ -112,19 +114,30 @@ class ContentSecurityPolicyMiddleware:
         request.csp_nonce = secrets.token_urlsafe(16)
         response = self.get_response(request)
         if "Content-Security-Policy" not in response and response.get("Content-Type", "").startswith("text/html"):
-            response["Content-Security-Policy"] = content_security_policy(request.csp_nonce)
+            if request.path.startswith(admin_prefix()):
+                # Django's own admin has inline styles and scripts we can't change; only the operator (signed in,
+                # two-step on) ever gets this far, everyone else is shown "not found" first
+                response["Content-Security-Policy"] = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                                                       "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                                                       "frame-ancestors 'none'; base-uri 'self'; object-src 'none'")
+            else:
+                response["Content-Security-Policy"] = content_security_policy(request.csp_nonce)
         return response
 
 
+def admin_prefix():
+    return "/" + settings.ADMIN_PATH
+
+
 class HiddenAdminMiddleware:
-    """The Django admin doesn't exist for anyone but the site's operator (signed in, two-step on):
-    to everyone else /admin/ is a plain "not found", so scanners and guessers find nothing to attack."""
+    """The Django admin doesn't exist for anyone but the site's operator (signed in, two-step on): to everyone
+    else its address is a plain "not found". It isn't at /admin/ either, where scanners and guessers look."""
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith("/admin/"):
+        if request.path.startswith(admin_prefix()) or request.path.rstrip("/") == admin_prefix().rstrip("/"):
             from . import platform
             user = getattr(request, "user", None)
             if not (platform.is_operator(user) and not platform.needs_two_step(user)):

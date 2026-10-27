@@ -1,8 +1,8 @@
 {% if asked %}
-<div class="answer" role="status"><p>{{ asked.answer|linebreaksbr }}</p><span class="small muted" style="display:block">{% if asked.proposal %}Nothing happens until you confirm.{% elif asked.by and asked.by != "offline" %}{{ asked.by }}, from your numbers{% else %}Calculated from your numbers{% endif %}</span>
+<div class="answer" role="status"><p>{{ asked.answer|linebreaksbr }}</p><span class="small muted st-3">{% if asked.proposal %}Nothing happens until you confirm.{% elif asked.by and asked.by != "offline" %}{{ asked.by }}, from your numbers{% else %}Calculated from your numbers{% endif %}</span>
   {% if asked.proposal.steps %}<ol class="plan-steps">{% for step in asked.proposal.steps %}<li>{{ step }}</li>{% endfor %}</ol>{% endif %}
   {% if asked.proposal %}
-  <form method="post" action="{% url 'ask_confirm' %}" class="actions" style="margin-top:12px;display:flex;width:100%">{% csrf_token %}
+  <form method="post" action="{% url 'ask_confirm' %}" class="actions st-16">{% csrf_token %}
     <input type="hidden" name="token" value="{{ asked.proposal.token }}">
     <button class="btn btn-primary" aria-label="Confirm: {{ asked.proposal.text }}" data-busy="Doing it…">Confirm</button>
     <a class="btn btn-quiet" href="{% url 'reports' %}" data-ask-cancel>Cancel</a>

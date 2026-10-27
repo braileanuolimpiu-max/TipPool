@@ -235,3 +235,21 @@ document.addEventListener("change", (e) => {
 document.addEventListener("click", (e) => {
   if (e.target.matches && e.target.matches("input.copy-link")) e.target.select();
 });
+
+/* Styles worked out on the server (a meter's width, a bar's height) come as data-css="...": the
+   Content-Security-Policy blocks style attributes in the page, but not styles set from here. */
+(() => {
+  const apply = (root) => {
+    const els = root.querySelectorAll ? root.querySelectorAll("[data-css]") : [];
+    [...(root.matches && root.matches("[data-css]") ? [root] : []), ...els].forEach((el) => {
+      el.dataset.css.split(";").forEach((rule) => {
+        const at = rule.indexOf(":");
+        if (at > 0) el.style.setProperty(rule.slice(0, at).trim(), rule.slice(at + 1).trim());
+      });
+      el.removeAttribute("data-css");
+    });
+  };
+  apply(document);
+  new MutationObserver((changes) => changes.forEach((c) => c.addedNodes.forEach(apply)))
+    .observe(document.documentElement, {childList: true, subtree: true});
+})();

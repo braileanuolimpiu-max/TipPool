@@ -23,9 +23,9 @@
         <img src="{% url 'qr_svg' %}?url={{ house_url|urlencode }}" alt="QR code to tip {{ restaurant_name }}">
         <p class="tent-note">PayPal, Venmo or card</p>
       </div>
-      <div class="stack" style="gap:10px">
-        <p style="margin:0">{% if restaurant.tip_mode == "pool" %}Tips are shared by the team under your rules, so it doesn't matter where the card sits.{% elif restaurant.tip_mode == "personal" %}Guests pick who served them from a list of today's team.{% else %}Guests pick "the whole team" or one person.{% endif %}</p>
-        <p class="small muted" style="margin:0">Print table tents, cards, stickers or a poster, or download the code to put on your menu.</p>
+      <div class="stack st-9">
+        <p class="st-20">{% if restaurant.tip_mode == "pool" %}Tips are shared by the team under your rules, so it doesn't matter where the card sits.{% elif restaurant.tip_mode == "personal" %}Guests pick who served them from a list of today's team.{% else %}Guests pick "the whole team" or one person.{% endif %}</p>
+        <p class="small muted st-20">Print table tents, cards, stickers or a poster, or download the code to put on your menu.</p>
         <div class="actions">
           <a class="btn btn-secondary small" href="{% url 'qr_png' %}?url={{ house_url|urlencode }}">Download PNG</a>
           <a class="btn btn-secondary small" href="{% url 'qr_svg' %}?download=1&url={{ house_url|urlencode }}">Download SVG</a>
@@ -58,7 +58,7 @@
     <h2>Personal codes</h2>
     <a class="btn btn-secondary" href="{% url 'qr_print' %}?codes=people&layout=card&copies=1">Print personal cards</a>
   </div>
-  <p class="muted no-print" style="margin:-6px 0 14px">One for each person's station, mirror or name badge. A guest who scans it tips that person directly, and they get the whole tip.</p>
+  <p class="muted no-print st-18">One for each person's station, mirror or name badge. A guest who scans it tips that person directly, and they get the whole tip.</p>
   <div class="tent-grid">
     {% for name, role, url, pk in people %}
     <div class="tent">
@@ -73,7 +73,7 @@
   </div>
 </section>
 {% elif restaurant.tip_mode == "pool" %}
-<p class="muted no-print" style="margin-top:22px">Want each person to have their own code, e.g. a salon or delivery team? Choose personal tips in <a href="{% url 'settings' %}#sharing">Settings → How tips are shared</a>.</p>
+<p class="muted no-print st-17">Want each person to have their own code, e.g. a salon or delivery team? Choose personal tips in <a href="{% url 'settings' %}#sharing">Settings → How tips are shared</a>.</p>
 {% endif %}
 {% endblock %}
 

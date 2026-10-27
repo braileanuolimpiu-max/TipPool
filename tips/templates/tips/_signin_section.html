@@ -5,9 +5,9 @@
         {% if two_step_qr %}
         <div class="two-step-setup">
           <img src="{{ two_step_qr }}" alt="Code to scan with your authenticator app" width="168" height="168">
-          <div class="stack" style="gap:10px">
-            <p style="margin:0"><strong>1.</strong> Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…).</p>
-            <p class="small muted" style="margin:0">Can't scan? Type this key: <code>{{ two_step_secret }}</code></p>
+          <div class="stack st-9">
+            <p class="st-20"><strong>1.</strong> Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…).</p>
+            <p class="small muted st-20">Can't scan? Type this key: <code>{{ two_step_secret }}</code></p>
             <form method="post" action="{% url 'two_step' %}" class="inline-form">{% csrf_token %}
               <div><label for="code_new"><strong>2.</strong> Type the 6-digit code it shows</label>
                 <input type="text" id="code_new" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required placeholder="123 456"></div>
@@ -17,7 +17,7 @@
           </div>
         </div>
         {% elif profile.totp_enabled %}
-        <p style="margin:0"><span class="pill ok">On</span> Two-step sign-in is on for {{ user.email|default:user.username }}.</p>
+        <p class="st-20"><span class="pill ok">On</span> Two-step sign-in is on for {{ user.email|default:user.username }}.</p>
         <form method="post" action="{% url 'two_step' %}" class="inline-form">{% csrf_token %}
           <div><label for="code_off">To turn it off, type a current code</label>
             <input type="text" id="code_off" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required placeholder="123 456"></div>

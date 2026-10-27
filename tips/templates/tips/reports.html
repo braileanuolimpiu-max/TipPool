@@ -45,7 +45,7 @@
 <section class="source-strip" aria-label="How the tips came in">
   <span class="small muted">How the tips came in</span>
   <div class="source-bar" role="img" aria-label="{% for label, amount in report.by_source %}{{ label }} {{ cur }}{{ amount|money }}{% if not forloop.last %}, {% endif %}{% endfor %}">
-    {% for label, amount in report.by_source %}{% if amount %}<span class="seg seg-{{ forloop.counter }}" style="flex:{{ amount }}" title="{{ label }}: {{ cur }}{{ amount|money }}"></span>{% endif %}{% endfor %}
+    {% for label, amount in report.by_source %}{% if amount %}<span class="seg seg-{{ forloop.counter }}" data-css="flex:{{ amount }}" title="{{ label }}: {{ cur }}{{ amount|money }}"></span>{% endif %}{% endfor %}
   </div>
   <ul class="source-legend">{% for label, amount in report.by_source %}<li><i class="sw sw-{{ forloop.counter }}"></i>{{ label }} <b>{{ cur }}{{ amount|money }}</b></li>{% endfor %}</ul>
 </section>
@@ -65,11 +65,11 @@
     </tbody>
   </table></div>
   {% else %}
-  <div class="panel-body"><p class="muted" style="margin:0">No closed shifts in this period.</p></div>
+  <div class="panel-body"><p class="muted st-20">No closed shifts in this period.</p></div>
   {% endif %}
 </section>
 
-<section class="panel" style="margin-top:22px">
+<section class="panel st-17">
   <div class="panel-head"><h2>Per shift</h2>
     <a class="btn btn-secondary small" href="?{{ query }}{% if query %}&{% endif %}export=shifts">Download CSV</a></div>
   {% if report.shifts %}
@@ -82,7 +82,7 @@
     </tbody>
   </table></div>
   {% else %}
-  <div class="panel-body"><p class="muted" style="margin:0">No closed shifts in this period.</p></div>
+  <div class="panel-body"><p class="muted st-20">No closed shifts in this period.</p></div>
   {% endif %}
 </section>
 {% endblock %}

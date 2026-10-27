@@ -36,7 +36,7 @@
       <ul class="rows">
         {% for e in on_clock %}
         <li><span class="avatar" aria-hidden="true">{{ e.staff.name|slice:":1" }}</span>
-          <div style="flex:1;min-width:0"><strong>{{ e.staff.name }}</strong>
+          <div class="st-7"><strong>{{ e.staff.name }}</strong>
             <div class="small muted">since {{ e.started_at|time:"g:i A" }} · {{ e.hours|hm }} so far</div></div>
           <form method="post" action="{% url 'clock_out_for' e.pk %}">{% csrf_token %}
             <button class="btn btn-quiet small" title="For someone who forgot to clock out">Clock out</button></form>
@@ -69,7 +69,7 @@
           {% for r in recent %}
           <div class="bar-col" tabindex="0" data-tip="{{ r.night.date|date:'D M j' }} · {{ cur }}{{ r.total|money }}">
             <span class="bar-val">{% if r.label %}{{ cur }}{{ r.total|floatformat:"0" }}{% endif %}</span>
-            <span class="bar" style="--h:{{ r.height }}"></span>
+            <span class="bar" data-css="--h:{{ r.height }}"></span>
             <span class="bar-day">{{ r.night.date|date:"D j" }}</span>
           </div>
           {% endfor %}
@@ -84,19 +84,19 @@
       <ul class="rows todo">
         {% for n in waiting %}
         <li><span class="todo-tag {% if n.hold %}stop{% endif %}">{% if n.hold %}On hold{% elif n.status == "closed" %}Who worked{% elif n.status == "review" %}Approve{% else %}Paying{% endif %}</span>
-          <div style="flex:1;min-width:0"><strong>{{ n }}</strong><div class="small muted">{% if n.hold %}{{ n.hold }}{% else %}{{ cur }}{{ n.tip_total|money }} in tips{% endif %}</div></div>
+          <div class="st-7"><strong>{{ n }}</strong><div class="small muted">{% if n.hold %}{{ n.hold }}{% else %}{{ cur }}{{ n.tip_total|money }} in tips{% endif %}</div></div>
           <a class="small" href="{% if n.status == 'closed' %}{% url 'close_night_pk' n.pk %}{% elif n.status == 'review' %}{% url 'review' n.pk %}{% else %}{% url 'payout_status' n.pk %}{% endif %}">Open</a></li>
         {% endfor %}
-        {% if alert_count %}<li><span class="todo-tag stop">Alert</span><div style="flex:1"><strong>{{ alert_count }} alert{{ alert_count|pluralize }}</strong><div class="small muted">Payouts, refunds or disputes</div></div><a class="small" href="{% url 'messages_page' %}">Open</a></li>{% endif %}
+        {% if alert_count %}<li><span class="todo-tag stop">Alert</span><div class="st-6"><strong>{{ alert_count }} alert{{ alert_count|pluralize }}</strong><div class="small muted">Payouts, refunds or disputes</div></div><a class="small" href="{% url 'messages_page' %}">Open</a></li>{% endif %}
       </ul>
     </section>
     {% endif %}
 
     <section>
       <div class="rule-card">
-        <h3 style="margin-bottom:4px">House rules</h3>
-        {% if rule_set %}<p style="margin:0">{{ rule_set.summary }} <a class="small" href="{% url 'rules' %}">Edit</a></p>
-        {% else %}<p class="muted" style="margin:0">No rules yet. <a href="{% url 'rules' %}">Describe how you share tips</a>.</p>{% endif %}
+        <h3 class="st-15">House rules</h3>
+        {% if rule_set %}<p class="st-20">{{ rule_set.summary }} <a class="small" href="{% url 'rules' %}">Edit</a></p>
+        {% else %}<p class="muted st-20">No rules yet. <a href="{% url 'rules' %}">Describe how you share tips</a>.</p>{% endif %}
       </div>
     </section>
   </div>
@@ -122,7 +122,7 @@
         <hr>
         <div class="line total"><span>Total</span><span class="amt-hl">{{ cur }}{{ total|money }}</span></div>
         {% else %}
-        <p style="text-align:center;margin:18px 0">No tips yet this shift.</p>
+        <p class="st-46">No tips yet this shift.</p>
         <p class="foot">Each tip prints here the moment a guest pays with PayPal or Venmo.</p>
         {% endif %}
       </div>

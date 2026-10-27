@@ -1,6 +1,6 @@
 {% extends "app.html" %}{% load static %}
 {% block title %}Print QR codes{% endblock %}
-{% block head %}<style>@page { size: {% if paper == "letter" %}letter{% else %}A4{% endif %} portrait; margin: 0; }</style>{% endblock %}
+{% block head %}<style nonce="{{ csp_nonce }}">@page { size: {% if paper == "letter" %}letter{% else %}A4{% endif %} portrait; margin: 0; }</style>{% endblock %}
 {% block content %}
 <a class="back no-print" href="{% url 'qr_page' %}">← QR codes</a>
 <header class="page-head no-print">

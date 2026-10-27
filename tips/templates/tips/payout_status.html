@@ -17,7 +17,7 @@
 {% if sample %}<div class="flash info"><strong>Sample history.</strong> This shift came with the demo, so it's shown as paid but no money was sent. To see real (sandbox) payouts arrive, pay yesterday's shift or close out today's.</div>{% endif %}
 {% if unclear %}<div class="flash warning">PayPal didn't answer clearly when this payout was sent, so it may or may not have gone out. <strong>Don't pay again.</strong> Press "Check PayPal again": it sends the very same request, which PayPal never pays twice.
   {% if unclear_old and user.manager.is_owner %}
-  <p class="small" style="margin:.5em 0 0">Still unclear? Look in your PayPal account's activity. If this payout isn't there, undo it here and pay again.</p>
+  <p class="small st-19">Still unclear? Look in your PayPal account's activity. If this payout isn't there, undo it here and pay again.</p>
   {% for b in unclear_old %}
   <form method="post" action="{% url 'payout_not_sent' b.pk %}" data-confirm="Only if you checked your PayPal account and this payout isn't there. If it was sent after all, paying again would pay twice." data-confirm-yes="It wasn't sent: undo it">{% csrf_token %}
     <button class="btn btn-secondary small">I checked PayPal: it wasn't sent</button></form>
@@ -41,7 +41,7 @@
             {% elif item.status == "UNCLAIMED" %}<span class="stamp wait" data-item="{{ item.pk }}">NOT ACCEPTED</span>
             {% else %}<span class="stamp wait" data-item="{{ item.pk }}">SENDING</span>{% endif %}
             <small>{{ item.receiver|default:item.share.staff.paypal_email }}{% if item.batch.is_retry %} · sent again{% endif %}</small>
-            {% if item.error %}<small style="color:#b8342a">{{ item.error }}</small>{% endif %}
+            {% if item.error %}<small class="st-2">{{ item.error }}</small>{% endif %}
           </span>
           <span class="amt">{{ cur }}{{ item.share.amount|money }}</span>
         </div>
@@ -59,8 +59,8 @@
     <section class="panel">
       <div class="panel-head"><h2>{{ item.share.staff.name }}: {% if item.status == "UNCLAIMED" %}not accepted yet{% else %}didn't arrive{% endif %}</h2></div>
       <div class="panel-body stack">
-        <p style="margin:0">{% if item.status == "UNCLAIMED" %}{{ cur }}{{ item.share.amount|money }} went to {{ item.receiver }}, which has no PayPal account yet. PayPal holds it for 30 days, then sends it back.{% else %}PayPal couldn't deliver {{ cur }}{{ item.share.amount|money }} to {{ item.receiver }}. The money is back in your PayPal account.{% endif %}</p>
-        <p class="small muted" style="margin:0">They're paid with <strong>{{ item.share.staff.payout_to }}</strong> now.{% if item.share.staff.payout_to == item.receiver %} If that's wrong, ask them to change it on their tips page (you'll approve it in Messages).{% endif %}</p>
+        <p class="st-20">{% if item.status == "UNCLAIMED" %}{{ cur }}{{ item.share.amount|money }} went to {{ item.receiver }}, which has no PayPal account yet. PayPal holds it for 30 days, then sends it back.{% else %}PayPal couldn't deliver {{ cur }}{{ item.share.amount|money }} to {{ item.receiver }}. The money is back in your PayPal account.{% endif %}</p>
+        <p class="small muted st-20">They're paid with <strong>{{ item.share.staff.payout_to }}</strong> now.{% if item.share.staff.payout_to == item.receiver %} If that's wrong, ask them to change it on their tips page (you'll approve it in Messages).{% endif %}</p>
         <div class="actions">
           {% if item.status == "UNCLAIMED" %}
           <form method="post" action="{% url 'payout_action' item.pk %}">{% csrf_token %}<button class="btn btn-secondary small" name="action" value="remind">Remind them</button></form>
@@ -77,16 +77,16 @@
       <div class="panel-head"><h2>What happens now</h2></div>
       <div class="panel-body stack">
         {% if night.status == "paid" %}
-        <p style="margin:0">PayPal has finished this payout. Each person got an email from PayPal and can see the math on their own tips page.</p>
+        <p class="st-20">PayPal has finished this payout. Each person got an email from PayPal and can see the math on their own tips page.</p>
         {% else %}
-        <p style="margin:0">PayPal is sending the money. This page updates by itself, usually within a minute.</p>
+        <p class="st-20">PayPal is sending the money. This page updates by itself, usually within a minute.</p>
         {% endif %}
-        <p class="small muted" style="margin:0">UNCLAIMED means that address has no PayPal account yet. You can remind them, or take it back and send it somewhere else.</p>
+        <p class="small muted st-20">UNCLAIMED means that address has no PayPal account yet. You can remind them, or take it back and send it somewhere else.</p>
       </div>
     </section>
 
     {% if items|length > 1 %}{% for item in items %}{% if item.superseded %}
-    <p class="small muted" style="margin:0">Earlier: {{ item.share.staff.name }}, {{ cur }}{{ item.share.amount|money }} to {{ item.receiver }}: {{ item.status_label|lower }}</p>
+    <p class="small muted st-20">Earlier: {{ item.share.staff.name }}, {{ cur }}{{ item.share.amount|money }} to {{ item.receiver }}: {{ item.status_label|lower }}</p>
     {% endif %}{% endfor %}{% endif %}
   </div>
 </div>

@@ -4,12 +4,12 @@
 {% if sent %}
 <h2>Check your email</h2>
 {% if email_enabled %}<p class="muted">If that email is on a team, your private tips link is on its way. It can take a minute. Can't find it? Ask your manager to copy it for you.</p>
-{% else %}<div class="flash warning" style="margin:0">TipPool's email isn't switched on yet, so no link could be sent. Ask your manager to copy your link for you.</div>{% endif %}
+{% else %}<div class="flash warning st-20">TipPool's email isn't switched on yet, so no link could be sent. Ask your manager to copy your link for you.</div>{% endif %}
 <a class="btn btn-secondary" href="{% url 'email_my_link' %}">Try another email</a>
 {% else %}
 <form method="post" class="stack">{% csrf_token %}
   <h2>Get your tips link</h2>
-  <p class="muted" style="margin:0">Enter the email your tips are paid to (your PayPal email). We'll send your private link there. Paid with Venmo by phone? Ask your manager to copy your link for you.</p>
+  <p class="muted st-20">Enter the email your tips are paid to (your PayPal email). We'll send your private link there. Paid with Venmo by phone? Ask your manager to copy your link for you.</p>
   <div><label for="email">Email</label><input type="email" id="email" name="email" required autocomplete="email" autofocus></div>
   <button class="btn btn-primary btn-block">Email me my link</button>
   <p class="auth-switch"><a href="{% url 'login' %}">Manager? Sign in</a></p>

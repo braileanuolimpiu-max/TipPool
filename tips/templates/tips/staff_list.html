@@ -10,12 +10,12 @@
     {% if staff %}
     <ul class="rows team-rows">
       {% for m in staff %}
-      <li{% if not m.active %} style="opacity:.55"{% endif %}>
+      <li{% if not m.active %} class="st-42"{% endif %}>
         <span class="avatar" aria-hidden="true">{{ m.staff.name|slice:":1" }}</span>
-        <div style="flex:1;min-width:0">
+        <div class="st-7">
           <strong>{{ m.staff.name }}</strong>{% if not m.active %} <span class="small muted">{{ m.role_name }}</span>{% endif %}
           {% if m.staff.payout_confirmed_at %}<span class="conf ok" title="They confirmed where they're paid on their tips page">✓ confirmed</span>{% else %}<span class="conf wait" title="They haven't confirmed where they're paid yet">not confirmed</span>{% endif %}
-          <div class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ m.staff.payout_to }}">{{ m.staff.payout_to }}</div>
+          <div class="small muted st-44" title="{{ m.staff.payout_to }}">{{ m.staff.payout_to }}</div>
         </div>
         {% if m.active %}<form method="post" action="{% url 'staff_role' m.pk %}" class="role-pick">{% csrf_token %}
           <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" data-autosubmit>
@@ -64,7 +64,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    <div class="panel-body"><p class="muted" style="margin:0">No one here yet. Add the people who share tips.</p></div>
+    <div class="panel-body"><p class="muted st-20">No one here yet. Add the people who share tips.</p></div>
     {% endif %}
   </section>
 
@@ -92,7 +92,7 @@
       <li class="muted">No roles yet. Pick your type of business, or add your own.</li>
       {% endfor %}
     </ul>
-    <p class="hint panel-body" style="margin:0;border-top:1px solid var(--hair-soft)">Picking a type of business swaps in its usual roles. Roles someone on your team has are always kept.</p>
+    <p class="hint panel-body st-26">Picking a type of business swaps in its usual roles. Roles someone on your team has are always kept.</p>
   </section>
   </div>
 

@@ -6,29 +6,29 @@
   {% if user.is_authenticated %}
   <div class="manager-strip"><span>You're viewing the guest tip page</span><a href="{% url 'dashboard' %}">Back to dashboard</a></div>
   {% endif %}
-  <div class="receipt-wrap" style="width:100%">
+  <div class="receipt-wrap st-47">
     <div class="receipt">
       <div class="head">
         <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}{{ t.thanks }}{% endif %}</h2>
         <p>{% if table %}{{ t.table }} {{ table }}, {% endif %}{% now "MONTH_DAY_FORMAT" %}, {% now "TIME_FORMAT" %}</p>
       </div>
       <hr>
-      {% if tip_message %}<p style="margin:0 0 10px;font-weight:700">{{ tip_message }}</p>{% endif %}
+      {% if tip_message %}<p class="st-23">{{ tip_message }}</p>{% endif %}
       {% if nobody %}
-      <p class="flash warning" style="margin:0">{{ t.nobody }}</p>
+      <p class="flash warning st-20">{{ t.nobody }}</p>
       {% elif tip_mode == "pool" or not people %}
-      <p style="margin:0">{{ t.pool_note }}</p>
+      <p class="st-20">{{ t.pool_note }}</p>
       {% else %}
-      <p style="margin:0 0 10px" id="who-label">{% if tip_mode == "personal" %}{{ t.who_personal }}{% else %}{{ t.who_both }}{% endif %}</p>
+      <p class="st-22" id="who-label">{% if tip_mode == "personal" %}{{ t.who_personal }}{% else %}{{ t.who_both }}{% endif %}</p>
       <div class="who-pick" role="group" aria-labelledby="who-label">
         {% if tip_mode == "both" %}<button type="button" class="who-btn" data-to="" aria-pressed="{% if not to %}true{% else %}false{% endif %}">{{ t.whole_team }}</button>{% endif %}
         {% for m in people %}<button type="button" class="who-btn" data-to="{{ m.pk }}" aria-pressed="{% if to == m.pk %}true{% else %}false{% endif %}">{{ m.staff.name }}<small>{{ m.guest_role }}</small></button>{% endfor %}
       </div>
-      <p class="small" style="margin:8px 0 0;color:#5c5f62" id="who-note">{% if tip_mode == "both" %}{{ t.note_both }}{% else %}{{ t.note_personal }}{% endif %}</p>
+      <p class="small st-36" id="who-note">{% if tip_mode == "both" %}{{ t.note_both }}{% else %}{{ t.note_personal }}{% endif %}</p>
       {% endif %}
       <hr>
       {% if not nobody %}
-      {% if cancelled %}<p style="margin:0 0 8px;font-weight:600">{{ t.cancelled }}</p>{% endif %}
+      {% if cancelled %}<p class="st-25">{{ t.cancelled }}</p>{% endif %}
       {% if tip_style == "percent" %}
       <label for="bill">{{ t.bill }}</label>
       <div class="money-input"><span aria-hidden="true">{{ cur }}</span><input type="number" id="bill" min="1" max="10000" step="0.01" inputmode="decimal" placeholder="0.00"></div>

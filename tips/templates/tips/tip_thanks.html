@@ -6,8 +6,8 @@
   {% if user.is_authenticated %}
   <div class="manager-strip"><span>{% if tip %}Test tip finished{% else %}You're viewing the guest thank-you page{% endif %}</span><a href="{% url 'dashboard' %}">Back to dashboard</a></div>
   {% endif %}
-  <div class="receipt-wrap" style="width:100%">
-    <div class="receipt" style="text-align:center">
+  <div class="receipt-wrap st-47">
+    <div class="receipt st-45">
       <div class="head">
         <h2>{% if restaurant_named %}{{ restaurant_name }}{% else %}{{ t.thanks }}{% endif %}</h2>
         <p>{% if table %}{{ t.table }} {{ table }}, {% endif %}{% if tip %}{{ tip.created_at|date:"MONTH_DAY_FORMAT" }}, {{ tip.created_at|date:"TIME_FORMAT" }}{% else %}{% now "MONTH_DAY_FORMAT" %}, {% now "TIME_FORMAT" %}{% endif %}</p>
@@ -15,15 +15,15 @@
       <hr>
       {% if tip and tip.status == "completed" %}
         <span class="big-stamp">{{ t.paid }}</span>
-        <div class="line total" style="justify-content:space-between"><span>{{ t.tip }}</span><span>{{ cur }}{{ tip.amount|money }}</span></div>
+        <div class="line total st-13"><span>{{ t.tip }}</span><span>{{ cur }}{{ tip.amount|money }}</span></div>
         <hr>
-        <p style="margin:0">{{ done_text }}</p>
+        <p class="st-20">{{ done_text }}</p>
       {% elif tip and not_paid %}
-        <p style="margin:8px 0">{{ t.not_paid }}</p>
+        <p class="st-34">{{ t.not_paid }}</p>
       {% elif tip %}
-        <p style="margin:8px 0">{{ confirming_text }}</p>
+        <p class="st-34">{{ confirming_text }}</p>
       {% else %}
-        <p style="margin:8px 0">{{ t.not_found }}</p>
+        <p class="st-34">{{ t.not_found }}</p>
       {% endif %}
       <hr>
       <a class="btn btn-secondary btn-block" href="{% url 'tip_page' %}?at={{ location.slug }}{% if table %}&table={{ table|urlencode }}{% endif %}">{{ t.another }}</a>

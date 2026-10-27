@@ -28,9 +28,9 @@ class AdminSignInTests(CleanCache):
         user.is_staff = user.is_superuser = True
         user.save()
         # signed out, the admin doesn't exist: no sign-in page of its own to guess at (it would skip the two-step code)
-        for url in ("/admin/", "/admin/login/?next=/admin/"):
+        for url in ("/tippool-admin/", "/admin", "/admin/", "/tippool-admin/login/?next=/tippool-admin/"):
             self.assertEqual(self.client.get(url).status_code, 404, url)
-        self.client.post("/admin/login/?next=/admin/", {"username": "boss@example.com", "password": "pw"})
+        self.client.post("/tippool-admin/login/?next=/tippool-admin/", {"username": "boss@example.com", "password": "pw"})
         self.assertFalse(self.client.get(reverse("dashboard")).wsgi_request.user.is_authenticated)
 
 
@@ -269,12 +269,12 @@ class GapFixTests(CleanCache):
         page = self.client.get(reverse("platform_settings"))
         self.assertEqual(page.status_code, 403)
         self.assertContains(page, "Turn on two-step sign-in first", status_code=403)
-        res = self.client.get("/admin/", follow=True)  # no admin either: it doesn't exist for them
+        res = self.client.get("/tippool-admin/", follow=True)  # no admin either: it doesn't exist for them
         self.assertEqual((res.status_code, res.redirect_chain), (404, []))
         op.manager.totp_enabled = True
         op.manager.save()
         self.assertEqual(self.client.get(reverse("platform_settings")).status_code, 200)
-        self.assertContains(self.client.get("/admin/"), "Site administration")
+        self.assertContains(self.client.get("/tippool-admin/"), "Site administration")
 
     @override_settings(RATELIMIT_ENABLED=True)
     def test_turning_two_step_off_cannot_be_guessed(self):
@@ -291,7 +291,7 @@ class GapFixTests(CleanCache):
 
     def test_admin_is_not_found_for_a_manager(self):
         self.client.force_login(make_manager("owner"))
-        res = self.client.get("/admin/", follow=True)
+        res = self.client.get("/tippool-admin/", follow=True)
         self.assertEqual((res.status_code, res.redirect_chain), (404, []))
 
     def test_every_page_has_a_content_security_policy_and_its_scripts_the_nonce(self):
@@ -312,6 +312,10 @@ class GapFixTests(CleanCache):
                 if 'type="application/json"' not in tag:
                     self.assertIn(f'nonce="{nonce}"', tag, f"{url}: {tag}")
             self.assertIsNone(re.search(r"\son[a-z]+=\"", html), f"{url}: an inline event handler")
+            self.assertNotIn("unsafe-inline", policy)
+            self.assertIsNone(re.search(r"\sstyle=\"", html), f"{url}: an inline style attribute")
+            for tag in re.findall(r"<style\b[^>]*>", html):
+                self.assertIn(f'nonce="{nonce}"', tag, f"{url}: {tag}")
 
 
 class LiveUpdatesTests(CleanCache):

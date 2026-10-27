@@ -13,7 +13,7 @@
   <a href="#scheduler" class="{% if minutes_since_tick is not None and minutes_since_tick < 45 %}ok{% endif %}"><b>Scheduler</b><span>{% if minutes_since_tick is None %}Never checked in{% elif minutes_since_tick < 2 %}Checked in just now{% else %}Last check-in {{ minutes_since_tick }} min ago{% endif %}</span></a>
 </section>
 
-<div class="stack" style="gap:18px">
+<div class="stack st-11">
 
 <form method="post" class="panel setting" id="email">{% csrf_token %}<input type="hidden" name="section" value="email">
   <div class="setting-intro"><span class="setting-no">01</span><h2>Email</h2>
@@ -88,7 +88,7 @@
     </div>
     {% endfor %}
     <div><label for="ai_daily_limit">Daily AI limit for the whole site</label>
-      <input type="number" id="ai_daily_limit" name="ai_daily_limit" min="0" max="100000" value="{{ cfg.ai_daily_limit }}" style="max-width:12rem">
+      <input type="number" id="ai_daily_limit" name="ai_daily_limit" min="0" max="100000" value="{{ cfg.ai_daily_limit }}" class="st-37">
       <p class="hint">AI answers per day across every business ({{ ai_used_today }} used today; 0 = no limit). Each business also has its own daily share (demos {{ demo_daily }}, others {{ business_daily }}), so accounts made just to use the AI can't run up costs or use up the free quota. Past a limit, the built-in assistant answers.</p></div>
     <div class="form-grid ai-help" data-for="claude">
       <div><label for="anthropic_key">Claude API key</label><input type="password" id="anthropic_key" name="anthropic_key" autocomplete="new-password" placeholder="{% if cfg.anthropic_key_encrypted %}Saved and hidden{% else %}sk-ant-…{% endif %}">
@@ -130,7 +130,7 @@
       <div><label for="demo_buyer_password">Its password</label><input type="text" id="demo_buyer_password" name="demo_buyer_password" value="{{ form.demo_buyer_password }}" autocomplete="off">
         <p class="hint">Shown on demo tip pages, so use a test account only.</p></div>
     </div>
-    <p class="small muted" style="margin:0">Where the demo team's tips are paid (test PayPal emails). Empty = made-up addresses.</p>
+    <p class="small muted st-20">Where the demo team's tips are paid (test PayPal emails). Empty = made-up addresses.</p>
     <div class="form-grid">
       {% for name, email in demo_staff %}<div><label for="staff_{{ name }}">{{ name }}</label><input type="text" id="staff_{{ name }}" name="staff_{{ name }}" value="{{ email }}" autocomplete="off"></div>{% endfor %}
     </div>
@@ -149,12 +149,12 @@
       <li><span><strong>Create cronjob</strong> again with the second address, <strong>every 10 minutes</strong>.</span></li>
       <li><span>Come back here: within 30 minutes it says "Checked in".</span></li>
     </ol>
-    <p class="small muted" style="margin:0"><strong>1. The work</strong> (every 30 minutes)</p>
+    <p class="small muted st-20"><strong>1. The work</strong> (every 30 minutes)</p>
     <div class="link-tools"><input class="copy-link" type="text" readonly value="{{ tick_url }}" aria-label="Scheduler address">
       <button type="button" class="icon-btn" data-copy aria-label="Copy the address" title="Copy">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
     <p class="hint tight">Keep it private: it contains a key.</p>
-    <p class="small muted" style="margin:0"><strong>2. Keep awake</strong> (every 10 minutes)</p>
+    <p class="small muted st-20"><strong>2. Keep awake</strong> (every 10 minutes)</p>
     <div class="link-tools"><input class="copy-link" type="text" readonly value="{{ up_url }}" aria-label="Keep-awake address">
       <button type="button" class="icon-btn" data-copy aria-label="Copy the address" title="Copy">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>

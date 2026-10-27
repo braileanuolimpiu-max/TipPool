@@ -12,7 +12,7 @@
       <form method="post" action="{% url 'location_switch' %}">{% csrf_token %}
         <input type="hidden" name="location" value="{{ r.location.pk }}"><input type="hidden" name="next" value="{% url 'dashboard' %}">
         <button class="btn btn-secondary small">Open</button></form></div>
-    <div class="panel-body stack" style="gap:12px">
+    <div class="panel-body stack st-10">
       <div class="pace-head">
         <b class="pace-now">{{ cur }}{{ p.now|money }}</b>
         {% if not p.night %}<span class="pace-chip">No open shift</span>
@@ -26,12 +26,12 @@
       </div>
       {% if p.normal_day and p.night %}
       <div class="pace-meter" role="img" aria-label="{{ cur }}{{ p.now|money }} so far; normal by now {{ cur }}{{ p.normal_now|money }}; a normal day {{ cur }}{{ p.normal_day|money }}">
-        <span class="fill {{ p.status }}" style="width:{% widthratio p.now p.meter_max 100 %}%"></span>
-        <span class="mark" style="left:{% widthratio p.normal_now p.meter_max 100 %}%" title="Normal by now"></span>
+        <span class="fill {{ p.status }}" data-css="width:{% widthratio p.now p.meter_max 100 %}%"></span>
+        <span class="mark" data-css="left:{% widthratio p.normal_now p.meter_max 100 %}%" title="Normal by now"></span>
       </div>
-      <p class="small muted" style="margin:0">Normal by now {{ cur }}{{ p.normal_now|money }} · a normal {{ p.night.date|date:"l" }} ends near {{ cur }}{{ p.normal_day|money }}</p>
+      <p class="small muted st-20">Normal by now {{ cur }}{{ p.normal_now|money }} · a normal {{ p.night.date|date:"l" }} ends near {{ cur }}{{ p.normal_day|money }}</p>
       {% elif p.night and p.status == "new" %}
-      <p class="small muted" style="margin:0">After 3 weeks of shifts, this shows how today compares with a normal {{ p.night.date|date:"l" }}.</p>
+      <p class="small muted st-20">After 3 weeks of shifts, this shows how today compares with a normal {{ p.night.date|date:"l" }}.</p>
       {% endif %}
       <dl class="pace-stats">
         <div><dt>Guests</dt><dd>{{ p.guests }}{% if p.normal_guests is not None %}<small> / {{ p.normal_guests }} usual</small>{% endif %}</dd></div>
@@ -46,7 +46,7 @@
         {% if r.messages %}<li>{{ r.messages }} message{{ r.messages|pluralize }} from the team</li>{% endif %}
       </ul>
       {% else %}
-      <p class="small muted" style="margin:0">Nothing waiting.</p>
+      <p class="small muted st-20">Nothing waiting.</p>
       {% endif %}
     </div>
   </section>

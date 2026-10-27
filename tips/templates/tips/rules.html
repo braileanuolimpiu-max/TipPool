@@ -13,7 +13,7 @@
         <textarea id="text" name="text" maxlength="4000" placeholder="{{ examples.0.1 }}">{{ text }}</textarea>
       </div>
       <div>
-        <p class="small muted" style="margin:0 0 6px">Start from an example:</p>
+        <p class="small muted st-24">Start from an example:</p>
         <div class="actions">
           {% for label, sentence in examples %}<button type="button" class="btn btn-secondary small" data-example="{{ sentence }}">{{ label }}</button>
           {% endfor %}
@@ -32,7 +32,7 @@
   <section class="panel">
     <div class="panel-head"><h2>Here's how I read it</h2></div>
     <div class="panel-body stack">
-      <p style="margin:0">{{ preview.summary }}</p>
+      <p class="st-20">{{ preview.summary }}</p>
       {% include "tips/_rules_table.html" with rules=preview.rules %}
       {% if preview.warnings %}<div class="note-warn"><strong>Check before saving</strong><ul>{% for w in preview.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
       <form method="post" class="actions">{% csrf_token %}
@@ -45,13 +45,13 @@
   <section class="panel">
     <div class="panel-head"><h2>Rules in use</h2><span class="pill ok">Active</span></div>
     <div class="panel-body stack">
-      <p style="margin:0">{{ active.summary }}</p>
+      <p class="st-20">{{ active.summary }}</p>
       {% include "tips/_rules_table.html" with rules=active.rules %}
       {% if active.warnings %}<div class="note-warn"><strong>Notes</strong><ul>{% for w in active.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
     </div>
   </section>
   {% else %}
-  <section class="panel panel-body"><p class="muted" style="margin:0">Your rules will appear here as a clear table, with a warning if anything could break US tip-pool law.</p></section>
+  <section class="panel panel-body"><p class="muted st-20">Your rules will appear here as a clear table, with a warning if anything could break US tip-pool law.</p></section>
   {% endif %}
 </div>
 {% endblock %}

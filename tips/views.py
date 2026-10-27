@@ -1876,7 +1876,11 @@ def digest_preview(request):
         request.business.digest if request.business.digest != "off" else "weekly")
     today = timezone.now().astimezone(autoclose.location_tz(request.location)).date()
     data = digest.build(request.business, list(request.allowed_locations), today, kind=kind)
-    return render(request, "tips/digest_preview.html", {**data, "kind": kind, "base_url": ""})
+    response = render(request, "tips/digest_preview.html", {**data, "kind": kind, "base_url": ""})
+    # the page shows the email itself, which needs its inline styles (mail apps ignore stylesheets); scripts stay strict
+    from .middleware import content_security_policy
+    response["Content-Security-Policy"] = content_security_policy(request.csp_nonce, inline_styles=True)
+    return response
 
 
 @managers_only
