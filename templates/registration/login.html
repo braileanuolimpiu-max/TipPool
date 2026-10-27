@@ -8,7 +8,7 @@
     <form method="post" class="stack">{% csrf_token %}
       <h2>Manager sign in</h2>
       {% for message in messages %}<div class="flash {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
-      {% if request.login_limited == "pause" %}<div class="flash error" role="alert">Too many wrong tries: the password was wrong 10 times in a row. Wait a minute, then try again. For safety, we've emailed the account's owner.</div>
+      {% if request.login_limited == "pause" %}<div class="flash error" role="alert">Too many wrong tries: the password was wrong 10 times in a row. Wait a few minutes, then try again. For safety, we've emailed the account's owner.</div>
       {% elif request.login_limited %}<div class="flash error" role="alert">Too many wrong tries from this network. Wait 15 minutes, or reset your password.</div>
       {% elif form.errors %}<div class="flash error">That email and password don't match.</div>{% endif %}
       <div><label for="id_username">Email</label><input type="text" name="username" id="id_username" autocomplete="username" inputmode="email" value="{{ form.username.value|default:'' }}" autofocus required></div>

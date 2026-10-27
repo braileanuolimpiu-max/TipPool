@@ -85,6 +85,50 @@ class ManagerToolTests(TestCase):
         night.refresh_from_db()
         self.assertEqual(night.status, Night.Status.PAYING)
 
+    def auto_closed_in_review(self, tip_id):
+        night = Night.objects.create(location=self.location, date=date(2026, 10, 15))
+        Tip.objects.create(night=night, amount=Decimal("100"), paypal_order_id=tip_id, status="completed")
+        Shift.objects.create(night=night, staff=self.maria, role="server", hours=Decimal("6"))
+        autoclose.run(now=datetime(2026, 10, 15, 23, 1, tzinfo=NY))
+        Night.objects.filter(pk=night.pk).update(closed_at=datetime(2026, 10, 15, 23, 0, tzinfo=NY))
+        night.refresh_from_db()
+        self.assertEqual((night.status, night.auto_closed), (Night.Status.REVIEW, True))
+        return night
+
+    def test_a_late_tip_starts_the_review_window_again(self):
+        self.auto_pay_location(60)
+        night = self.auto_closed_in_review("A3")
+        # a guest's tip lands at 23:55: the split is calculated again and the team gets a fresh hour to look
+        Tip.objects.create(night=night, amount=Decimal("20"), paypal_order_id="A3-late", status="completed")
+        services._invalidate_split(night)
+        autoclose.run(now=datetime(2026, 10, 16, 0, 1, tzinfo=NY))  # an hour after closing, a minute after the new split
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.REVIEW)
+        self.assertEqual(sum(s.amount for s in night.shares.all()), Decimal("120.00"))
+        self.assertEqual(self.paypal.payouts, 0)
+        autoclose.run(now=datetime(2026, 10, 16, 1, 2, tzinfo=NY))  # the new window is over
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.PAYING)
+
+    def test_a_manager_editing_an_automatic_shift_takes_it_over(self):
+        self.auto_pay_location(60)
+        night = self.auto_closed_in_review("A4")
+        self.client.post(reverse("close_night_pk", args=[night.pk]),
+                         {"save_roster": "1", f"worked_{self.maria.pk}": "on", f"hours_{self.maria.pk}": "5",
+                          f"role_{self.maria.pk}": "server"})
+        night.refresh_from_db()
+        self.assertFalse(night.auto_closed)
+        autoclose.run(now=datetime(2026, 10, 16, 3, 0, tzinfo=NY))  # long after the window: still not paid
+        night.refresh_from_db()
+        self.assertNotIn(night.status, (Night.Status.PAYING, Night.Status.PAID))
+        self.assertEqual(self.paypal.payouts, 0)
+        # adding cash tips to an automatic shift does the same
+        other = Night.objects.create(location=self.location, date=date(2026, 10, 14), auto_closed=True,
+                                     status=Night.Status.CLOSED)
+        services.add_manual_tip(other, "10", "cash")
+        other.refresh_from_db()
+        self.assertFalse(other.auto_closed)
+
     def test_flag_during_review_window_holds_payout(self):
         self.auto_pay_location(60)
         night = Night.objects.create(location=self.location, date=date(2026, 10, 15))

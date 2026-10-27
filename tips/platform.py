@@ -122,7 +122,8 @@ def paypal_platform_fallback():
     cfg = config()
     if cfg.paypal_client_id:
         return not cfg.paypal_live
-    return settings.PAYPAL_PLATFORM_FALLBACK
+    # from the environment: never with real money, even if PAYPAL_PLATFORM_FALLBACK=1 is set by mistake
+    return settings.PAYPAL_PLATFORM_FALLBACK and "sandbox" in settings.PAYPAL_BASE_URL
 
 
 def paypal_platform_webhook():
@@ -144,8 +145,9 @@ def demo_staff_email(name):
 
 def cron_secrets():
     """The scheduler keys that work: the one shown on Platform settings and, so an existing cron job never
-    breaks, the one from the environment."""
-    keys = [config().cron_secret if config().pk else "", settings.CRON_SECRET]
+    breaks, the one from the environment, until "Make a new address" retires it."""
+    cfg = config()
+    keys = [cfg.cron_secret if cfg.pk else "", "" if cfg.cron_env_retired else settings.CRON_SECRET]
     return [k for k in keys if k]
 
 
@@ -169,6 +171,13 @@ def is_operator(user):
     return bool(user and user.is_authenticated and user.is_superuser)
 
 
+def needs_two_step(user):
+    """Running the site (Platform settings, the admin) controls every business's keys and money: the operator
+    must have two-step sign-in on. Not on your own computer (DEBUG)."""
+    profile = getattr(user, "manager", None) if user is not None and user.is_authenticated else None
+    return not settings.DEBUG and not (profile is not None and profile.totp_enabled)
+
+
 def has_operator():
     from django.contrib.auth import get_user_model
     return get_user_model().objects.filter(is_superuser=True, is_active=True).exists()
@@ -176,25 +185,15 @@ def has_operator():
 
 def setup_code():
     """A code only someone who can read the server's log (the person who deployed TipPool) knows.
-    Needed to take over running a site that already has businesses but nobody running it."""
+    Needed to run a site: signing up first is not enough, since anyone could find a new site before its owner."""
     import hashlib
     import hmac
     digest = hmac.new(settings.SECRET_KEY.encode(), b"tippool-operator-claim", hashlib.sha256).hexdigest()
     return digest[:10].upper()
 
 
-def make_first_operator(user, business):
-    """The first real business on a brand-new site runs it. Locked, so two sign-ups at once can't both win."""
-    from django.db import transaction
-
-    from .models import Business, PlatformConfig
-    with transaction.atomic():
-        PlatformConfig.objects.get_or_create(pk=1)
-        PlatformConfig.objects.select_for_update().get(pk=1)
-        # any other real business with people in it means the site is already in use
-        others = Business.objects.filter(is_demo=False, managers__isnull=False).exclude(pk=business.pk).exists()
-        if has_operator() or others:
-            return False
-        user.is_superuser = user.is_staff = True
-        user.save(update_fields=["is_superuser", "is_staff"])
-        return True
+def can_claim(user):
+    """Nobody runs the site yet and this is the owner of a real business: they may take the role with the setup code."""
+    profile = getattr(user, "manager", None) if user is not None and user.is_authenticated else None
+    return (profile is not None and profile.is_owner and not profile.business.is_demo
+            and not is_operator(user) and not has_operator())

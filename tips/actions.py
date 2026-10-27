@@ -141,7 +141,9 @@ def propose(kind, params, location, user):
             raise ActionError(f"The {night} is {cur}{total}, over the owner's {cur}{limit} limit, so the owner has to "
                               "pay it. Open it to ask them.")
         text = f"Pay the {night}: {cur}{total} to {people} {'person' if people == 1 else 'people'} through PayPal."
-        params = {"night": night.pk}
+        from .services import split_fingerprint
+        # exactly this split: if it's recalculated before the confirm, nothing is paid
+        params = {"night": night.pk, "split": split_fingerprint(night.shares.select_related("staff"))}
     elif kind == "set_week":
         member = _member(location, params.get("person"))
         week = {k: float(v) for k, v in (params.get("week") or {}).items() if k in {str(i) for i in range(7)}
@@ -198,16 +200,19 @@ def propose_plan(steps, location, user):
         raise ActionError("That's one thing: ask it on its own.")
     if sum(1 for k, _ in steps if k == "pay_shift") > 1:
         raise ActionError("One payout per request, please: ask for each shift separately.")
-    texts, planned, changed_dates = [], [], set()
+    texts, planned, changed = [], [], {}  # changed: the shifts earlier steps close or add tips to, by date
     for i, (kind, params) in enumerate(steps):
         day = params.get("shift_date")
-        if kind == "pay_shift" and (day in changed_dates or (day is None and changed_dates)):
-            # it's split (or split again) by an earlier step: the amount is known, and checked, only then
-            texts.append("Then pay that shift through PayPal, only if the close-out check finds nothing and it's "
+        if kind == "pay_shift" and changed and (day is None or day in changed):
+            # it's split (or split again) by an earlier step: the amount is known, and checked, only then.
+            # It pays exactly the shift those steps changed, never whichever shift happens to be waiting.
+            nights = {night.pk: night for night in changed.values()} if day is None else {changed[day].pk: changed[day]}
+            if len(nights) > 1:
+                raise ActionError("Those steps change different shifts: ask to pay each shift on its own.")
+            night = next(iter(nights.values()))
+            texts.append(f"Then pay the {night} through PayPal, only if the close-out check finds nothing and it's "
                          "within your payout limits (the amount is the split from the step before).")
-            if day is None and len(changed_dates) == 1:
-                day = next(iter(changed_dates))
-            planned.append(("pay_shift", {"shift_date": day, "after_change": True}))
+            planned.append(("pay_shift", {"night": night.pk, "after_change": True}))
             continue
         try:
             proposal = propose(kind, params, location, user)
@@ -219,7 +224,8 @@ def propose_plan(steps, location, user):
         data = signing.loads(proposal["token"], salt=SALT)
         planned.append((kind, data["p"]))
         if kind in ("close_shift", "add_tip"):
-            changed_dates.add(day)
+            night = Night.objects.get(pk=data["p"]["night"])
+            changed[day] = changed[night.date.isoformat()] = night
     token = signing.dumps({"k": "plan", "p": {"steps": planned}, "u": user.pk, "l": location.pk,
                            "n": secrets.token_hex(16)}, salt=SALT, compress=True)
     return {"text": f"{len(texts)} steps, in this order:", "steps": texts, "token": token}
@@ -257,7 +263,7 @@ def _run_plan(data, request):
     for i, (kind, params) in enumerate(data["p"]["steps"]):
         try:
             if kind == "pay_shift" and params.get("after_change"):
-                done.append(_pay_after_change(params.get("shift_date"), request))
+                done.append(_pay_after_change(params.get("night"), request))
             else:
                 done.append(_run({"k": kind, "p": params}, request))
         except ActionError as exc:
@@ -268,19 +274,22 @@ def _run_plan(data, request):
     return " ".join(f"{n + 1}. {text}" for n, text in enumerate(done))
 
 
-def _pay_after_change(shift_date, request):
+def _pay_after_change(night_pk, request):
     """The pay step of a plan whose earlier step closed the shift or added tips: split again if needed, then
-    pay only if the check finds nothing (and the limits allow it, inside pay_night)."""
+    pay only if the check finds nothing (and the limits allow it, inside pay_night).
+    Only the shift those steps changed: if it isn't ready, nothing is paid (no other shift instead)."""
     from . import services
     from .check import blocking
     from .models import TipRuleSet
     location = request.location
-    nights = Night.objects.filter(location=location, status__in=[Night.Status.CLOSED, Night.Status.REVIEW])
-    if shift_date:
-        nights = nights.filter(date=date.fromisoformat(shift_date))
-    night = nights.order_by("-date", "-created_at").first()
+    night = Night.objects.filter(pk=night_pk, location=location).first() if night_pk else None
     if night is None:
-        raise ActionError("the shift isn't ready to pay (it may still need who worked). Open it to check.")
+        raise ActionError("that shift had nothing to pay, so nothing was paid.")
+    if night.status == Night.Status.OPEN:
+        raise ActionError(f"the {night} is still open: close it out first, then pay it. Nothing was paid.")
+    if night.status not in (Night.Status.CLOSED, Night.Status.REVIEW):
+        raise ActionError(f"the {night} isn't waiting to be paid (it's {night.get_status_display().lower()}). "
+                          "Nothing was paid.")
     if night.status == Night.Status.CLOSED:
         rules = TipRuleSet.active(location)
         if not rules or not night.shifts.exists():
@@ -304,7 +313,7 @@ def _run(data, request):
             from .check import blocking
             if night.status != Night.Status.REVIEW or blocking(night):
                 raise ActionError(f"The {night} can't be paid from here any more. Open it to check.")
-            services.pay_night(night, by_owner=request.user.manager.is_owner)
+            services.pay_night(night, by_owner=request.user.manager.is_owner, expected_split=params.get("split"))
             Change.log(request, f"Paid the {night} (asked in Ask about your tips)")
             return f"Payout for the {night} sent to PayPal."
         if kind == "set_week":
@@ -402,7 +411,10 @@ def _payouts_to_fix(location):
     failed, unclaimed = [], []
     for item in items:
         if item.failed:
-            _, receiver = services.payout_destination(item.share.staff, location.business.currency)
+            try:
+                _, receiver = services.payout_destination(item.share.staff, location.business.currency)
+            except services.TipPoolError:  # e.g. Venmo outside US dollars: can't be sent again from here
+                continue
             if receiver != item.receiver:
                 failed.append(item)
         elif item.status == "UNCLAIMED" and not cache.get(f"payout-remind:{item.pk}"):
@@ -416,14 +428,17 @@ def _fix_payouts(params, request):
 
     from . import emails, services
     from .models import Change, PayoutItem
+    from .paypal import PayPalError
     location = request.location
     sent, reminded, skipped = [], [], []
     for item in PayoutItem.objects.filter(pk__in=params.get("failed", []), batch__night__location=location):
         try:
-            new = services.resend_payout(item)
+            new = services.resend_payout(item, by_owner=request.user.manager.is_owner)
             sent.append(f"{item.share.staff.name} (to {new.receiver})")
         except services.TipPoolError as exc:
             skipped.append(f"{item.share.staff.name}: {exc}")
+        except PayPalError as exc:  # one person's "no" doesn't stop the others, and what went out is still logged
+            skipped.append(f"{item.share.staff.name}: PayPal said no ({exc})")
     for item in PayoutItem.objects.filter(pk__in=params.get("unclaimed", []), batch__night__location=location,
                                           status="UNCLAIMED", superseded=False).select_related("share__staff"):
         if location.business.is_demo:

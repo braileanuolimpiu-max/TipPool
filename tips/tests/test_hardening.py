@@ -1,12 +1,13 @@
 """Security review round 4: admin sign-in, two-step codes, reminders, shared staff, owner alerts, uploads,
 switching PayPal accounts, and tips that arrive while a shift is being paid."""
+import json
 import time
 from decimal import Decimal
 from unittest import mock
 
 from django.core import mail
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from tips import services, totp
@@ -168,6 +169,38 @@ class PayPalSwitchTests(CleanCache):
     def test_switch_when_nothing_is_waiting(self):
         self.assertTrue(self.connect(live=True).paypal_live)
 
+    def test_no_disconnect_while_a_shift_is_being_paid(self):
+        # its payout belongs to this account: checked with another one (the sandbox), it could be marked paid wrongly
+        self.connect(live=True)
+        night = Night.objects.create(location=self.location, date="2026-01-05", status=Night.Status.PAYING)
+        self.client.post(reverse("payment_settings"), {"action": "disconnect"})
+        self.assertEqual(Business.objects.get(pk=self.business.pk).paypal_client_id, "CID-True")
+        Night.objects.filter(pk=night.pk).update(status=Night.Status.PAID)
+        self.client.post(reverse("payment_settings"), {"action": "disconnect"})
+        self.assertEqual(Business.objects.get(pk=self.business.pk).paypal_client_id, "")
+
+
+@override_settings(RATELIMIT_ENABLED=True)
+class TipFloodTests(CleanCache):
+    def order(self, location):
+        return self.client.post(reverse("api_create_order"), data=json.dumps({"amount": "5", "at": location.slug}),
+                                content_type="application/json")
+
+    def test_only_unpaid_orders_fill_the_location_limit(self):
+        from tips.tests.test_money import FakePayPal
+        from tips.views import UNFINISHED_ORDERS_PER_HOUR
+        location = Location.default()
+        night = Night.current(location)
+        # a very busy night: many real tips went through, and guests can still tip
+        Tip.objects.bulk_create([Tip(night=night, amount=Decimal("5"), status=Tip.Status.COMPLETED,
+                                     paypal_order_id=f"PAID-{n}") for n in range(UNFINISHED_ORDERS_PER_HOUR)])
+        with mock.patch("tips.services.get_client", return_value=FakePayPal()):
+            self.assertEqual(self.order(location).status_code, 200)
+            # a flood of orders nobody pays is stopped
+            Tip.objects.bulk_create([Tip(night=night, amount=Decimal("5"), paypal_order_id=f"JUNK-{n}")
+                                     for n in range(UNFINISHED_ORDERS_PER_HOUR)])
+            self.assertEqual(self.order(location).status_code, 429)
+
 
 class LateTipTests(CleanCache):
     def test_a_tip_that_finishes_while_its_shift_is_paid_moves_on(self):
@@ -227,6 +260,35 @@ class GapFixTests(CleanCache):
         self.client.post(reverse("manager_two_step_off", args=[helper.manager.pk]))
         helper.manager.refresh_from_db()
         self.assertFalse(helper.manager.totp_enabled)
+
+    def test_running_the_site_needs_two_step_sign_in(self):
+        op = make_manager("op")
+        op.is_staff = op.is_superuser = True
+        op.save()
+        self.client.force_login(op)
+        page = self.client.get(reverse("platform_settings"))
+        self.assertEqual(page.status_code, 403)
+        self.assertContains(page, "Turn on two-step sign-in first", status_code=403)
+        res = self.client.get("/admin/", follow=True)  # no admin either, and no redirect loop
+        self.assertLess(len(res.redirect_chain), 4)
+        self.assertNotContains(res, "Site administration")
+        op.manager.totp_enabled = True
+        op.manager.save()
+        self.assertEqual(self.client.get(reverse("platform_settings")).status_code, 200)
+        self.assertContains(self.client.get("/admin/"), "Site administration")
+
+    @override_settings(RATELIMIT_ENABLED=True)
+    def test_turning_two_step_off_cannot_be_guessed(self):
+        user = make_manager("guessed")
+        user.manager.totp_secret_encrypted, user.manager.totp_enabled = encrypt(totp.new_secret()), True
+        user.manager.save()
+        self.client.force_login(user)
+        for n in range(15):
+            self.client.post(reverse("two_step"), {"action": "disable", "code": f"{n:06d}"})
+        with mock.patch("tips.totp.verify", return_value=True):  # even the right code waits now
+            self.client.post(reverse("two_step"), {"action": "disable", "code": "123456"})
+        user.manager.refresh_from_db()
+        self.assertTrue(user.manager.totp_enabled)
 
     def test_admin_does_not_loop_for_a_manager(self):
         self.client.force_login(make_manager("owner"))

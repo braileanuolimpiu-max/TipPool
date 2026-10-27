@@ -453,6 +453,9 @@ def _anthropic_parse(system, content, output_model, effort="medium"):
         raise AIError(f"Claude API error ({exc.status_code}).") from exc
     except anthropic.APIConnectionError as exc:
         raise AIError("Could not reach the Claude API (network).") from exc
+    except (anthropic.APIError, ValueError) as exc:  # anything else, e.g. an answer that doesn't fit the form
+        log.warning("Claude call failed: %s", type(exc).__name__)
+        raise AIError("Claude's answer could not be read. Please try again.") from exc
 
     if response.stop_reason == "refusal":
         raise AIError("Claude declined this request.")

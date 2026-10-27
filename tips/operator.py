@@ -1,5 +1,5 @@
 """Platform settings: everything about running the TipPool site, set up on the website (no code, no .env).
-Only the site's operator sees it: the first real account made on a fresh site (or whoever claims it)."""
+Only the site's operator sees it: the owner who claimed it with the setup code from the server's log."""
 import smtplib
 
 from django.contrib import messages
@@ -23,10 +23,10 @@ def _operator_only(request):
     if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
     if platform.is_operator(request.user):
+        if platform.needs_two_step(request.user):
+            return render(request, "tips/platform_claim.html", {"needs_two_step": True}, status=403)
         return None
-    profile = getattr(request.user, "manager", None)
-    can_claim = (not platform.has_operator() and profile is not None and profile.is_owner
-                 and not profile.business.is_demo)
+    can_claim = platform.can_claim(request.user)
     if can_claim:
         import logging
         logging.getLogger("tips.operator").warning("TipPool setup code (to take over running this site): %s",
@@ -400,7 +400,7 @@ def _save_demo(request, cfg):
 
 def _new_cron(request, cfg):
     from .models import new_cron_secret
-    cfg.cron_secret = new_cron_secret()
+    cfg.cron_secret, cfg.cron_env_retired = new_cron_secret(), True  # the old address really stops working
     cfg.save()
     messages.warning(request, "New scheduler address made. Paste it into cron-job.org again: the old one stopped working.")
     return redirect(f"{reverse('platform_settings')}#scheduler")

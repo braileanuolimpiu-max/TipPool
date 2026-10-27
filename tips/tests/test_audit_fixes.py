@@ -198,6 +198,14 @@ class ShownCorrectlyTests(AuditBase):
         night = self.make_night()
         msg = Message.objects.create(staff=self.staff["John"], location=self.location, night=night, text="Hours?")
         Night.objects.filter(pk=night.pk).update(hold="John flagged a problem.")
+        lead = make_manager("lead", self.location.business, owner=False)
+        lead.manager.level = lead.manager.Level.LEAD
+        lead.manager.save()
+        self.client.force_login(lead)  # a shift lead can't lift a hold that stops money going out
+        self.client.post(reverse("messages_page"), {"message": msg.pk, "reply": "Fixed"})
+        night.refresh_from_db()
+        self.assertEqual(night.hold, "John flagged a problem.")
+        self.client.force_login(self.user)
         self.client.post(reverse("messages_page"), {"message": msg.pk, "reply": "Fixed"})
         night.refresh_from_db()
         self.assertEqual(night.hold, "")

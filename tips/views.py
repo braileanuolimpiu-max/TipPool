@@ -3,14 +3,16 @@ import re
 from collections import Counter
 import json
 import logging
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 import qrcode
 import qrcode.image.svg
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -24,7 +26,7 @@ from django.views.decorators.http import require_POST
 from . import ai, autoclose, guest_i18n, hours as hours_from, insights, platform, roles as role_presets, services
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
-from .accounts import manager_required, managers_only, two_step_setup_context
+from .accounts import manager_required, managers_only, owner_required, two_step_setup_context
 from .check import blocking as check_blocking, live as check_live
 from .middleware import public_location
 from .ratelimit import hit, limited
@@ -231,6 +233,9 @@ def tip_thanks(request):
         })
 
 
+UNFINISHED_ORDERS_PER_HOUR = 300
+
+
 @require_POST
 @limited("orders", 20, 600, json=True)
 def api_create_order(request):
@@ -243,7 +248,11 @@ def api_create_order(request):
         location = Location.objects.filter(slug=str(data.get("at", ""))[:40], archived=False).first()
         if location is None:
             return JsonResponse({"error": "This tip page doesn't belong to a business."}, status=404)
-        if not hit(f"orders-loc:{location.pk}", 300, 3600):
+        # a location-wide stop for floods of orders nobody pays: only unfinished ones count, so real tips
+        # (however busy the night) never use it up
+        if settings.RATELIMIT_ENABLED and Tip.objects.filter(
+                night__location=location, status=Tip.Status.CREATED,
+                created_at__gte=timezone.now() - timedelta(hours=1)).count() >= UNFINISHED_ORDERS_PER_HOUR:
             return JsonResponse({"error": "Too many tips at once. Please try again in a minute."}, status=429)
         for_staff = None
         to = str(data.get("to") or "")
@@ -307,7 +316,7 @@ def qr_show(request):
         raise Http404("Unknown business.")
     table = request.GET.get("table", "")[:20]
     to = request.GET.get("to", "")
-    member = (Membership.objects.filter(pk=int(to), location=location).select_related("staff").first()
+    member = (Membership.objects.filter(pk=int(to), location=location, active=True).select_related("staff").first()
               if to.isascii() and to.isdigit() else None)
     url = request.build_absolute_uri(reverse("tip_page")) + f"?at={location.slug}" + (
         f"&table={table}" if table else "") + (f"&to={member.pk}" if member else "")
@@ -316,6 +325,7 @@ def qr_show(request):
     return render(request, "tips/qr_show.html", {"url": url, "label": label, "table": table})
 
 
+@limited("qr", 600, 600, methods=("GET",))  # a print sheet loads dozens; a script can't make thousands
 def qr_svg(request):
     url = request.GET.get("url", "")
     if not url.startswith(request.build_absolute_uri("/")) or len(url) > 300:
@@ -329,6 +339,7 @@ def qr_svg(request):
     return response
 
 
+@limited("qr", 600, 600, methods=("GET",))
 def qr_png(request):
     """A big PNG of a tip code, for menus, posters or design tools."""
     url = request.GET.get("url", "")
@@ -520,7 +531,10 @@ def staff_bulk(request):
         seen[email] = n
         existing = StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).first()
         if existing is not None and Membership.objects.filter(staff=existing, location=location, active=True).exists():
-            Membership.objects.filter(staff=existing, location=location).update(default_role=role)
+            changed = Membership.objects.filter(staff=existing, location=location).exclude(default_role=role)
+            if changed.update(default_role=role):
+                label = next((r.name for r in roles if r.key == role), role)
+                Change.log(request, f"{existing.name}'s usual role is now {label} (from a list added at once)")
             updated.append(existing.name)
             continue
         if _name_taken(request.business, name, email):
@@ -645,6 +659,13 @@ def staff_edit(request, pk):
     if changes:
         person.save()
         Change.log(request, f"Edited {person.name}: " + "; ".join(changes))
+        address = next((c for c in changes if c.startswith("PayPal email")), "")
+        if address and not request.user.manager.is_owner:  # where money goes changed: the owner hears about it
+            from .alerts import raise_alert
+            who = request.user.get_full_name() or request.user.get_username()
+            raise_alert(request.business, f"{who} changed where {person.name} is paid: {address[len('PayPal email '):]}. "
+                                          f"{person.name} confirms it on their tips page before they're paid there.",
+                        location=request.location, key=f"address:{person.pk}:{email}", owners_only=True)
         messages.success(request, f"Saved. {person.name} confirms the new email on their tips page before the "
                                   "next payout." if any("email" in c for c in changes) else "Saved.")
     return redirect("staff_list")
@@ -768,6 +789,9 @@ def role_preset(request):
 
 
 # --- Rules -------------------------------------------------------------------
+MAX_RULES_CHARS = 4000
+
+
 @manager_required
 @managers_only
 def rules_page(request):
@@ -788,12 +812,18 @@ def rules_page(request):
         return redirect("rules")
     if request.method == "POST":
         text = request.POST.get("text", "")
-        try:
-            parsed = ai.parse_rules(text, request.location)
-            preview = {"text": text, "location": request.location.pk, **parsed}
-            request.session["rules_preview"] = preview
-        except ai.AIError as exc:
-            messages.error(request, str(exc))
+        if len(text) > MAX_RULES_CHARS:  # every reading is an AI call: keep it to what rules need
+            messages.error(request, f"That's longer than tip rules need ({MAX_RULES_CHARS:,} characters at most). "
+                                    "Shorten it and try again.")
+        elif not hit(f"rules-read:{request.user.pk}", 20, 3600):
+            messages.error(request, "You've had the rules read many times in the last hour. Wait a little, then try again.")
+        else:
+            try:
+                parsed = ai.parse_rules(text, request.location)
+                preview = {"text": text, "location": request.location.pk, **parsed}
+                request.session["rules_preview"] = preview
+            except ai.AIError as exc:
+                messages.error(request, str(exc))
     active = TipRuleSet.active(request.location)
     return render(request, "tips/rules.html", {
         "active": active, "preview": preview, "text": text or (active.text if active else ""),
@@ -879,6 +909,10 @@ def close_night(request, pk=None):
                 locked.shares.all().delete()
                 locked.status = Night.Status.CLOSED
                 locked.save(update_fields=["status"])
+            if locked.status != Night.Status.OPEN and locked.auto_closed:
+                # a manager is working on it: it's theirs to approve, never paid automatically mid-edit
+                locked.auto_closed = False
+                locked.save(update_fields=["auto_closed"])
         night.refresh_from_db()
         roster = ", ".join(f"{s.staff.name} {s.hours.normalize():f}h" for s in night.shifts.select_related("staff"))
         Change.log(request, f"{'Saved' if saving_only else 'Closed out with'} who worked on the {night}: {roster or 'nobody'}")
@@ -1063,8 +1097,28 @@ def payout_status(request, pk):
         "night": night, "batch": batch, "items": items, "paid": paid,
         "sample": (batch.paypal_batch_id or "").startswith("DEMO"),
         "unclear": any(services.needs_recheck(b) for b in night.payout_batches.all()),
+        "unclear_old": [b for b in night.payout_batches.all() if services.needs_recheck(b)
+                        and b.created_at <= timezone.now() - services.NOT_SENT_AFTER],
         "payout_fees": sum((i.fee for i in items), Decimal("0")),
     })
+
+
+@require_POST
+@owner_required
+def payout_not_sent(request, pk):
+    """The owner checked their PayPal account: a payout PayPal never answered about isn't there. Undo it."""
+    batch = get_object_or_404(PayoutBatch, pk=pk, night__location=request.location)
+    night = batch.night
+    try:
+        services.mark_not_sent(batch)
+    except services.TipPoolError as exc:
+        messages.error(request, str(exc))
+        return redirect("payout_status", pk=night.pk)
+    Change.log(request, f"Checked PayPal: the unclear payout for the {night} wasn't sent, so it was undone "
+                        "to be paid again")
+    messages.success(request, "Undone. Nothing was paid with it, so you can pay again now.")
+    night.refresh_from_db()
+    return redirect("review" if night.status == Night.Status.REVIEW else "payout_status", pk=night.pk)
 
 
 @manager_required
@@ -1077,7 +1131,7 @@ def payout_action(request, pk):
     night, staff, action = item.share.night, item.share.staff, request.POST.get("action")
     try:
         if action == "resend":
-            new = services.resend_payout(item)
+            new = services.resend_payout(item, by_owner=request.user.manager.is_owner)
             Change.log(request, f"Sent {staff.name}'s payout for the {night} again, to {new.receiver}")
             messages.success(request, f"Sent again to {new.receiver}.")
         elif action == "cancel":
@@ -1122,7 +1176,13 @@ def payout_status_json(request, pk):
     batch = getattr(night, "payout_batch", None)
     if batch is None:
         raise Http404
+    from django.core.cache import cache
     for each in night.payout_batches.all():
+        if (each.paypal_batch_id or "").startswith("DEMO"):
+            continue  # sample history: nothing to ask PayPal about
+        # however many pages are open, PayPal is asked about a batch at most every 15 seconds
+        if not cache.add(f"batch-refresh:{each.pk}", 1, 15):
+            continue
         try:
             services.refresh_batch(each)
         except (PayPalError, services.TipPoolError):
@@ -1180,7 +1240,8 @@ def settings_page(request):
         for i in range(4):
             try:
                 value = Decimal(request.POST.get(f"tip_value_{i}", "") or "0")
-                values.append(int(value) if value.is_finite() and abs(value) < 100000 else 0)
+                whole = value.is_finite() and abs(value) < 100000 and value == value.to_integral_value()
+                values.append(int(value) if whole else 0)  # 7.5 is refused (and said so), never cut to 7
             except InvalidOperation:
                 values.append(0)
         limit = 100 if style == Location.TipStyle.PERCENT else 500
@@ -1190,7 +1251,7 @@ def settings_page(request):
         elif style == "":
             restaurant.tip_style, restaurant.tip_values = "", []
         elif style in Location.TipStyle.values:
-            ignored.append(f"the tip buttons (each must be between 1 and {limit})")
+            ignored.append(f"the tip buttons (each must be a whole number from 1 to {limit})")
         if request.POST.get("tip_mode") in Location.TipMode.values:
             restaurant.tip_mode = request.POST["tip_mode"]
         if request.POST.get("after_close") in Location.AfterClose.values:
@@ -1320,7 +1381,11 @@ def reports_page(request):
         return response
     from . import ask
     question = request.GET.get("q", "").strip()
-    if question and not hit(f"ask:{request.user.pk}", 20, 600):
+    typed = question
+    if question and request.headers.get("Sec-Fetch-Site") == "cross-site":
+        # a link on another website: put the question in the box, but only the manager pressing Ask runs it
+        asked, question = None, ""
+    elif question and not hit(f"ask:{request.user.pk}", 20, 600):
         asked = {"answer": "You've asked a lot in a few minutes. Wait a little, then ask again.", "by": "offline"}
         question = ""  # nothing more is asked this time
     else:
@@ -1337,8 +1402,8 @@ def reports_page(request):
                                                           "query": params.urlencode()})
     return render(request, "tips/reports.html", {
         "report": report, "periods": reports.PERIODS, "period": period, "scope": scope,
-        "query": params.urlencode(), "question": question, "asked": asked, "examples": ask.EXAMPLES,
-        "ai_mode": ai.mode(),
+        "query": params.urlencode(), "question": typed if asked is None else question, "asked": asked,
+        "examples": ask.EXAMPLES, "ai_mode": ai.mode(),
     })
 
 
@@ -1383,8 +1448,14 @@ def messages_page(request):
         if msg.kind == Message.Kind.PAYOUT_CHANGE and request.user.manager.is_lead:
             messages.error(request, "Only a manager can approve where someone is paid.")
             return redirect("messages_page")
+        if msg.night_id and request.user.manager.is_lead:
+            # a flag holds the shift's payout: answering it lets money go out, so it's a manager's call
+            messages.error(request, "Only a manager can answer a problem flagged on a shift: it holds the payout.")
+            return redirect("messages_page")
         if msg.kind == Message.Kind.PAYOUT_CHANGE:
             if not msg.is_open:
+                return redirect("messages_page")
+            if _works_elsewhere(request, msg.staff):  # where they're paid moves their tips at every location
                 return redirect("messages_page")
             approved = request.POST.get("decision") == "approve"
             if approved:
@@ -1411,15 +1482,16 @@ def messages_page(request):
             night.save(update_fields=["hold"])
         messages.success(request, f"Done. {msg.staff.name} sees your answer on their tips page.")
         return redirect("messages_page")
-    qs = list(Message.objects.filter(Q(location=request.location) | Q(kind=Message.Kind.PAYOUT_CHANGE,
-                                                                      staff__business=business,
-                                                                      staff__memberships__location__in=request.allowed_locations))
-              .select_related("staff", "night").distinct())
+    shown = (Message.objects.filter(Q(location=request.location) | Q(kind=Message.Kind.PAYOUT_CHANGE,
+                                                                     staff__business=business,
+                                                                     staff__memberships__location__in=request.allowed_locations))
+             .select_related("staff", "night").distinct())
+    waiting = list(shown.filter(resolved_at__isnull=True))
     alerts = Alert.objects.filter(business=business).filter(Q(location=request.location) | Q(location__isnull=True))
     return render(request, "tips/messages.html", {
-        "payout_requests": [m for m in qs if m.is_open and m.kind == Message.Kind.PAYOUT_CHANGE],
-        "open": [m for m in qs if m.is_open and m.kind == Message.Kind.MESSAGE],
-        "resolved": [m for m in qs if not m.is_open][:40],
+        "payout_requests": [m for m in waiting if m.kind == Message.Kind.PAYOUT_CHANGE],
+        "open": [m for m in waiting if m.kind == Message.Kind.MESSAGE],
+        "resolved": shown.filter(resolved_at__isnull=False)[:40],  # the newest 40, not the whole history
         "alerts": alerts.filter(resolved_at__isnull=True).select_related("night")[:50],
     })
 
@@ -1677,8 +1749,21 @@ def paypal_webhook(request):
         log.warning("Rejected unverified webhook %s", event_id)
         return HttpResponse(status=400)
 
-    WebhookEvent.objects.create(event_id=event_id, event_type=str(event.get("event_type", ""))[:80],
-                                verified=True, payload=event)
+    # recorded and applied together: if applying fails, the record is undone and PayPal's retry is applied
+    # (instead of being skipped as a duplicate of an event that never took effect)
+    with transaction.atomic():
+        try:
+            with transaction.atomic():
+                WebhookEvent.objects.create(event_id=event_id, event_type=str(event.get("event_type", ""))[:80],
+                                            verified=True, payload=event)
+        except IntegrityError:
+            return HttpResponse("ok")  # the same event delivered twice at once: the other one applies it
+        _apply_webhook_event(event)
+    return HttpResponse("ok")
+
+
+def _apply_webhook_event(event):
+    """A verified PayPal event: change what it says changed. Raises if it can't, so PayPal sends it again."""
     event_type = event.get("event_type", "")
     resource = _as_dict(event.get("resource"))
     if event_type == "PAYMENT.CAPTURE.COMPLETED":
@@ -1705,7 +1790,6 @@ def paypal_webhook(request):
                 services.refresh_batch(batch)
             except PayPalError:
                 log.exception("Could not refresh batch %s", batch_id)
-    return HttpResponse("ok")
 
 
 def _check_with_paypal(event, business):

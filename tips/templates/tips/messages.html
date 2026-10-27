@@ -47,11 +47,15 @@
           <strong>{{ m.staff.name }}</strong> <span class="small muted">{{ m.created_at|date:"D M j, g:i A" }}</span>
           {% if m.night %}<div class="small"><a href="{% if m.night.status == 'paid' or m.night.status == 'paying' %}{% url 'payout_status' m.night.pk %}{% else %}{% url 'review' m.night.pk %}{% endif %}">About the {{ m.night.date|date:"l, M j" }} shift</a></div>{% endif %}
           <p class="msg-text">{{ m.text }}</p>
+          {% if m.night and is_lead %}
+          <p class="small muted" style="margin:0">A manager answers this one: it holds the shift's payout.</p>
+          {% else %}
           <form method="post" class="stack" style="gap:8px">{% csrf_token %}<input type="hidden" name="message" value="{{ m.pk }}">
             <textarea name="reply" rows="2" maxlength="1000" placeholder="Reply (they see it on their tips page)" aria-label="Reply to {{ m.staff.name }}"></textarea>
             <div class="actions"><button class="btn btn-primary small" name="resolve">Reply and resolve</button>
               {% if m.night and m.night.status != 'paid' and m.night.status != 'paying' %}<a class="small" href="{% url 'close_night_pk' m.night.pk %}">Fix the hours</a>{% endif %}</div>
           </form>
+          {% endif %}
         </div>
       </li>
       {% empty %}

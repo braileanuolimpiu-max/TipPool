@@ -202,7 +202,8 @@ class Location(models.Model):
 
     @classmethod
     def default(cls):
-        """The first location (created if there is none). Old printed QR codes without ?at= land here."""
+        """The first location in the whole site (created if there is none), whatever business it belongs to.
+        For tests only: app code must never use it (a tip could land in another business's PayPal)."""
         obj = cls.objects.first()
         if obj is None:
             business = Business.objects.first() or Business.objects.create(name="My business")
@@ -405,6 +406,9 @@ class Night(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     auto_closed = models.BooleanField(default=False)
+    # when a late tip made the automatic split be calculated again: the review window starts again here
+    # (empty: it runs from closed_at)
+    review_from = models.DateTimeField(null=True, blank=True)
     # why an automatic payout was held back for the manager (empty = nothing to check)
     hold = models.CharField(max_length=200, blank=True)
     # bumped each time PayPal clearly rejects a payout, so the corrected retry gets a fresh id
@@ -779,6 +783,8 @@ class PlatformConfig(models.Model):
     demo_staff = models.JSONField(default=dict, blank=True)  # {"Maria": "sandbox email", ...}
     # the outside scheduler (cron-job.org) and the privacy page
     cron_secret = models.CharField(max_length=60, default=new_cron_secret)
+    # "Make a new address" was used: the key from the environment (CRON_SECRET) stops working too
+    cron_env_retired = models.BooleanField(default=False)
     last_tick_at = models.DateTimeField(null=True, blank=True)
     contact_email = models.CharField(max_length=200, blank=True)
     updated_at = models.DateTimeField(auto_now=True)

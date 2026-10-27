@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from . import check, hours, services
@@ -99,6 +100,8 @@ def _run_location(location, now):
     for night in Night.objects.filter(location=location, status=Night.Status.CLOSED, auto_closed=True, hold="",
                                       shifts__isnull=False).distinct():
         if night.tip_total > 0:
+            # the amounts changed since anyone could look: the review window starts again from now
+            Night.objects.filter(pk=night.pk).update(review_from=now)
             done.append(split_and_pay(night, location, needs_check=False))
     done += pay_after_review(location, now)
     return done
@@ -109,8 +112,10 @@ def pay_after_review(location, now):
     if location.after_close != Location.AfterClose.PAY or not location.review_minutes:
         return []
     results = []
-    waiting = Night.objects.filter(location=location, status=Night.Status.REVIEW, auto_closed=True, hold="",
-                                   closed_at__lte=now - timedelta(minutes=location.review_minutes))
+    # the window runs from the latest split: a late tip that changed the amounts gets a fresh review window
+    since = now - timedelta(minutes=location.review_minutes)
+    waiting = Night.objects.filter(Q(review_from__lte=since) | Q(review_from__isnull=True, closed_at__lte=since),
+                                   location=location, status=Night.Status.REVIEW, auto_closed=True, hold="")
     if location.business.payouts_frozen:
         return []  # the owner stopped payouts: they wait, and go out by themselves once unfrozen
     for night in waiting:

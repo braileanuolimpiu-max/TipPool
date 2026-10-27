@@ -9,20 +9,27 @@ from django.urls import reverse
 from tips import ai, platform
 from tips.models import PlatformConfig
 from tips.paypal import SANDBOX_API, get_client
-from tips.tests.helpers import make_manager
+from tips.tests.helpers import make_manager, make_operator
 
 
 class OperatorTests(TestCase):
-    def test_first_real_signup_runs_the_site(self):
+    def test_first_signup_does_not_run_the_site_without_the_setup_code(self):
+        # anyone could find a new site before its owner: signing up first must not hand over the whole site
         data = {"business": "Cafe One", "business_type": "cafe", "timezone": "UTC", "name": "Ana Owner",
                 "email": "ana@example.com", "password": "Strong-pass-2026"}
         self.client.post(reverse("signup"), data)
         ana = get_user_model().objects.get(email="ana@example.com")
+        self.assertFalse(ana.is_superuser)
+        self.assertFalse(ana.is_staff)
+        self.assertContains(self.client.get(reverse("dashboard")), 'class="platform-link"')  # where to claim it
+        self.assertContains(self.client.get(reverse("platform_settings")), "I run this site")
+        self.client.post(reverse("claim_platform"), {"code": platform.setup_code()})
+        ana.refresh_from_db()
         self.assertTrue(ana.is_superuser)
-        self.assertEqual(self.client.get(reverse("platform_settings")).status_code, 200)
         self.client.logout()
         self.client.post(reverse("signup"), {**data, "business": "Cafe Two", "email": "bo@example.com"})
         self.assertFalse(get_user_model().objects.get(email="bo@example.com").is_superuser)
+        self.assertNotContains(self.client.get(reverse("dashboard")), 'class="platform-link"')
         self.assertEqual(self.client.get(reverse("platform_settings")).status_code, 403)
 
     def test_claim_when_nobody_runs_the_site(self):
@@ -44,8 +51,7 @@ class OperatorTests(TestCase):
 
 class SettingsFromTheWebsiteTests(TestCase):
     def setUp(self):
-        self.op = make_manager("op")
-        self.op.is_superuser = True
+        self.op = make_operator("op")
         self.op.email = "op@example.com"
         self.op.save()
         self.client.force_login(self.op)
@@ -177,13 +183,21 @@ class ReviewFixTests(TestCase):
         self.assertFalse(get_user_model().objects.get(email="eve@example.com").is_superuser)
 
     @override_settings(CRON_SECRET="old-key")
-    def test_the_environments_scheduler_key_keeps_working(self):
+    def test_the_environments_scheduler_key_keeps_working_until_a_new_address_is_made(self):
         cfg = PlatformConfig.load()
         self.assertEqual(cfg.cron_secret, "old-key")
         cfg.cron_secret = "new-key"
         cfg.save()
         for key in ("old-key", "new-key"):
             self.assertEqual(self.client.get(reverse("cron_tick") + f"?key={key}").status_code, 200, key)
+        self.assertEqual(self.client.get(reverse("cron_tick"), HTTP_X_CRON_KEY="new-key").status_code, 200)
+        # "Make a new address": the page says the old one stopped working, and so it has (the environment's too)
+        self.client.force_login(make_operator("op"))
+        self.client.post(reverse("platform_settings"), {"section": "cron_new"})
+        newest = PlatformConfig.load().cron_secret
+        for key in ("old-key", "new-key"):
+            self.assertEqual(self.client.get(reverse("cron_tick") + f"?key={key}").status_code, 404, key)
+        self.assertEqual(self.client.get(reverse("cron_tick") + f"?key={newest}").status_code, 200)
 
     def test_open_redirect_on_freeze_is_closed(self):
         owner = make_manager("owner")
@@ -242,10 +256,7 @@ class LimitedManagerMessageTests(TestCase):
 
 class PolishRoundTests(TestCase):
     def test_a_failed_platform_save_keeps_what_was_typed(self):
-        op = make_manager("op")
-        op.is_superuser = True
-        op.save()
-        self.client.force_login(op)
+        self.client.force_login(make_operator("op"))
         page = self.client.post(reverse("platform_settings"), {"section": "contact", "contact_email": "not an email"},
                                 follow=True)
         self.assertContains(page, 'value="not an email"')

@@ -15,7 +15,14 @@
 </header>
 {% include "tips/_stepper.html" with step=3 %}
 {% if sample %}<div class="flash info"><strong>Sample history.</strong> This shift came with the demo, so it's shown as paid but no money was sent. To see real (sandbox) payouts arrive, pay yesterday's shift or close out today's.</div>{% endif %}
-{% if unclear %}<div class="flash warning">PayPal didn't answer clearly when this payout was sent, so it may or may not have gone out. <strong>Don't pay again.</strong> Press "Check PayPal again": it sends the very same request, which PayPal never pays twice.</div>{% endif %}
+{% if unclear %}<div class="flash warning">PayPal didn't answer clearly when this payout was sent, so it may or may not have gone out. <strong>Don't pay again.</strong> Press "Check PayPal again": it sends the very same request, which PayPal never pays twice.
+  {% if unclear_old and user.manager.is_owner %}
+  <p class="small" style="margin:.5em 0 0">Still unclear? Look in your PayPal account's activity. If this payout isn't there, undo it here and pay again.</p>
+  {% for b in unclear_old %}
+  <form method="post" action="{% url 'payout_not_sent' b.pk %}" data-confirm="Only if you checked your PayPal account and this payout isn't there. If it was sent after all, paying again would pay twice." data-confirm-yes="It wasn't sent: undo it">{% csrf_token %}
+    <button class="btn btn-secondary small">I checked PayPal: it wasn't sent</button></form>
+  {% endfor %}
+  {% endif %}</div>{% endif %}
 
 <div class="split-2 reverse">
   <div class="tray"><div class="receipt-wrap">
@@ -87,8 +94,10 @@
 {% block scripts %}
 {% if night.status == "paying" %}
 <script>
-  // Ask PayPal every few seconds until every payment is final
+  // Ask PayPal every few seconds until every payment is final (for 15 minutes; then "Check with PayPal" or reload)
+  const pollUntil = Date.now() + 15 * 60 * 1000;
   const poll = setInterval(async () => {
+    if (Date.now() > pollUntil) { clearInterval(poll); return; }
     const res = await fetch("{% url 'payout_status_json' night.pk %}");
     if (!res.ok) return;
     const data = await res.json();

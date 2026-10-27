@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from tips import ai, ask, openai_compat, platform
 from tips.models import PlatformConfig
-from tips.tests.helpers import make_manager
+from tips.tests.helpers import make_operator
 from tips.vault import encrypt
 
 
@@ -71,9 +71,7 @@ class OpenAICompatibleTests(TestCase):
 
 class OtherAISetupTests(TestCase):
     def setUp(self):
-        op = make_manager("op")
-        op.is_superuser = True
-        op.save()
+        op = make_operator("op")
         self.client.force_login(op)
         self.url = reverse("platform_settings")
 

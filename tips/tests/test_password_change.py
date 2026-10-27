@@ -1,4 +1,5 @@
 import re
+from unittest import mock
 
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -121,6 +122,22 @@ class WrongPasswordPauseTests(TestCase):
         from django.core.cache import cache
         cache.delete(f"login-pause:user-{self.user.pk}")  # a minute later
         self.assertEqual(self.login("right-pass-123").status_code, 302)
+
+    def test_the_pause_grows_each_round(self):
+        from django.core.cache import cache
+        pauses = []
+        real_set = cache.set
+
+        def remember(key, value, timeout=None, *args, **kwargs):
+            if key.startswith("login-pause:"):
+                pauses.append(timeout)
+            return real_set(key, value, timeout, *args, **kwargs)
+        with mock.patch.object(cache, "set", side_effect=remember):
+            for _ in range(4):
+                for _ in range(10):
+                    self.login("nope")
+                cache.delete(f"login-pause:user-{self.user.pk}")  # the pause ran out; the guessing goes on
+        self.assertEqual(pauses, [60, 300, 900, 900])
 
     def test_a_right_password_resets_the_count(self):
         for _ in range(9):

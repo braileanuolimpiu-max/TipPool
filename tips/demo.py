@@ -57,8 +57,11 @@ def _fill(location, seed):
     for name, role in TEAM:
         person, _ = StaffMember.objects.get_or_create(business=business, name=name,
                                                       defaults={"paypal_email": _email(name)})
-        person.payout_confirmed_at = timezone.now()
-        person.save(update_fields=["payout_confirmed_at"])
+        if business.is_demo:
+            # only in the demo: sample people in a real business are never paid as if they'd said "pay me here"
+            # (their addresses are test accounts, and the business may go live later)
+            person.payout_confirmed_at = timezone.now()
+            person.save(update_fields=["payout_confirmed_at"])
         Membership.objects.update_or_create(staff=person, location=location, defaults={
             "default_role": role, "active": True,
             "schedule": {str(d): 6 for d in range(1, 6)} if role == "server" else {}})

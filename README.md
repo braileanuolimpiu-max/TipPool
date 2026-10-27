@@ -176,8 +176,8 @@ questions, so the app works without an API key (and the demo history is generate
 - Changing a password needs a 6-character code sent by email (valid 5 minutes); a new password can't be the
   current one, and every change or reset sends a notice.
 - Managers and shift leads can be limited to their own locations; leads can close out but never pay.
-- Running the site (Platform settings) belongs to the first account on a new site, or needs a one-time setup
-  code from the server's log. Platform secrets (email password, API keys) are encrypted and never shown again. Secure cookies, HSTS, CSRF protection, and a referrer policy that keeps private staff links from leaking to other sites.
+- Running the site (Platform settings) always needs a one-time setup code from the server's log, never just
+  being the first to sign up, and two-step sign-in (for Platform settings and the admin). Platform secrets (email password, API keys) are encrypted and never shown again. Secure cookies, HSTS, CSRF protection, and a referrer policy that keeps private staff links from leaking to other sites.
 - CSV exports are protected against spreadsheet formula injection.
 - AI use is capped: a daily limit for the whole site (set in Platform settings), a daily share per business
   (smaller for demos) and a per-person limit on Ask, so accounts made just to use the AI can't run up costs
@@ -227,8 +227,10 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 1. Create a free Postgres database on [Neon](https://neon.tech) and copy its connection link.
 2. On [Render](https://render.com): **New → Blueprint**, pick this repo, and paste the link as `DATABASE_URL`.
    That's the only value you type: Render generates the two secret keys itself.
-3. Open the site and **create your account**. The first account on a new site runs it, and gets
-   **Platform** at the top. There, with step-by-step help on each part:
+3. Open the site and **create your account**, then open **Platform** at the top and type the setup code from
+   the server's log (on Render: your service → **Logs**, "TipPool setup code"). Signing up first is not enough,
+   so nobody who finds a new site before you can take it over. Platform then asks you to turn on two-step
+   sign-in (an authenticator app), since it holds every business's keys. There, with step-by-step help on each part:
    - **Email:** pick **Brevo** (free, 300 a day), add your sender address there and paste an API key, then
      "Send me a test email". Brevo is used through its web API, because Render's free plan blocks email
      ports (SMTP). Gmail, Outlook and other SMTP services work locally or on a paid plan.

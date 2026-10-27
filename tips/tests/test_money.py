@@ -195,6 +195,68 @@ class MoneyTests(TestCase):
         self.client.post(reverse("payout_action", args=[item.pk]), {"action": "resend"})
         self.assertEqual(PayoutItem.objects.filter(share__staff=self.john).count(), 2)
 
+    def test_manager_cannot_redirect_a_payout_to_an_unconfirmed_address(self):
+        # a manager cancels an unclaimed payout, puts their own email on the person, and sends it again
+        self.paid_night()
+        item = PayoutItem.objects.get(share__staff=self.john)
+        services.apply_payout_item_event({"payout_item": {"sender_item_id": item.sender_item_id},
+                                          "payout_item_id": "PI2", "transaction_status": "UNCLAIMED"})
+        manager = make_manager("mgr", self.business, owner=False)
+        self.client.force_login(manager)
+        self.client.post(reverse("payout_action", args=[item.pk]), {"action": "cancel"})
+        member = self.john.memberships.get()
+        self.client.post(reverse("staff_edit", args=[member.pk]), {"name": "John", "paypal_email": "mgr@example.com"})
+        self.assertTrue(Alert.objects.filter(key__startswith=f"address:{self.john.pk}:").exists())  # owner is told
+        sent = len(self.paypal.payout_bodies)
+        self.client.post(reverse("payout_action", args=[item.pk]), {"action": "resend"})
+        self.assertEqual(len(self.paypal.payout_bodies), sent)  # nothing sent
+        self.assertFalse(PayoutItem.objects.get(pk=item.pk).superseded)
+        with self.assertRaises(services.TipPoolError):
+            services.resend_payout(item)
+        self.client.force_login(self.owner)  # the owner may, after checking the address
+        self.client.post(reverse("payout_action", args=[item.pk]), {"action": "resend"})
+        self.assertEqual(self.paypal.payout_bodies[-1][0]["receiver"], "mgr@example.com")
+
+    def test_only_the_owner_can_pay_unconfirmed_people(self):
+        sam = hire("Sam", "server", confirmed=False)
+        night = self.shift_with(("90", "0"), people=("maria", "john"))
+        Shift.objects.create(night=night, staff=sam, role="server", hours=Decimal("5"))
+        services.build_split(night, self.rules)
+        self.client.force_login(make_manager("mgr", self.business, owner=False))
+        self.assertContains(self.client.get(reverse("review", args=[night.pk])), "only the owner can pay this shift")
+        self.client.post(reverse("pay", args=[night.pk]), {"checked": "on"})  # "I checked these" isn't enough
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.REVIEW)
+        with self.assertRaises(services.TipPoolError):
+            services.pay_night(night, allow_unconfirmed=True, by_owner=False)
+
+    def test_owner_can_undo_an_unclear_payout_after_checking_paypal(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from tips.models import PayoutBatch
+        night = self.paid_night()
+        batch = night.payout_batch
+        # PayPal never answered clearly: no batch id, status unknown
+        PayoutBatch.objects.filter(pk=batch.pk).update(paypal_batch_id="", status="UNKNOWN")
+        attempt = night.payout_attempt
+        page = self.client.get(reverse("payout_status", args=[night.pk]))
+        self.assertNotContains(page, "I checked PayPal")  # too soon: check PayPal again first
+        self.client.post(reverse("payout_not_sent", args=[batch.pk]))
+        self.assertTrue(PayoutBatch.objects.filter(pk=batch.pk).exists())
+        PayoutBatch.objects.filter(pk=batch.pk).update(created_at=timezone.now() - timedelta(minutes=11))
+        self.client.force_login(make_manager("mgr", self.business, owner=False))  # managers can't
+        self.client.post(reverse("payout_not_sent", args=[batch.pk]))
+        self.assertTrue(PayoutBatch.objects.filter(pk=batch.pk).exists())
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("payout_status", args=[night.pk])), "I checked PayPal")
+        self.client.post(reverse("payout_not_sent", args=[batch.pk]))
+        night.refresh_from_db()
+        self.assertFalse(PayoutBatch.objects.filter(pk=batch.pk).exists())
+        self.assertEqual((night.status, night.payout_attempt), (Night.Status.REVIEW, attempt + 1))
+        services.pay_night(night)  # paid again, with a new id
+        self.assertTrue(night.payout_batch.sender_batch_id.endswith(f"-a{attempt + 1}"))
+
     def test_success_cannot_be_resent(self):
         self.paid_night()
         item = PayoutItem.objects.get(share__staff=self.john)

@@ -1,7 +1,7 @@
 # One-click deploy on Render (free plan).
 # You paste one thing in Render: DATABASE_URL (a free Neon Postgres link). Render makes the two keys itself.
 # Everything else (email, Claude, PayPal, the demo, the scheduler) is set up on the website afterwards:
-# sign up (the first account runs the site) and open "Platform" at the top.
+# sign up, open "Platform" at the top and type the setup code from the service's Logs.
 services:
   - type: web
     name: tippool

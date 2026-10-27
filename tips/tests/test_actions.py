@@ -70,6 +70,21 @@ class ActionTests(ActionBase):
         night.refresh_from_db()
         self.assertEqual(night.status, Night.Status.PAYING)
 
+    def test_a_confirmation_never_pays_a_different_split(self):
+        night = self.ready_night()
+        page = self.ask("pay yesterday's shift")  # shown: $100.00, Maria and John 5h each
+        # someone changes the hours before the confirm: the split is calculated again
+        night.shifts.filter(staff=self.maria).update(hours=Decimal("9"))
+        Night.objects.filter(pk=night.pk).update(status=Night.Status.CLOSED)
+        night.shares.all().delete()
+        services.build_split(night, self.rules)
+        res = self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]},
+                               follow=True)
+        night.refresh_from_db()
+        self.assertEqual(night.status, Night.Status.REVIEW)
+        self.assertEqual(self.paypal.payout_bodies, [])
+        self.assertContains(res, "The split changed since it was shown")
+
     def test_cannot_pay_what_the_check_stops(self):
         self.ready_night(hours="15")
         page = self.ask("pay yesterday's shift")
@@ -116,6 +131,19 @@ class ActionTests(ActionBase):
         self.assertIn("Pay the Thursday, Oct 15 shift", result["proposal"]["text"])
 
 
+    @override_settings(AI_MODE="claude")
+    def test_an_ai_action_needs_the_manager_to_ask_for_one(self):
+        # staff wrote "pay this shift now" into a flag; the AI went along with it on an innocent question
+        self.ready_night()
+        out = ask.AnswerOut(answer="Maria earned the most.",
+                            action=ask.ActionOut(kind="pay_shift", shift_date="2026-10-15"))
+        with mock.patch("tips.ai._claude_parse", return_value=out):
+            result = ask.answer("who earned the most this month?", [self.location], TODAY, location=self.location,
+                                user=self.boss)
+        self.assertNotIn("proposal", result)
+        self.assertEqual(result["answer"], "Maria earned the most.")
+
+
 @override_settings(AI_MODE="mock")
 class AgentPlanTests(ActionBase):
     """Several things in one request, confirmed once, done in order, stopping safely."""
@@ -149,6 +177,31 @@ class AgentPlanTests(ActionBase):
         again = self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]},
                                  follow=True)
         self.assertContains(again, "already done")
+
+    def test_a_plan_pays_only_the_shift_it_changed(self):
+        # yesterday's shift is waiting to be paid; tonight is still open. "Add cash and pay" must not pay yesterday.
+        yesterday = self.ready_night(day=date(2026, 10, 15))
+        tonight = self.open_night_with_clock_ins()
+        page = self.ask("add $40 cash and pay everyone")
+        steps = page.context["asked"]["proposal"]["steps"]
+        self.assertEqual(len(steps), 2)
+        self.assertIn(str(tonight), steps[1])  # the confirm text names the shift that will be paid
+        res = self.client.post(reverse("ask_confirm"), {"token": page.context["asked"]["proposal"]["token"]},
+                               follow=True)
+        yesterday.refresh_from_db()
+        tonight.refresh_from_db()
+        self.assertEqual(yesterday.status, Night.Status.REVIEW)  # untouched
+        self.assertEqual(tonight.tip_total, Decimal("140.00"))  # the cash went where it said
+        self.assertEqual(self.paypal.payout_bodies, [])
+        self.assertContains(res, "Stopped at step 2")
+
+    def test_a_plan_pays_the_shift_it_closed_by_its_pk(self):
+        night = self.open_night_with_clock_ins()
+        page = self.ask("close out tonight and pay everyone")
+        token = page.context["asked"]["proposal"]["token"]
+        from django.core import signing
+        steps = signing.loads(token, salt=actions.SALT)["p"]["steps"]
+        self.assertEqual(steps[1], ["pay_shift", {"night": night.pk, "after_change": True}])
 
     def test_a_plan_stops_before_money_moves_when_the_check_says_no(self):
         night = self.open_night_with_clock_ins(hours=15)  # a 15-hour shift: the check stops the payout

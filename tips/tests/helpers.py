@@ -21,3 +21,13 @@ def make_manager(username, business=None, owner=True):
     user = get_user_model().objects.create_user(username, email=f"{username}@example.com", password="pw")
     Manager.objects.create(user=user, business=business, is_owner=owner)
     return user
+
+
+def make_operator(username, business=None):
+    """A login that runs the site: an owner with two-step sign-in on (Platform settings need it)."""
+    user = make_manager(username, business)
+    user.is_superuser = True
+    user.save()
+    user.manager.totp_enabled = True
+    user.manager.save(update_fields=["totp_enabled"])
+    return user

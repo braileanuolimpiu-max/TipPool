@@ -12,7 +12,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from .models import ClockEntry, Membership, Night, Shift
+from .models import ClockEntry, Membership, Night, Shift, StaffMember
 
 
 class ClockError(Exception):
@@ -26,10 +26,13 @@ def running_entry(staff):
 def clock_in(staff, location):
     if not Membership.objects.filter(staff=staff, location=location, active=True).exists():
         raise ClockError("You're not on this location's team.")
-    running = running_entry(staff)
-    if running:
-        raise ClockError(f"You're already clocked in at {running.night.location.display_name}.")
-    return ClockEntry.objects.create(staff=staff, night=Night.current(location))
+    with transaction.atomic():
+        # locked: two taps at once can't both start an entry (and count the hours twice)
+        StaffMember.objects.select_for_update().get(pk=staff.pk)
+        running = running_entry(staff)
+        if running:
+            raise ClockError(f"You're already clocked in at {running.night.location.display_name}.")
+        return ClockEntry.objects.create(staff=staff, night=Night.current(location))
 
 
 def clock_out(staff, at=None):

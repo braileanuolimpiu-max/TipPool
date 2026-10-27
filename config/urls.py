@@ -16,6 +16,16 @@ def _admin_login(request, extra_context=None):
 
 
 admin.site.login = _admin_login
+_admin_allowed = admin.site.has_permission
+
+
+def _admin_permission(request):
+    """The admin runs the whole site: like Platform settings, only with two-step sign-in on."""
+    from tips.platform import needs_two_step
+    return _admin_allowed(request) and not needs_two_step(request.user)
+
+
+admin.site.has_permission = _admin_permission
 
 urlpatterns = [
     path("favicon.ico", lambda request: redirect(static("icons/icon-32.png"), permanent=True)),

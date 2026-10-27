@@ -129,6 +129,30 @@ class HardeningTests(TestCase):
         old.refresh_from_db()
         self.assertEqual(old.status, Tip.Status.FAILED)
 
+    def test_old_orders_are_only_given_up_when_paypal_says_nobody_paid(self):
+        from datetime import timedelta
+
+        from tips.paypal import PayPalError
+        night = Night.current(self.location)
+        paid = Tip.objects.create(night=night, amount=Decimal("5"), paypal_order_id="PAID-LATE")
+        unknown = Tip.objects.create(night=night, amount=Decimal("6"), paypal_order_id="NO-ANSWER")
+        ancient = Tip.objects.create(night=night, amount=Decimal("7"), paypal_order_id="ANCIENT")
+        Tip.objects.filter(pk__in=[paid.pk, unknown.pk]).update(created_at=paid.created_at - timedelta(hours=4))
+        Tip.objects.filter(pk=ancient.pk).update(created_at=paid.created_at - timedelta(days=4))
+        paypal = FakePayPal()
+
+        def get_order(order_id):
+            if order_id == "NO-ANSWER":
+                raise PayPalError("timeout")
+            return {"status": "APPROVED" if order_id == "PAID-LATE" else "CREATED"}
+        paypal.get_order = get_order
+        with mock.patch("tips.services.get_client", return_value=paypal), \
+                mock.patch("tips.services.capture_tip") as capture:
+            services.sync_pending_tips(night)
+        capture.assert_called_once_with("PAID-LATE")  # the guest did pay: it's captured, not thrown away
+        self.assertEqual(Tip.objects.get(pk=unknown.pk).status, Tip.Status.CREATED)  # asked again next time
+        self.assertEqual(Tip.objects.get(pk=ancient.pk).status, Tip.Status.FAILED)
+
 
 class ProductionSettingsTests(TestCase):
     """The app refuses to start in production without its secrets, instead of running insecurely."""

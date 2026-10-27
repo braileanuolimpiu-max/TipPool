@@ -85,6 +85,9 @@
       <label class="choice"><input type="checkbox" name="checked" required>
         <span><strong>I checked these</strong><span class="small muted">{% for f in stops %}{{ f.text }}{% if not forloop.last %} · {% endif %}{% endfor %}</span></span></label>
       {% endif %}
+      {% if unconfirmed and not user.manager.is_owner %}
+      <p class="small flash error" style="margin:0">Not confirmed yet: {% for p in unconfirmed %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}. They confirm where they're paid on their tips page; until then only the owner can pay this shift.</p>
+      {% endif %}
       <button class="btn btn-primary btn-block" data-busy="Paying through PayPal…">Pay {{ paying_count }} {% if paying_count == 1 %}person{% else %}people{% endif %} {{ cur }}{{ paid_total|money }}</button>
       <a class="btn btn-quiet" href="{% url 'close_night_pk' night.pk %}">Change who worked</a>
     </form>

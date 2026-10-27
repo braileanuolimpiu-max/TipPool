@@ -40,6 +40,8 @@ def app_context(request):
         "email_to_terminal": settings.DEBUG and platform.email_settings() is None
                              and settings.EMAIL_FALLBACK_BACKEND.endswith("console.EmailBackend"),
         "is_operator": platform.is_operator(user),
+        # a new site: its owner finds Platform at the top, where the setup code from the server's log is asked
+        "can_claim_platform": platform.can_claim(user),
         "cur": owner.symbol if owner else "$",
         "business": business,
         "open_messages": open_messages,

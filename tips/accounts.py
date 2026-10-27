@@ -65,12 +65,14 @@ def owner_required(view):
 
 WRONG_IN_A_ROW = 10
 PAUSE_SECONDS = 60
+# each new round of 10 wrong tries within a day pauses longer: 1, then 5, then 15 minutes
+PAUSES = (PAUSE_SECONDS, 5 * 60, 15 * 60)
 
 
 class EmailBackend(ModelBackend):
     """Sign in with your email (or your username, for older logins).
-    10 wrong passwords in a row for an account pause it for a minute and email its owner;
-    a network that keeps guessing (50 wrong tries) waits 15 minutes."""
+    10 wrong passwords in a row for an account pause it (a minute, longer each time it happens again that day)
+    and email its owner; a network that keeps guessing (50 wrong tries) waits 15 minutes."""
 
     def authenticate(self, request, username=None, password=None, **kwargs):
         from django.core.cache import cache
@@ -93,7 +95,7 @@ class EmailBackend(ModelBackend):
         if user is None:
             User().set_password(password)  # same time as a real check, so timing can't tell who has an account
         elif user.check_password(password) and self.user_can_authenticate(user):
-            cache.delete(f"login-streak:{name}")  # only wrong tries *in a row* count
+            cache.delete_many([f"login-streak:{name}", f"login-rounds:{name}"])  # only wrong tries *in a row* count
             return user
         hit(f"login-ip:{ip}", 50, 900)
         if not limits_on:
@@ -108,26 +110,38 @@ class EmailBackend(ModelBackend):
                 cache.add(streak_key, 1, 900)
                 streak = 1
         if streak >= WRONG_IN_A_ROW:
-            cache.set(f"login-pause:{name}", 1, PAUSE_SECONDS)
+            rounds_key = f"login-rounds:{name}"
+            if cache.add(rounds_key, 1, 24 * 3600):
+                rounds = 1
+            else:
+                try:
+                    rounds = cache.incr(rounds_key)
+                except ValueError:
+                    cache.add(rounds_key, 1, 24 * 3600)
+                    rounds = 1
+            pause = PAUSES[min(rounds, len(PAUSES)) - 1]
+            cache.set(f"login-pause:{name}", 1, pause)
             cache.delete(streak_key)
             if request is not None:
                 request.login_limited = "pause"
             if user is not None and user.email and cache.add(f"login-warned:{user.pk}", 1, 3600):
-                _warn_owner(user, ip)  # at most once an hour, so nobody can flood an inbox with these
+                _warn_owner(user, ip, pause)  # at most once an hour, so nobody can flood an inbox with these
         return None
 
 
-def _warn_owner(user, ip):
+def _warn_owner(user, ip, pause=PAUSE_SECONDS):
     """Tell the account's owner someone kept typing the wrong password."""
     when = timezone.localtime().strftime("%b %d, %I:%M %p")
+    minutes = max(1, pause // 60)
+    how_long = "a minute" if minutes == 1 else f"{minutes} minutes"
     emails.send(user.email, "Someone kept trying to sign in to your TipPool account",
                 eyebrow="Security alert", heading="Someone kept trying your password",
                 greeting=f"Hi {user.get_full_name() or user.get_username()},",
                 paragraphs=[f"Someone typed the wrong password {WRONG_IN_A_ROW} times in a row for your TipPool "
-                            "account, so signing in to it is paused for a minute."],
+                            f"account, so signing in to it is paused for {how_long}."],
                 details=[("Account", user.email), ("When", when), ("From", ip)],
                 button=("Reset your password", emails.absolute(reverse("password_reset"))),
-                notes=["If it was you: wait a minute, or reset your password.",
+                notes=[f"If it was you: wait {how_long}, or reset your password.",
                        "If it wasn't you: your password is still safe, but change it to be sure, and turn on two-step "
                        "sign-in (Settings → Your sign-in) so a password alone is never enough."])
 
@@ -186,8 +200,6 @@ def signup(request):
                 user = request.user if finishing else _new_user(data["email"], password, data["name"])
                 business = Business.objects.create(name=" ".join(data["business"].split())[:80])
                 Manager.objects.create(user=user, business=business, is_owner=True)
-                from .platform import make_first_operator
-                make_first_operator(user, business)
                 location_name = " ".join((data["location"] or data["business"]).split())
                 location = Location.objects.create(
                     business=business, name=location_name[:80], slug=Location.new_slug(location_name),
@@ -394,7 +406,7 @@ def _paypal_switch_blocked(business, client_id, live):
         return ""
     nights = Night.objects.filter(location__business=business)
     if nights.filter(status__in=[Night.Status.REVIEW, Night.Status.PAYING]).exists():
-        return "a shift is waiting to be paid or being paid. Pay it (or recalculate it) first, then connect again."
+        return "a shift is waiting to be paid or being paid. Pay it (or recalculate it) first, then try again."
     if any(services.needs_recheck(b) for b in PayoutBatch.objects.filter(night__location__business=business)
            .exclude(paypal_batch_id__gt="")):
         return "a payout's answer from PayPal is still unclear. Check it again on its shift first."
@@ -415,6 +427,11 @@ def payment_settings(request):
     from .paypal import LIVE_API, SANDBOX_API, PayPalClient, PayPalError, detect_mode
     business = request.business
     if request.POST.get("action") == "disconnect":
+        # payouts in progress belong to this account: checking them with another one could mark them wrongly
+        stop = _paypal_switch_blocked(business, "", False) if business.paypal_client_id else ""
+        if stop:
+            messages.error(request, "PayPal wasn't disconnected: " + stop)
+            return redirect(f"{reverse('settings')}#payments")
         business.paypal_client_id = business.paypal_secret_encrypted = business.paypal_webhook_id = ""
         business.paypal_live = False
         business.save()
@@ -582,6 +599,10 @@ def two_step(request):
     if request.method == "POST":
         action = request.POST.get("action")
         code = request.POST.get("code", "")
+        if action in ("confirm", "disable") and not hit(f"two-step-code:{request.user.pk}", 10, 900):
+            # a stolen session can't guess its way to turning two-step sign-in off
+            messages.error(request, "Too many codes typed. Wait 15 minutes, then try again.")
+            return redirect(_signin_page(request))
         if action == "start":
             request.session["two_step_new"] = totp.new_secret()
         elif action == "confirm":
@@ -669,7 +690,7 @@ def load_sample(request):
 def cron_tick(request):
     """Called every few minutes by an outside scheduler (and keeps a free server awake):
     runs automatic close-outs, smart alerts and summary emails, and removes week-old demos.
-    Needs ?key=CRON_SECRET."""
+    Needs the key: in an X-Cron-Key header (kept out of web logs), or ?key=CRON_SECRET."""
     import hmac
 
     from django.http import Http404, JsonResponse
@@ -677,7 +698,7 @@ def cron_tick(request):
     from . import autoclose, demo, digest, watch
     from . import platform
     from .models import PlatformConfig
-    given = request.GET.get("key", "")
+    given = request.headers.get("X-Cron-Key") or request.GET.get("key", "")
     if not any(hmac.compare_digest(given, key) for key in platform.cron_secrets()):
         raise Http404()
     PlatformConfig.objects.filter(pk=1).update(last_tick_at=timezone.now())  # shown on Platform settings

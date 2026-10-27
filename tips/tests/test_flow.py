@@ -6,7 +6,7 @@ from unittest import mock
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from tips import ai
+from tips import ai, services
 from tips.models import Location, Night, PayoutItem, Tip, TipRuleSet
 from tips.tests.helpers import hire, make_manager
 
@@ -173,6 +173,40 @@ class FullFlowTests(TestCase):
                                               content_type="application/json").status_code, 400)
         tip = Tip.objects.get(paypal_order_id="ORD-W")
         self.assertEqual((tip.status, tip.paypal_capture_id), ("completed", "CAP-W"))
+
+    def test_a_webhook_that_fails_is_applied_when_paypal_sends_it_again(self):
+        from tips.models import WebhookEvent
+        night = Night.current(self.location)
+        Tip.objects.create(night=night, amount=Decimal("9.00"), paypal_order_id="ORD-X")
+        event = {"id": "WH-X", "event_type": "PAYMENT.CAPTURE.COMPLETED",
+                 "resource": {"id": "CAP-X", "supplementary_data": {"related_ids": {"order_id": "ORD-X"}}}}
+        self.client.raise_request_exception = False
+        with override_settings(PAYPAL_WEBHOOK_ID="WEBHOOK"):
+            with mock.patch("tips.services.mark_capture_completed", side_effect=RuntimeError("database hiccup")):
+                res = self.client.post(reverse("paypal_webhook"), data=json.dumps(event), content_type="application/json")
+            self.assertEqual(res.status_code, 500)  # PayPal will send it again
+            self.assertFalse(WebhookEvent.objects.filter(event_id="WH-X").exists())
+            self.client.post(reverse("paypal_webhook"), data=json.dumps(event), content_type="application/json")
+        self.assertEqual(Tip.objects.get(paypal_order_id="ORD-X").status, Tip.Status.COMPLETED)
+        self.assertTrue(WebhookEvent.objects.filter(event_id="WH-X").exists())
+
+    def test_late_capture_event_never_brings_back_a_refunded_tip(self):
+        # PayPal retries a "captured" event for days; the guest was refunded in the meantime
+        night = Night.current(self.location)
+        Tip.objects.create(night=night, amount=Decimal("30.00"), paypal_order_id="ORD-R", paypal_capture_id="CAP-R",
+                           status=Tip.Status.REFUNDED)
+        event = {"id": "WH-R", "event_type": "PAYMENT.CAPTURE.COMPLETED",
+                 "resource": {"id": "CAP-R", "supplementary_data": {"related_ids": {"order_id": "ORD-R"}}}}
+        with override_settings(PAYPAL_WEBHOOK_ID="WEBHOOK"):
+            self.client.post(reverse("paypal_webhook"), data=json.dumps(event), content_type="application/json")
+        self.assertEqual(Tip.objects.get(paypal_order_id="ORD-R").status, Tip.Status.REFUNDED)
+        # a waiting tip whose capture PayPal now reports as refunded isn't counted either
+        Tip.objects.create(night=night, amount=Decimal("12.00"), paypal_order_id="ORD-S")
+        refunded = {"status": "COMPLETED", "purchase_units": [{"payments": {"captures": [
+            {"id": "CAP-S", "status": "REFUNDED"}]}}]}
+        with mock.patch.object(self.paypal, "get_order", return_value=refunded):
+            services.mark_capture_completed("ORD-S", "CAP-S")
+        self.assertNotEqual(Tip.objects.get(paypal_order_id="ORD-S").status, Tip.Status.COMPLETED)
 
     def test_unsigned_webhook_is_only_a_hint(self):
         """A forged 'tip paid' event for an order nobody paid changes nothing: PayPal is asked instead."""

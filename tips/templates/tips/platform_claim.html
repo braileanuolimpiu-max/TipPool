@@ -4,7 +4,11 @@
 <header class="page-head"><div><h1>Platform settings</h1>
   <p>Email, AI, TipPool's own PayPal and the scheduler, for the whole site.</p></div></header>
 <div class="panel panel-body stack narrow-panel">
-{% if can_claim %}
+{% if needs_two_step %}
+  <p style="margin:0"><strong>Turn on two-step sign-in first.</strong> Platform settings hold every business's keys and money, so a password alone isn't enough to open them.</p>
+  <p class="small muted" style="margin:0">It takes a minute with an authenticator app. Then come back here.</p>
+  <a class="btn btn-primary" href="{% url 'two_step' %}">Turn on two-step sign-in</a>
+{% elif can_claim %}
   <p style="margin:0"><strong>Nobody runs this TipPool site yet.</strong> If you set it up (you deployed it, or you're its administrator), take this role to connect email, AI and the rest from here.</p>
   <p class="small muted" style="margin:0">To prove it, type the setup code from the server's log. On Render: open your service, then <strong>Logs</strong>, and look for "TipPool setup code". It was written there just now.</p>
   <form method="post" action="{% url 'claim_platform' %}" class="inline-form">{% csrf_token %}

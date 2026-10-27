@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from tips import ai, ask, gemini, platform
 from tips.models import Location, PlatformConfig
-from tips.tests.helpers import make_manager
+from tips.tests.helpers import make_manager, make_operator
 from tips.vault import encrypt
 
 
@@ -76,9 +76,7 @@ class GeminiOnTests(TestCase):
 
 class GeminiSetupTests(TestCase):
     def setUp(self):
-        op = make_manager("op")
-        op.is_superuser = True
-        op.save()
+        op = make_operator("op")
         self.client.force_login(op)
         self.url = reverse("platform_settings")
 

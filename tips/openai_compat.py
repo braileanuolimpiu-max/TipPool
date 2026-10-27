@@ -106,11 +106,17 @@ def parse(provider, system, content, output_model):
     if response.status_code >= 400:
         log.warning("%s error %s: %s", label, response.status_code, response.text[:300])
         raise AIError(f"{label} API error ({response.status_code}).")
-    data = response.json()
-    choices = data.get("choices") or []
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise AIError(f"{label}'s answer could not be read. Please try again.") from exc
+    choices = (data.get("choices") if isinstance(data, dict) else None) or []
     if not choices:
         raise AIError(f"{label} declined this request.")
-    text = (choices[0].get("message") or {}).get("content") or ""
+    message = (choices[0] if isinstance(choices[0], dict) else {}).get("message")
+    text = (message if isinstance(message, dict) else {}).get("content") or ""
+    if not isinstance(text, str):
+        raise AIError(f"{label}'s answer could not be read. Please try again.")
     text = text.strip()
     if text.startswith("```"):  # some services wrap JSON in a code block
         text = text.strip("`").removeprefix("json").strip()

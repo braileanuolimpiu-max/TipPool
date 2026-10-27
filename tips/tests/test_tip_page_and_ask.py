@@ -115,6 +115,22 @@ class AskInPlaceTests(TestCase):
         self.assertNotContains(page, "<html")
         self.assertContains(page, 'class="answer"')
 
+    def test_a_link_from_another_site_only_fills_the_box(self):
+        # another website can't make a signed-in manager's browser spend AI questions
+        with mock.patch("tips.ask.answer", return_value={"answer": "Maria.", "by": "offline"}) as answer:
+            page = self.client.get(reverse("reports"), {"q": "Who earned the most?"}, HTTP_SEC_FETCH_SITE="cross-site")
+            answer.assert_not_called()
+            self.assertContains(page, 'value="Who earned the most?"')
+            self.client.get(reverse("reports"), {"q": "Who earned the most?"}, HTTP_SEC_FETCH_SITE="same-origin")
+            answer.assert_called_once()
+
+    def test_rules_text_is_capped(self):
+        from tips.views import MAX_RULES_CHARS
+        with mock.patch("tips.ai.parse_rules") as parse:
+            page = self.client.post(reverse("rules"), {"text": "x" * (MAX_RULES_CHARS + 1)}, follow=True)
+        parse.assert_not_called()
+        self.assertContains(page, "longer than tip rules need")
+
     def test_examples_come_back_when_nothing_is_asked(self):
         page = self.client.get(reverse("reports"), {"partial": "1"})
         self.assertContains(page, 'data-q="Who earned the most this month?"')

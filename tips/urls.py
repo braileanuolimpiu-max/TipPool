@@ -69,6 +69,7 @@ urlpatterns = [
     path("nights/<int:pk>/pay/", views.pay, name="pay"),
     path("nights/<int:pk>/payout/", views.payout_status, name="payout_status"),
     path("payouts/<int:pk>/action/", views.payout_action, name="payout_action"),
+    path("payouts/batches/<int:pk>/not-sent/", views.payout_not_sent, name="payout_not_sent"),
     path("nights/<int:pk>/payout.json", views.payout_status_json, name="payout_status_json"),
     # staff (secret link)
     path("me/<str:token>/", views.my_tips, name="my_tips"),
