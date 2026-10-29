@@ -1479,3 +1479,18 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
   .week-grid-days li.all-days .all-label { grid-column: 1 / -1; }
   .week-grid-days li.all-days input[type=time] { max-width: none; }
 }
+/* ---------- the smallest phones (320px: the first iPhone SE, Galaxy S9+) ---------- */
+/* close-out rows: the name beside its avatar uses the whole row; the role list starts under the switch, so it has room */
+@media (max-width: 520px) {
+  .roster .who { grid-column: 2 / -1; }
+  .roster select { grid-column: 1 / 3; }
+}
+/* a card's subtitle wraps instead of pushing the page sideways (Ask about your tips) */
+.panel-head > .small.muted { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+/* location cards are never wider than the screen */
+.loc-grid { grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); }
+/* the role presets: the list and its button each get a full line when they can't share one */
+@media (max-width: 360px) {
+  .role-preset { flex-wrap: wrap; }
+  .role-preset select, .role-preset .btn { flex: 1 1 100%; width: 100%; }
+}
