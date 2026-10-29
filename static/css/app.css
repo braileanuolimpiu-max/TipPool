@@ -1452,3 +1452,5 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
 /* the summary email shown as itself, in its own frame, so its email styles never touch the page */
 .digest-frame { padding: 0; overflow: hidden; }
 .digest-email { display: block; width: 100%; min-height: 420px; border: 0; background: #fff; }
+/* the close-out bar's two buttons are equal halves on phones: long labels wrap instead of widening their button */
+@media (max-width: 760px) { .sticky-bar { align-items: stretch; } .sticky-bar .btn { min-width: 0; white-space: normal; text-align: center; line-height: 1.2; } }
