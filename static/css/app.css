@@ -1405,3 +1405,50 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
 .find-row .find-input { flex: 1; min-width: 0; }
 .find-row span { white-space: nowrap; }
 @media (max-width: 760px) { .find-row { padding: 10px 14px; } }
+/* phones: the top bar is the logo, then Menu, search and the light/dark switch on the right, all the same size;
+   who's signed in, Platform and Sign out are in the menu */
+.rail-account { display: none; }
+@media (max-width: 760px) {
+  .who-am-i { gap: 8px; }
+  .who-am-i > form, .who-am-i .platform-link { display: none; }
+  .who-am-i .jump-btn, .who-am-i .theme-btn { width: 40px; height: 40px; padding: 0; justify-content: center;
+    border: 1.5px solid var(--ink); border-radius: 6px; background: var(--paper); color: var(--ink); }
+  .who-am-i .jump-btn svg, .who-am-i .theme-btn svg { width: 20px; height: 20px; }
+  .menu-btn { height: 40px; }
+  body.menu-open .rail-account { display: grid; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hair); }
+  .rail-account p { margin: 0; font-size: .875rem; color: var(--graphite); }
+  .rail-account .btn { width: 100%; }
+}
+/* the smallest phones: the logo alone, so everything stays on one line */
+@media (max-width: 340px) { .topbar .brand b { display: none; } }
+
+/* ---------- phone and dark-mode polish (from screenshots of the live site) ---------- */
+/* QR cards, the full-screen code and print sheets are white "paper": their text keeps light-mode ink in dark mode too */
+.tent, .show-screen, .sheet, .house-qr { color-scheme: light; --ink: #141414; --graphite: #5c5c58; --hair: #dcdcd6;
+  --hair-soft: #ececE7; --paper: #ffffff; color: var(--ink); }
+/* the full-screen code fits the screen exactly: no scrolling on a phone */
+.show-screen { min-height: 0; height: 100vh; height: 100dvh; overflow: hidden; gap: 8px; padding: 16px; }
+.show-screen img { width: min(78vw, 44vh); width: min(78vw, 44dvh); }
+.show-screen .tent-label { font-size: clamp(2rem, min(9vw, 7vh), 4.4rem); }
+/* "Close out automatically" lines up with the day switches under it (their rows have 12px padding + a border) */
+.switch-line:has(+ .week-grid-days) { padding-left: 13px; }
+/* small buttons really are small (they had the full size) */
+.btn.small { padding: 7px 12px; font-size: .85rem; }
+/* phones: actions are full-width buttons of one height, not a ragged row of different widths */
+@media (max-width: 560px) {
+  .actions > .btn:not(.btn-quiet), .actions > form, .actions > form > .btn:not(.btn-quiet),
+  .stack > .btn:not(.btn-quiet), .stack > form > .btn:not(.btn-quiet), .stack > .actions > .btn:not(.btn-quiet),
+  .panel-body > .btn:not(.btn-quiet), .setting-body > .btn:not(.btn-quiet), form.panel > .btn:not(.btn-quiet),
+  .file-pick > .btn { flex: 1 1 100%; width: 100%; }
+  .btn:not(.btn-quiet) { min-height: 44px; }
+  .btn.small:not(.btn-quiet) { min-height: 44px; }  /* one height for every button on a phone */
+  .actions { gap: 8px; }
+}
+/* dark mode: things that kept a light-mode colour */
+:root[data-theme="dark"] details.why p { color: var(--ink); }                 /* each person's explanation */
+:root[data-theme="dark"] .tour-next { background: #141414; color: var(--marker); }  /* the demo tour's "Next" tag */
+:root[data-theme="dark"] .ticket .badge { color: #141414; }                    /* the open-messages count */
+.fold-line span { color: #5c5c58; }                                             /* the print sheet's "fold" label */
+/* the summary email shown as itself, in its own frame, so its email styles never touch the page */
+.digest-frame { padding: 0; overflow: hidden; }
+.digest-email { display: block; width: 100%; min-height: 420px; border: 0; background: #fff; }

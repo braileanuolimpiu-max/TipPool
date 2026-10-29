@@ -5,5 +5,20 @@
   <div><h1>Summary email</h1><p>What the {% if kind == "daily" %}morning{% else %}Monday{% endif %} summary says right now. Choose how often it's sent in Settings → Owner controls.</p></div>
   <div class="actions"><a class="btn {% if kind == 'weekly' %}btn-primary{% else %}btn-secondary{% endif %}" href="?kind=weekly">Weekly</a><a class="btn {% if kind == 'daily' %}btn-primary{% else %}btn-secondary{% endif %}" href="?kind=daily">Daily</a></div>
 </header>
-<section class="panel panel-body digest-frame">{% include "emails/digest.html" %}</section>
+<section class="panel digest-frame">
+  <iframe class="digest-email" id="digest-email" title="The summary email" srcdoc="{{ email_html|force_escape }}"
+          sandbox="allow-same-origin allow-popups allow-top-navigation-by-user-activation"></iframe>
+</section>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  // the frame is as tall as the email, and its links open in the app, not inside the frame
+  const frame = document.getElementById("digest-email");
+  frame.addEventListener("load", () => {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    doc.querySelectorAll("a[href]").forEach((a) => { a.target = "_top"; });
+    frame.style.height = doc.documentElement.scrollHeight + "px";
+  });
+</script>
 {% endblock %}

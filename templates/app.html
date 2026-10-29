@@ -69,6 +69,12 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
       <span class="label">Settings</span></a>{% endif %}
   </nav>
+  {# phones: who's signed in, Platform and Sign out live in the menu (the top bar keeps Menu, search and the switch) #}
+  <div class="rail-account">
+    <p>Signed in as <a href="{% url 'two_step' %}">{{ user.get_full_name|default:user.username }}</a></p>
+    {% if is_operator or can_claim_platform %}<a class="btn btn-secondary" href="{% url 'platform_settings' %}">Platform settings</a>{% endif %}
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-secondary">Sign out</button></form>
+  </div>
 </div>
 <div class="menu-scrim" id="menu-scrim" hidden></div>
 {% if jump %}

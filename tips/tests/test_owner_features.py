@@ -150,7 +150,12 @@ class DigestTests(TestCase):
     def test_preview_page(self):
         owner = make_manager("owner")
         self.client.force_login(owner)
-        self.assertContains(self.client.get(reverse("digest_preview")), "Summary email")
+        page = self.client.get(reverse("digest_preview"))
+        self.assertContains(page, "Summary email")
+        # the email is shown whole in its own frame (escaped into srcdoc), so its styles never touch the page
+        self.assertContains(page, 'srcdoc="&lt;!doctype html&gt;')
+        self.assertContains(page, "in tips&lt;/h1&gt;")
+        self.assertNotContains(page, "<h1 style=")
 
 
 class ActivityAndBulkTests(TestCase):

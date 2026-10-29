@@ -1876,8 +1876,11 @@ def digest_preview(request):
         request.business.digest if request.business.digest != "off" else "weekly")
     today = timezone.now().astimezone(autoclose.location_tz(request.location)).date()
     data = digest.build(request.business, list(request.allowed_locations), today, kind=kind)
-    response = render(request, "tips/digest_preview.html", {**data, "kind": kind, "base_url": ""})
-    # the page shows the email itself, which needs its inline styles (mail apps ignore stylesheets); scripts stay strict
+    from django.template.loader import render_to_string
+    email_html = render_to_string("emails/digest.html", {**data, "kind": kind, "base_url": ""}, request=request)
+    response = render(request, "tips/digest_preview.html", {"kind": kind, "email_html": email_html})
+    # the email is shown in a frame of its own (its styles never reach the page); it needs its inline styles
+    # (mail apps ignore stylesheets), and the frame follows this page's policy; scripts stay strict
     from .middleware import content_security_policy
     response["Content-Security-Policy"] = content_security_policy(request.csp_nonce, inline_styles=True)
     return response
