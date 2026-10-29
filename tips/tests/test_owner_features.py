@@ -27,7 +27,10 @@ class PerLocationManagerTests(TestCase):
         page = self.client.get(reverse("dashboard"))
         self.assertEqual(page.context["location"], self.second)
         self.assertEqual(self.client.post(reverse("location_switch"), {"location": self.main.pk}).status_code, 404)
-        self.assertNotContains(self.client.get(reverse("overview")), self.main.display_name)
+        # a name only a leak could show (an unnamed location is called "Your business", which is also a settings card)
+        self.main.name = "Main Street"
+        self.main.save()
+        self.assertNotContains(self.client.get(reverse("overview")), "Main Street")
 
     def test_owner_picks_locations(self):
         self.client.force_login(self.owner)

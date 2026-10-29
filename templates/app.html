@@ -18,6 +18,9 @@
     <span>Menu</span>
   </button>
   <div class="who-am-i">
+    {% if jump %}<button type="button" class="jump-btn" id="jump-btn" aria-haspopup="dialog" aria-controls="jump" title="Search features (Ctrl+K)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+      <span class="jump-label">Search features…</span><kbd>Ctrl K</kbd></button>{% endif %}
     {% if is_operator or can_claim_platform %}<a class="platform-link" href="{% url 'platform_settings' %}" title="Email, AI, PayPal and the scheduler, for the whole site">Platform</a>{% endif %}
     <span><span class="who-label">Signed in as </span><a href="{% url 'two_step' %}" title="Your password and two-step sign-in">{{ user.get_full_name|default:user.username }}</a></span>
     <button type="button" class="theme-btn" id="theme-btn" role="switch" aria-checked="false" aria-label="Dark mode" title="Switch between light and dark">
@@ -68,6 +71,18 @@
   </nav>
 </div>
 <div class="menu-scrim" id="menu-scrim" hidden></div>
+{% if jump %}
+<dialog class="jump no-print" id="jump" aria-label="Search features">
+  <div class="jump-field">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+    <input type="search" id="jump-q" placeholder="Search features, e.g. closing time" autocomplete="off" spellcheck="false"
+           role="combobox" aria-expanded="true" aria-controls="jump-list" aria-autocomplete="list" aria-label="Search features">
+  </div>
+  <ul class="jump-list" id="jump-list" role="listbox" aria-label="Results"></ul>
+  <p class="jump-hint"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close</p>
+</dialog>
+{{ jump|json_script:"jump-data" }}
+{% endif %}
 <main class="main" id="content" tabindex="-1">
   {% if business.payouts_frozen %}<div class="flash error frozen-banner no-print" role="alert"><strong>All payouts are frozen</strong> by {{ business.payouts_frozen_by }}. Tips still come in; nothing is paid out.{% if user.manager.is_owner %} <a href="{% url 'settings' %}#owner">Turn payouts back on</a>{% endif %}</div>{% endif %}
   {% if business.is_demo %}<div class="demo-banner no-print"><strong>Demo business.</strong> Sample data and PayPal sandbox money only. It's removed after a week. <a href="{% url 'signup' %}">Create your own account</a></div>{% endif %}
@@ -111,7 +126,13 @@
       nav.classList.toggle("at-end", nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 2);
     };
     nav.addEventListener("scroll", () => nav.classList.toggle("at-end", nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 2));
-    window.addEventListener("resize", fit);
+    // resizing fires dozens of events a second: measure at most once per frame, not once per event
+    let queued = false;
+    window.addEventListener("resize", () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; fit(); });
+    });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
     fit();
   })();

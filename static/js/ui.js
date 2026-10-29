@@ -253,3 +253,121 @@ document.addEventListener("click", (e) => {
   new MutationObserver((changes) => changes.forEach((c) => c.addedNodes.forEach(apply)))
     .observe(document.documentElement, {childList: true, subtree: true});
 })();
+
+/* "Search features": every page and settings card this person can open (the list comes from the server).
+   Opens from the top bar button, Ctrl+K (Cmd+K) or "/"; arrows move, Enter opens, Esc closes. */
+(() => {
+  const dialog = document.getElementById("jump"), data = document.getElementById("jump-data");
+  if (!dialog || !data) return;
+  const input = document.getElementById("jump-q"), list = document.getElementById("jump-list");
+  const words = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+  const items = JSON.parse(data.textContent).map((it) => ({...it, tw: words(it.t), kw: words(`${it.k} ${it.w}`)}));
+  // "close" finds "closing", "pay" finds "payouts": a word matches from its start, or by its first 4 letters
+  const hit = (q, ws) => ws.some((w) => w.startsWith(q) || (q.length >= 4 && w.startsWith(q.slice(0, 4))));
+  const score = (it, qs) => {
+    let total = 0;
+    for (const q of qs) {
+      if (hit(q, it.tw)) total += 3;
+      else if (hit(q, it.kw)) total += 1;
+      else return 0;
+    }
+    return total;
+  };
+  let shown = [], at = 0;
+  const mark = () => {
+    [...list.children].forEach((li, i) => li.setAttribute("aria-selected", i === at ? "true" : "false"));
+    if (shown.length) {
+      input.setAttribute("aria-activedescendant", `jump-${at}`);
+      list.children[at].scrollIntoView({block: "nearest"});
+    } else input.removeAttribute("aria-activedescendant");
+  };
+  const render = () => {
+    const qs = words(input.value);
+    shown = (qs.length ? items.map((it) => [score(it, qs), it]).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).map(([, it]) => it)
+      : items).slice(0, 9);
+    at = 0;
+    list.replaceChildren(...shown.map((it, i) => {
+      const li = document.createElement("li"), a = document.createElement("a"), t = document.createElement("strong"), w = document.createElement("span");
+      li.id = `jump-${i}`;
+      li.setAttribute("role", "option");
+      a.href = it.u;
+      t.textContent = it.t;
+      w.textContent = it.w;
+      a.append(t, w);
+      li.append(a);
+      li.addEventListener("mousemove", () => { if (at !== i) { at = i; mark(); } });
+      return li;
+    }));
+    if (!shown.length) {
+      const li = document.createElement("li");
+      li.className = "jump-none";
+      li.textContent = "Nothing found. Try other words, like \"payouts\" or \"closing time\".";
+      list.append(li);
+    }
+    mark();
+  };
+  const open = () => {
+    if (dialog.open) return;
+    input.value = "";
+    render();
+    dialog.showModal();
+    input.focus();
+  };
+  const go = (it) => {
+    dialog.close();
+    const [path, hash] = it.u.split("#");
+    if (hash && path === location.pathname) {  // a card on this page: scroll to it and mark it
+      history.replaceState(null, "", `#${hash}`);
+      const target = document.getElementById(hash);
+      if (target) {
+        target.scrollIntoView({block: "start", behavior: "smooth"});
+        target.classList.remove("jump-target");
+        void target.offsetWidth;
+        target.classList.add("jump-target");
+      }
+    } else location.href = it.u;
+  };
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" && shown.length) { e.preventDefault(); at = (at + 1) % shown.length; mark(); }
+    else if (e.key === "ArrowUp" && shown.length) { e.preventDefault(); at = (at - 1 + shown.length) % shown.length; mark(); }
+    else if (e.key === "Enter" && shown.length) { e.preventDefault(); go(shown[at]); }
+    else if (e.key === "Escape") { e.preventDefault(); dialog.close(); }  // a search box would only clear its text
+  });
+  list.addEventListener("click", (e) => {
+    const li = e.target.closest("li[role=option]");
+    if (li) { e.preventDefault(); go(shown[Number(li.id.slice(5))]); }
+  });
+  dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });  // a click outside the box
+  const button = document.getElementById("jump-btn");
+  if (button) button.addEventListener("click", open);
+  document.addEventListener("keydown", (e) => {
+    const typing = e.target.closest && e.target.closest("input, textarea, select, [contenteditable]");
+    if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)) { e.preventDefault(); open(); }
+    else if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); open(); }
+  });
+  // arriving from another page: mark the card it jumped to
+  if (location.hash.length > 1) {
+    const target = document.getElementById(location.hash.slice(1));
+    if (target) target.classList.add("jump-target");
+  }
+})();
+
+/* "Find someone": a list that filters as you type (Team, the close-out roster). Rows carry data-find-text;
+   hidden rows still send their form fields, so nothing someone ticked is lost while searching. */
+document.querySelectorAll("input[data-find]").forEach((input) => {
+  const rows = [...document.querySelectorAll(input.dataset.find)].filter((li) => li.dataset.findText !== undefined);
+  const count = input.dataset.findCount ? document.querySelector(input.dataset.findCount) : null;
+  const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  input.addEventListener("input", () => {
+    const qs = norm(input.value).split(/\s+/).filter(Boolean);
+    let n = 0;
+    rows.forEach((li) => {
+      const ok = qs.every((q) => norm(li.dataset.findText).includes(q));
+      li.hidden = !ok;
+      if (ok) n += 1;
+    });
+    if (count) count.textContent = qs.length ? `${n} of ${rows.length}` : "";
+  });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });  // never submits the roster
+});

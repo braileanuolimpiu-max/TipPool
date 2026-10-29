@@ -6,11 +6,12 @@
 </header>
 <div class="split-2 top">
   <div class="stack">
-  <section class="panel">
+  <section class="panel" id="team-list">
     {% if staff %}
+    {% if staff|length > 1 %}<div class="find-row"><input type="search" class="find-input" data-find=".team-rows > li" data-find-count="#team-count" placeholder="Find someone by name, email or role" aria-label="Find someone on the team"><span class="small muted" id="team-count" aria-live="polite"></span></div>{% endif %}
     <ul class="rows team-rows">
       {% for m in staff %}
-      <li{% if not m.active %} class="st-42"{% endif %}>
+      <li{% if not m.active %} class="st-42"{% endif %} data-find-text="{{ m.staff.name }} {{ m.staff.paypal_email }} {{ m.role_name }}">
         <span class="avatar" aria-hidden="true">{{ m.staff.name|slice:":1" }}</span>
         <div class="st-7">
           <strong>{{ m.staff.name }}</strong>{% if not m.active %} <span class="small muted">{{ m.role_name }}</span>{% endif %}
@@ -97,7 +98,7 @@
   </div>
 
   <div class="stack">
-  <form method="post" class="panel">{% csrf_token %}
+  <form method="post" class="panel" id="add-someone">{% csrf_token %}
     <div class="panel-head"><h2>Add someone</h2></div>
     <div class="panel-body stack">
       <div><label for="name">Name</label><input type="text" id="name" name="name" required></div>
@@ -110,7 +111,7 @@
     </div>
   </form>
 
-  <details class="panel bulk-add">
+  <details class="panel bulk-add" id="add-several">
     <summary class="panel-head"><h2>Add several at once</h2><span class="small muted">Paste a list or upload a CSV</span></summary>
     <form method="post" action="{% url 'staff_bulk' %}" enctype="multipart/form-data" class="panel-body stack">{% csrf_token %}
       <div><label for="people">One person per line: name, PayPal email, role</label>
@@ -125,7 +126,7 @@
     </form>
   </details>
 
-  <form method="post" action="{% url 'role_add' %}" class="panel">{% csrf_token %}
+  <form method="post" action="{% url 'role_add' %}" class="panel" id="add-role">{% csrf_token %}
     <div class="panel-head"><h2>Add a role</h2></div>
     <div class="panel-body stack">
       <div><label for="role_name">Role name</label>

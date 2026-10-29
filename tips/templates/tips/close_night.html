@@ -18,9 +18,10 @@
 <div class="split-2 wide-left">
   <form method="post" class="panel" id="roster-form">{% csrf_token %}
     <div class="panel-head"><h2>Who worked this shift</h2><span class="small muted" id="worked-count"></span></div>
+    {% if rows|length > 1 %}<div class="find-row"><input type="search" class="find-input" data-find=".roster > li" data-find-count="#roster-find-count" placeholder="Find someone by name or role" aria-label="Find someone on the roster"><span class="small muted" id="roster-find-count" aria-live="polite"></span></div>{% endif %}
     <ul class="rows roster">
       {% for row in rows %}
-      <li class="{% if not row.worked %}off{% endif %}">
+      <li class="{% if not row.worked %}off{% endif %}" data-find-text="{{ row.member.name }} {{ row.role|default:'' }}">
         <label class="switch" title="Worked this shift">
           <input type="checkbox" name="worked_{{ row.member.pk }}" {% if row.worked %}checked{% endif %} aria-label="{{ row.member.name }} worked this shift">
           <span></span>

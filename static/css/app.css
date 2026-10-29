@@ -1370,3 +1370,38 @@ html { scrollbar-gutter: stable; }
 @media (max-width: 760px) { .setup-body .actions .btn { flex: 1 1 0; } }
 /* wide tables fit tablets without spilling past the edge */
 @media (max-width: 1100px) { table.data th, table.data td { padding-left: 14px; padding-right: 14px; } }
+
+/* ---------- "Search features" (top bar, Ctrl+K) and "Find someone" (Team, close-out) ---------- */
+.who-am-i .jump-btn { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; min-width: 210px;
+  border: 1px solid var(--hair); border-radius: 6px; background: var(--paper); color: var(--graphite); text-decoration: none; }
+.who-am-i .jump-btn:hover { border-color: var(--ink); color: var(--ink); }
+.who-am-i .jump-btn:focus-visible { outline: none; box-shadow: var(--focus); }
+.jump-btn svg { width: 16px; height: 16px; flex: none; }
+.jump-btn .jump-label { flex: 1; text-align: left; }
+.jump kbd, .jump-btn kbd { font: 600 .68rem var(--mono); padding: 1px 5px; border: 1px solid var(--hair); border-radius: 3px;
+  background: var(--tray, #f4f4f0); color: var(--graphite); }
+@media (max-width: 1100px) { .who-am-i .jump-btn { min-width: 0; } .jump-btn kbd { display: none; } }
+@media (max-width: 760px) { .who-am-i .jump-btn { padding: 7px; border-color: var(--ink); color: var(--ink); } }
+dialog.jump { width: min(560px, calc(100vw - 24px)); margin: 12vh auto auto; padding: 0; border: 1px solid var(--hair);
+  border-top: 4px solid var(--marker); border-radius: 8px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,.5); }
+dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
+.jump-field { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--hair); }
+.jump-field svg { width: 18px; height: 18px; flex: none; color: var(--graphite); }
+.jump-field input[type=search] { flex: 1; border: 0; box-shadow: none; padding: 6px 0; font-size: 1.05rem; background: transparent; }
+.jump-field input[type=search]:focus { box-shadow: none; }
+.jump-list { list-style: none; margin: 0; padding: 6px; max-height: min(52vh, 420px); overflow-y: auto; }
+.jump-list a { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; border-radius: 5px;
+  color: var(--ink); text-decoration: none; }
+.jump-list li[aria-selected="true"] a { background: var(--marker-soft); box-shadow: inset 3px 0 0 var(--marker); }
+.jump-list a span { font: .74rem var(--mono); color: var(--graphite); white-space: nowrap; }
+.jump-none { padding: 14px 12px; color: var(--graphite); font-size: .9rem; }
+.jump-hint { margin: 0; padding: 8px 14px; border-top: 1px solid var(--hair-soft); font-size: .76rem; color: var(--graphite); }
+@media (max-width: 760px) { dialog.jump { margin-top: 8vh; } .jump-hint { display: none; } }
+/* the card a search jumped to: a short highlight, so the eye finds it */
+.jump-target { animation: jump-flash 1.8s ease-out 1; }
+@keyframes jump-flash { 0%, 35% { box-shadow: 0 0 0 3px var(--marker); } 100% { box-shadow: 0 0 0 3px transparent; } }
+.find-row { display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid var(--hair-soft); }
+.find-row .find-input { flex: 1; min-width: 0; }
+.find-row span { white-space: nowrap; }
+@media (max-width: 760px) { .find-row { padding: 10px 14px; } }

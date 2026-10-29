@@ -32,8 +32,13 @@ def app_context(request):
         tour.record(request)
         if business is not None:
             demo_tour = tour.steps(request, business, location)
+    jump = None
+    if profile is not None and business is not None:  # the "Search features" box: what this person can open
+        from . import jump as jump_index
+        jump = jump_index.entries(request, profile, platform.is_operator(user), len(locations) > 1)
     return {
         "csp_nonce": getattr(request, "csp_nonce", ""),  # on every <script>: the Content-Security-Policy needs it
+        "jump": jump,
         "demo_tour": demo_tour,
         "is_lead": bool(profile and profile.is_lead),
         "email_enabled": platform.email_enabled(),
