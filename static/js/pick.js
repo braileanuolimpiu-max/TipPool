@@ -1,9 +1,9 @@
 /* Dropdown lists in TipPool's own style.
    The <select> box stays as it is (so forms, auto-submit and the styles around it keep working);
-   only the list that opens is ours instead of the browser's. Phones keep their native picker,
-   which is easier to use with a thumb. Add data-native to a <select> to keep the browser's list. */
+   only the list that opens is ours instead of the browser's. On touch screens it's a sheet from the bottom with
+   rows big enough for a thumb. Add data-native to a <select> to keep the browser's list. */
 (() => {
-  if (window.matchMedia("(pointer: coarse)").matches) return;
+  const touch = window.matchMedia("(pointer: coarse)").matches;
 
   let open = null;      // {select, list, items, active}
   let typed = "", typedAt = 0;
@@ -14,12 +14,13 @@
 
   function close(refocus) {
     if (!open) return;
-    const {select, list} = open;
+    const {select, list, scrim} = open;
     list.remove();
+    if (scrim) scrim.remove();
     select.removeAttribute("aria-activedescendant");
     select.classList.remove("pick-open");
     open = null;
-    if (refocus) select.focus({preventScroll: true});
+    if (refocus && !touch) select.focus({preventScroll: true});
   }
 
   function choose(select, index) {
@@ -42,10 +43,18 @@
 
   function build(select) {
     const list = document.createElement("ul");
-    list.className = "pick-list";
+    list.className = touch ? "pick-list pick-sheet" : "pick-list";
     list.setAttribute("role", "listbox");
-    list.style.fontSize = getComputedStyle(select).fontSize;
+    if (!touch) list.style.fontSize = getComputedStyle(select).fontSize;
     const items = [];
+    const name = select.getAttribute("aria-label") || (select.labels && select.labels[0] ? select.labels[0].textContent.trim() : "");
+    if (touch && name) {  // the sheet covers the box it belongs to: say what's being picked
+      const title = document.createElement("li");
+      title.className = "pick-title";
+      title.setAttribute("role", "presentation");
+      title.textContent = name;
+      list.appendChild(title);
+    }
     let group = null;
     [...select.options].forEach((opt, i) => {
       const parent = opt.parentElement;
@@ -81,6 +90,7 @@
   }
 
   function place(select, list) {
+    if (touch) return;  // the sheet's place is in the stylesheet: the bottom of the screen
     const r = select.getBoundingClientRect();
     const below = window.innerHeight - r.bottom - 12, above = r.top - 12;
     list.style.width = `${Math.min(r.width, document.documentElement.clientWidth - 16)}px`;  // exactly as wide as its box
@@ -95,8 +105,15 @@
   function openFor(select) {
     close();
     const {list, items} = build(select);
+    let scrim = null;
+    if (touch) {  // a tap outside the sheet closes it
+      scrim = document.createElement("div");
+      scrim.className = "pick-scrim";
+      scrim.addEventListener("click", () => close());
+      document.body.appendChild(scrim);
+    }
     document.body.appendChild(list);
-    open = {select, list, items, active: null};
+    open = {select, list, items, active: null, scrim};
     place(select, list);
     select.classList.add("pick-open");
     setActive(items[select.selectedIndex] && !items[select.selectedIndex].hasAttribute("aria-disabled")
@@ -174,6 +191,26 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", titleAll);
   else titleAll();
 
-  window.addEventListener("resize", () => close());
-  window.addEventListener("scroll", (e) => { if (open && !open.list.contains(e.target)) close(); }, true);
+  // touch: a tap on a dropdown opens the sheet (and no browser list); a swipe that starts on one still scrolls
+  if (touch) {
+    let tap = null;
+    document.addEventListener("touchstart", (e) => {
+      const select = e.target.closest && e.target.closest("select");
+      tap = usable(select) ? {select, x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false} : null;
+    }, {capture: true, passive: true});
+    document.addEventListener("touchmove", (e) => {
+      if (tap && (Math.abs(e.touches[0].clientX - tap.x) > 8 || Math.abs(e.touches[0].clientY - tap.y) > 8)) tap.moved = true;
+    }, {capture: true, passive: true});
+    document.addEventListener("touchend", (e) => {
+      const t = tap;
+      tap = null;
+      if (!t || t.moved) return;
+      e.preventDefault();  // no browser list
+      if (open && open.select === t.select) close();
+      else openFor(t.select);
+    }, {capture: true, passive: false});
+  }
+
+  window.addEventListener("resize", () => { if (!touch) close(); });  // a phone's keyboard or toolbar resizing isn't a reason
+  window.addEventListener("scroll", (e) => { if (open && !touch && !open.list.contains(e.target)) close(); }, true);
 })();

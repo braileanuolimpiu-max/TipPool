@@ -1454,3 +1454,28 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
 .digest-email { display: block; width: 100%; min-height: 420px; border: 0; background: #fff; }
 /* the close-out bar's two buttons are equal halves on phones: long labels wrap instead of widening their button */
 @media (max-width: 760px) { .sticky-bar { align-items: stretch; } .sticky-bar .btn { min-width: 0; white-space: normal; text-align: center; line-height: 1.2; } }
+/* phones: a button that shares its row with a field (Ask, the role presets) keeps its own width; the field gets the rest */
+@media (max-width: 560px) {
+  :is(.actions, form, .ask-row, .inline-form):has(> input:not([type=hidden]), > select, > textarea) > .btn:not(.btn-quiet) {
+    flex: 0 0 auto; width: auto; }
+  .role-preset select { flex: 1 1 auto; min-width: 0; }
+}
+/* dropdown lists on phones: TipPool's own list as a sheet from the bottom, with rows big enough for a thumb */
+.pick-scrim { position: fixed; inset: 0; z-index: 999; background: rgba(20, 20, 18, .45); animation: pick-fade .12s ease-out; }
+@keyframes pick-fade { from { opacity: 0; } to { opacity: 1; } }
+.pick-list.pick-sheet { left: 8px; right: 8px; bottom: 8px; top: auto; width: auto; max-height: min(62vh, 480px);
+  padding: 6px 6px 10px; font-size: 1rem; border-radius: 10px; animation: sheet-up .16s ease-out; }
+@keyframes sheet-up { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+.pick-sheet .pick-title { padding: 12px 14px 10px; font: 700 .72rem var(--mono); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--graphite); border-bottom: 1px solid var(--hair-soft); margin-bottom: 4px; }
+.pick-sheet .pick-opt { padding: 14px 16px 14px 40px; border-radius: 6px; }
+.pick-sheet .pick-opt[aria-selected="true"]::before { left: 15px; }
+/* "All days" gets the full width under the days, and its time box shrinks instead of sliding over the label */
+.week-grid-days li.all-days { grid-column: 1 / -1; grid-template-columns: max-content minmax(0, 160px) max-content;
+  justify-content: start; }
+.week-grid-days li.all-days input[type=time] { width: 100%; min-width: 0; justify-self: stretch; }
+@media (max-width: 380px) {  /* the smallest phones: the label on its own line, the time box and Apply under it */
+  .week-grid-days li.all-days { grid-template-columns: minmax(0, 1fr) max-content; }
+  .week-grid-days li.all-days .all-label { grid-column: 1 / -1; }
+  .week-grid-days li.all-days input[type=time] { max-width: none; }
+}
