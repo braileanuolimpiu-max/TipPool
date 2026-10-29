@@ -11,188 +11,87 @@
   <link rel="apple-touch-icon" href="{% static 'icons/icon-180.png' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:wght@400;500;700&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/landing.css' %}">
-  <script nonce="{{ csp_nonce }}" src="{% static 'js/landing.js' %}" defer></script>
+  <link rel="modulepreload" href="{% static 'vendor/three/three.module.min.js' %}">
+  <script nonce="{{ csp_nonce }}" type="module" src="{% static 'js/terminal.js' %}"></script>
 </head>
-<body class="lp">
-<div class="lp-grain" aria-hidden="true"></div>
-<div class="lp-smoke" aria-hidden="true"><i></i><i></i><i></i></div>
-<div class="lp-glitch" aria-hidden="true"><i></i><i></i><i></i></div>
+<body class="tp" data-three="{% static 'vendor/three/three.module.min.js' %}" data-login="{% url 'login' %}" data-signup="{% url 'signup' %}">
+<a class="tp-skip" href="#manual">Skip to the text version</a>
 
-<header class="lp-nav">
-  <a class="lp-logo" href="{% url 'dashboard' %}" aria-label="TipPool home">
-    <img src="{% static 'icons/tippool.svg' %}" alt=""><span>TipPool</span>
-  </a>
-  <nav class="lp-links" aria-label="On this page">
-    <a href="#how">How it works</a><a href="#agent">The agent</a><a href="#features">Features</a><a href="#trust">Security</a>
+<header class="tp-bar">
+  <a class="tp-logo" href="{% url 'dashboard' %}" aria-label="TipPool home"><em>TipPool</em><span>POS-80 · night shift</span></a>
+  <nav class="tp-ways" aria-label="Ways in">
+    <a href="{% url 'login' %}">Log in</a>
+    <a href="{% url 'signup' %}">Sign up</a>
+    <form method="post" action="{% url 'demo_start' %}" id="tp-demo-form">{% csrf_token %}<button>Try the demo</button></form>
   </nav>
-  <div class="lp-actions">
-    <a class="lp-link" href="{% url 'login' %}">Log in</a>
-    <a class="lp-btn lp-btn-ghost" href="{% url 'signup' %}">Sign up</a>
-    <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="lp-btn lp-btn-hot">Try the demo</button></form>
-  </div>
 </header>
 
-<main id="content">
-  <section class="lp-hero">
-    <div class="lp-hero-copy">
-      <p class="lp-kicker"><span class="lp-dot"></span>PayPal × AI · tip pooling for teams</p>
-      <h1>Tip-outs, <em>done</em> before the lights go&nbsp;off.</h1>
-      <p class="lp-lede">Guests tip by QR with PayPal or Venmo. AI turns your house rules into an exact, explained split. One PayPal payout pays the whole team, before anyone takes their apron off.</p>
-      <div class="lp-cta">
-        <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="lp-btn lp-btn-hot lp-btn-big">Try the live demo <span aria-hidden="true">→</span></button></form>
-        <a class="lp-btn lp-btn-ghost lp-btn-big" href="{% url 'signup' %}">Create your account</a>
-      </div>
-      <p class="lp-note">No sign-up for the demo · PayPal sandbox money only</p>
+<main>
+  <section class="tp-stage" aria-label="TipPool terminal">
+    <div class="tp-scene" id="tp-scene"></div>
+    <div class="tp-flat" id="tp-flat" hidden>
+      <p class="tp-flat-note">Tap a line on the screen, or press 1 to 5.</p>
     </div>
-
-    <div class="lp-stage" aria-hidden="true">
-      <div class="lp-halo"></div>
-      <div class="lp-phone" id="lp-phone">
-        <div class="lp-phone-screen">
-          <p class="lp-ph-place">Luna Bistro</p>
-          <p class="lp-ph-title">Leave a tip</p>
-          <div class="lp-ph-grid"><b>15%</b><b class="lp-pick">18%</b><b>20%</b><b>25%</b></div>
-          <p class="lp-ph-who">For the whole team</p>
-          <span class="lp-ph-pay">PayPal</span>
-          <div class="lp-ph-thanks"><span class="lp-check">✓</span><p>Thank you!</p><small>$12.60 for the team</small></div>
-        </div>
+    <noscript>
+      <div class="tp-noscript">
+        <p>TIPPOOL OS</p>
+        <p>Tip-outs, done before the lights go off.</p>
       </div>
-      <div class="lp-printer"><span class="lp-led"></span></div>
-      <div class="lp-receipt" id="lp-receipt">
-        <p class="lp-r-head">LUNA BISTRO<br><small>TIP-OUT · TONIGHT</small></p>
-        <p class="lp-r-line" data-step="1"><span>Guest tips (PayPal)</span><b data-count="148.60">$0.00</b></p>
-        <p class="lp-r-line" data-step="2"><span>Card machine</span><b data-count="86.40">$0.00</b></p>
-        <p class="lp-r-line" data-step="3"><span>Cash jar</span><b data-count="31.50">$0.00</b></p>
-        <p class="lp-r-rule" data-step="4"></p>
-        <p class="lp-r-line lp-r-name" data-step="5"><span>Maria · server 6h</span><b data-count="63.96">$0.00</b></p>
-        <p class="lp-r-line lp-r-name" data-step="6"><span>Lea · server 6h</span><b data-count="63.96">$0.00</b></p>
-        <p class="lp-r-line lp-r-name" data-step="7"><span>John · server 5.5h</span><b data-count="58.63">$0.00</b></p>
-        <p class="lp-r-line lp-r-name" data-step="8"><span>Alex · bar 20%</span><b data-count="53.30">$0.00</b></p>
-        <p class="lp-r-line lp-r-name" data-step="9"><span>Sam · busser 10%</span><b data-count="26.65">$0.00</b></p>
-        <p class="lp-r-rule" data-step="10"></p>
-        <p class="lp-r-line lp-r-total" data-step="11"><span>To pay out</span><b>$266.50</b></p>
-        <p class="lp-r-foot" data-step="12">exact cents · adds up ✓</p>
-        <span class="lp-stamp" id="lp-stamp">PAID<small>via PayPal</small></span>
-      </div>
-      <p class="lp-float lp-float-ai">AI check · nothing unusual ✓</p>
-      <p class="lp-float lp-float-pay">5 payouts · 1 batch</p>
-    </div>
+    </noscript>
+    <h1 class="tp-title">Tip-outs, <em>done</em><br> before the lights go&nbsp;off.</h1>
+    <p class="tp-hint" aria-hidden="true"><kbd>1</kbd>–<kbd>5</kbd> or tap the screen<span> · scroll for the manual</span></p>
   </section>
 
-  <section class="lp-strip" aria-label="Built with">
-    <p>PayPal Orders v2</p><p>PayPal Payouts</p><p>Venmo</p><p>Webhooks</p><p>Gemini or Claude</p><p>7 guest languages</p>
-  </section>
+  <section class="tp-manual" id="manual" aria-labelledby="manual-title">
+    <header class="tp-man-head">
+      <p>TipPool POS-80</p>
+      <h2 id="manual-title">Operator's manual</h2>
+      <p>For restaurants, bars and cafés that split tips as a team.</p>
+    </header>
 
-  <section class="lp-section" id="how">
-    <p class="lp-eyebrow">How it works</p>
-    <h2>Three steps. <em>One shift.</em></h2>
-    <div class="lp-steps">
-      <article class="lp-step lp-reveal">
-        <span class="lp-num">01</span>
-        <h3>Guests tip by QR</h3>
-        <p>One code on every table, or one per person. PayPal or Venmo, in the guest's language. The amount is set on our server, so it can't be changed in the browser.</p>
-      </article>
-      <article class="lp-step lp-reveal">
-        <span class="lp-num">02</span>
-        <h3>AI splits and explains</h3>
-        <p>Write your rules like you'd say them: "bartenders get 20%, the rest by hours". AI reads them, warns about tip law, explains each share. The money math stays exact, in cents.</p>
-      </article>
-      <article class="lp-step lp-reveal">
-        <span class="lp-num">03</span>
-        <h3>One payout pays everyone</h3>
-        <p>A close-out check looks for anything odd first. Then one PayPal Payouts batch pays the whole team to PayPal or Venmo, tracked live, never twice.</p>
-      </article>
-    </div>
-  </section>
+    <ol class="tp-man">
+      <li>
+        <h3><span>01</span>Guests tip by QR</h3>
+        <p>A QR code on the table or the receipt. Guests pay with PayPal or Venmo, in their own language. No app, no account.</p>
+      </li>
+      <li>
+        <h3><span>02</span>The AI splits it, and says why</h3>
+        <p>Write your house rules in plain words: "bar gets 20%, bussers 10%, servers by hours". TipPool turns them into an exact split, to the cent, with a sentence for every share.</p>
+      </li>
+      <li>
+        <h3><span>03</span>One payout pays everyone</h3>
+        <p>One PayPal batch pays the whole shift. It is checked before it is sent, and the same shift is never paid twice.</p>
+      </li>
+      <li>
+        <h3><span>04</span>Ask the agent</h3>
+        <p>"Close out tonight, add $40 cash and pay everyone." The agent lays out the steps, you confirm once, and it does the shift.</p>
+      </li>
+    </ol>
 
-  <section class="lp-section lp-agent" id="agent">
-    <div class="lp-agent-copy lp-reveal">
-      <p class="lp-eyebrow">The agent</p>
-      <h2>Ask it. <em>It does the shift.</em></h2>
-      <p>Owners ask in plain words and get answers from their own numbers. Ask it to act, and it builds a plan: close out tonight, add the cash, pay everyone. You confirm once; every step is checked again before money moves.</p>
-      <ul class="lp-ticks">
-        <li>The AI can stop a payout, never start one on its own</li>
-        <li>Amounts are calculated in code, never by the AI</li>
-        <li>Every plan is signed, single-use and expires in 10 minutes</li>
+    <div class="tp-man-rules">
+      <h3>House rules the machine keeps</h3>
+      <ul>
+        <li>Amounts are calculated in code, never by the AI.</li>
+        <li>The AI can stop a payout. It can never start one.</li>
+        <li>Every split adds up to the cent, and shows its working.</li>
+        <li>Two-step sign-in, a strict security policy and a full history of every change.</li>
       </ul>
     </div>
-    <div class="lp-chat lp-reveal" id="lp-chat">
-      <div class="lp-chat-bar"><span></span><span></span><span></span><p>Ask about your tips</p></div>
-      <p class="lp-msg lp-msg-me"><span id="lp-typed"></span><i class="lp-caret"></i></p>
-      <div class="lp-msg lp-msg-ai" id="lp-plan">
-        <p class="lp-plan-title">3 steps, in this order:</p>
-        <p class="lp-plan-step"><b>1</b>Close out the Friday shift and split it</p>
-        <p class="lp-plan-step"><b>2</b>Add $40.00 cash tips, shared by the team</p>
-        <p class="lp-plan-step"><b>3</b>Pay the Friday shift through PayPal</p>
-        <span class="lp-confirm">Confirm</span>
-      </div>
-      <p class="lp-msg lp-msg-done" id="lp-done">✓ Paid 5 people · $306.50 · PayPal Payouts</p>
-    </div>
-  </section>
 
-  <section class="lp-section" id="features">
-    <p class="lp-eyebrow">Everything a tipped team needs</p>
-    <h2>Built for the <em>real</em> end of a shift.</h2>
-    <div class="lp-bento">
-      <article class="lp-card lp-card-wide lp-reveal">
-        <h3>Rules in plain words</h3>
-        <p>"Bussers get 10% split equally, the rest goes to servers by hours." Read into structured rules, with a warning when something breaks tip law, like managers taking from the pool.</p>
-        <div class="lp-rule-demo"><span>Bartenders</span><b>20% · by hours</b><span>Bussers</span><b>10% · equally</b><span>Servers</span><b>the rest · by hours</b></div>
-      </article>
-      <article class="lp-card lp-reveal"><h3>A check before money moves</h3><p>A 15-hour shift, a forgotten clock-out, a flagged problem, an unconfirmed address: the payout waits.</p></article>
-      <article class="lp-card lp-reveal"><h3>Staff see the why</h3><p>A private link per person: their shares, the explanation, clock in and out, flag a problem. No account needed.</p></article>
-      <article class="lp-card lp-reveal"><h3>Card and cash too</h3><p>Add the card machine and the cash jar at close-out, so every tip is shared, not only the QR ones.</p></article>
-      <article class="lp-card lp-reveal"><h3>Every location, live</h3><p>A board of each location against a normal day at this hour, with smart alerts when something is quietly wrong.</p></article>
-      <article class="lp-card lp-reveal"><h3>Codes for every table</h3><p>Print table tents, cards and posters, or show a code full-screen on a tablet by the till.</p></article>
-    </div>
-  </section>
-
-  <section class="lp-marquee" aria-label="Made for">
-    <div class="lp-marquee-track">
-      <span>Restaurants</span><span>Cafés</span><span>Bars</span><span>Salons</span><span>Spas</span><span>Hotels</span><span>Delivery</span>
-      <span aria-hidden="true">Restaurants</span><span aria-hidden="true">Cafés</span><span aria-hidden="true">Bars</span><span aria-hidden="true">Salons</span><span aria-hidden="true">Spas</span><span aria-hidden="true">Hotels</span><span aria-hidden="true">Delivery</span>
-    </div>
-  </section>
-
-  <section class="lp-section lp-numbers">
-    <div class="lp-stat lp-reveal"><b data-count-to="0" data-prefix="$" data-decimals="2">$0.00</b><span>lost to rounding, ever</span></div>
-    <div class="lp-stat lp-reveal"><b data-count-to="1">0</b><span>PayPal batch pays the team</span></div>
-    <div class="lp-stat lp-reveal"><b data-count-to="7">0</b><span>languages for guests</span></div>
-    <div class="lp-stat lp-reveal"><b data-count-to="5">0</b><span>currencies</span></div>
-  </section>
-
-  <section class="lp-section" id="trust">
-    <p class="lp-eyebrow">Money handled carefully</p>
-    <h2>Safe by <em>default.</em></h2>
-    <div class="lp-trust">
-      <p class="lp-reveal"><b>Never paid twice</b>One fixed id per payout; unclear answers are checked with PayPal, never re-sent blindly.</p>
-      <p class="lp-reveal"><b>Only to confirmed addresses</b>Each person confirms where they're paid; the owner hears about every change.</p>
-      <p class="lp-reveal"><b>Two-step sign-in</b>Authenticator codes for managers, required for whoever runs the site.</p>
-      <p class="lp-reveal"><b>Locked down</b>Encrypted keys, signed webhooks, a strict content security policy, every business kept apart.</p>
-    </div>
-  </section>
-
-  <section class="lp-final lp-reveal">
-    <h2>See a whole shift <em>paid out</em> in two minutes.</h2>
-    <p>Luna Bistro is waiting, with three weeks of history and yesterday's shift ready to pay. Sandbox money, real PayPal.</p>
-    <div class="lp-cta">
-      <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="lp-btn lp-btn-hot lp-btn-big">Try the live demo <span aria-hidden="true">→</span></button></form>
-      <a class="lp-btn lp-btn-ghost lp-btn-big" href="{% url 'login' %}">Log in</a>
+    <div class="tp-man-go">
+      <p>Try a whole shift with sandbox money. No sign-up.</p>
+      <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="tp-key">Try the demo <span aria-hidden="true">↵</span></button></form>
+      <a class="tp-key tp-key-dim" href="{% url 'signup' %}">Sign up</a>
+      <a class="tp-key tp-key-dim" href="{% url 'login' %}">Log in</a>
     </div>
   </section>
 </main>
 
-<footer class="lp-foot">
-  <p><span class="lp-foot-logo">TipPool</span> · Built for the PayPal AI Hackathon 2026</p>
-  <nav><a href="{% url 'privacy' %}">Privacy</a><a href="{% url 'terms' %}">Terms</a><a href="https://github.com/braileanuolimpiu-max/TipPool" rel="noopener">Source</a></nav>
+<footer class="tp-foot">
+  <p>TipPool · built for the PayPal AI hackathon · PayPal sandbox money only</p>
+  <p>3D terminal drawn with three.js (MIT)</p>
 </footer>
-
-<aside class="lp-banner" id="lp-banner">
-  <p>Live demo, sandbox money: no sign-up needed.</p>
-  <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="lp-banner-go">Try it <span aria-hidden="true">→</span></button></form>
-  <button type="button" class="lp-banner-x" id="lp-banner-x" aria-label="Close">×</button>
-</aside>
 </body>
 </html>
