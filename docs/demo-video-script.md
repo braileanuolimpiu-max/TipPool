@@ -6,13 +6,16 @@
 - A phone ready to scan the QR code (screen-mirrored or filmed), with the sandbox buyer login at hand.
 - Open the demo team member Maria's staff page on the phone in advance (Team → copy link), for scene 6.
 - Record the screen at 1080p. Read the voice-over slowly; the times below leave room for clicks.
+- Check the AI is answering: in Reports, ask one question. The line under the answer must name the AI
+  ("Gemini, from your numbers"), not "Calculated from your numbers" (that's the built-in fallback).
+- Upload to YouTube as **Public** (not unlisted), under 3:00, and put the link in the Devpost form.
 
 ---
 
 ### 1. The problem (0:00–0:15)
 **Screen:** sign-in page (the left side reads "Tip-outs, done before the end of the shift").
 **Say:** "Every night, tipped teams split money by hand: a calculator, a spreadsheet, cash envelopes, and
-bank transfers one by one. TipPool does it in one click, with PayPal and Claude."
+bank transfers one by one. TipPool does it in one click, with PayPal and AI."
 **Click:** Try the demo.
 
 ### 2. A live shift (0:15–0:25)
@@ -29,7 +32,7 @@ created and captured on our server with the Orders API and the JS SDK v6, so the
 
 ### 4. Rules in plain words (0:50–1:10)
 **Click:** Tip rules. Add "managers get 5%" to the rules and save.
-**Say:** "The owner writes the house rules like they'd say them. Claude turns them into exact rules,
+**Say:** "The owner writes the house rules like they'd say them. The AI turns them into exact rules,
 and warns when something breaks tip law: managers can't take from the pool in the US."
 **Click:** remove the manager part and save again.
 
@@ -50,21 +53,25 @@ twice."
 **Screen (phone):** Maria's tips page: her share, the explanation, her totals.
 **Say:** "Each person sees exactly what they got, and why."
 
-### 7. Ask about your tips (2:15–2:35)
-**Click:** Reports → ask "Who earned the most last week?" Then ask "Set Maria to Monday to Friday 6 hours",
-and **Confirm**.
-**Say:** "Owners ask questions in plain English, answered from their own numbers. Claude can take
-actions too, but only after the manager confirms."
+### 7. An agent that moves money, safely (2:15–2:40)
+**Click:** Reports → ask "Who earned the most last week?" Then ask "Close out tonight, add $40 cash and pay
+everyone".
+**Screen:** the 3-step plan, each step naming tonight's shift → **Confirm** → the payout page.
+**Say:** "Owners ask in plain English, answered from their own numbers. And the AI can act: close out
+tonight, add the cash, pay everyone through PayPal Payouts, as one plan the manager confirms once. Every
+step is checked again before money moves, and the AI can stop a payout, but never start one on its own."
 
-### 8. Close (2:35–2:50)
+### 8. Close (2:40–2:55)
 **Screen:** QR print studio (6 per page) or the All locations overview, then the sign-in page.
 **Say:** "Several locations, any kind of tipped business, card and cash tips included, staff's own PayPal
-accounts confirmed by them, and every business's data kept apart. TipPool: tip-outs done before the end of the
-shift."
+accounts confirmed by them, every business's data kept apart, and money that can't be paid twice or to the
+wrong person. TipPool: tip-outs done before the end of the shift."
 
 ---
 
 ## If something goes wrong while recording
 - PayPal popup blocked: the page falls back to PayPal inside the page. Just continue.
 - A payout stays SENDING: click **Check PayPal again**; sandbox payouts usually finish within a minute.
-- Out of time: cut scene 7 first, then shorten scene 4.
+- The AI says it couldn't answer: the built-in assistant still answers (and the plan in scene 7 still works);
+  re-record scene 4 and 7 once the AI is back if you can.
+- Out of time: shorten scene 4 first, then scene 2. Keep scene 7: it's the PayPal + AI agent moment.

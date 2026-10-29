@@ -33,7 +33,7 @@ card in the corner ticks off each step as you go:
    `SUCCESS` (real sandbox payouts).
 4. **Tip as a guest.** The page the QR code opens, with PayPal and Venmo buttons. It's in 7 languages, and
    PayPal's own window follows the guest's language too. Demo tip pages show a sandbox buyer login to pay with.
-5. **Ask about your tips**, e.g. *"Who earned the most last week?"* Claude answers from your numbers, and
+5. **Ask about your tips**, e.g. *"Who earned the most last week?"* The AI answers from your numbers, and
    acts once you confirm: *"Close out tonight, add $40 cash and pay everyone"* is one plan, done in order.
 6. **Change the rules in plain words.** AI reads them into structured rules and warns about anything that
    breaks tip law (e.g. managers taking from the pool, which the US FLSA doesn't allow).
@@ -44,7 +44,8 @@ card in the corner ticks off each step as you go:
   a test tip with; demo payouts go to sandbox accounts.
 - To run it yourself instead, see [Run it locally](#run-it-locally-sandbox): it works without any keys
   (the demo uses a built-in AI fallback), and with your own sandbox keys for real PayPal calls.
-- Hosted on **Render** (blueprint in `render.yaml`) with a Neon Postgres database.
+- Hosted on **Render** (blueprint in `render.yaml`) with a Neon Postgres database. The live demo's AI is
+  **Gemini** (Google); if it's busy or over its free limit, the built-in assistant answers and says so.
 
 ## The problem
 
@@ -59,11 +60,11 @@ flowchart LR
     G[Guest scans QR] -->|PayPal / Venmo<br/>Orders v2 + JS SDK v6| T[(Tips for<br/>tonight's shift)]
     C[Card machine and cash<br/>added at close-out] --> T
     S[Staff clock in/out<br/>from their phone] --> H[(Who worked)]
-    R[House rules in plain words] -->|Claude reads them| RR[Structured rules]
+    R[House rules in plain words] -->|AI reads them| RR[Structured rules]
     T --> X[Exact-cent split<br/>plain Python]
     H --> X
     RR --> X
-    X --> E[Claude explains<br/>each share]
+    X --> E[AI explains<br/>each share]
     X --> K{AI + rule<br/>close-out check}
     K -->|stop: flagged,<br/>15-hour shift, ...| M[Manager fixes it]
     K -->|ready| P[Manager approves<br/>or auto-pay after review]
@@ -72,7 +73,7 @@ flowchart LR
 ```
 
 - **Rules in plain words.** *"Bartenders get 20%, bussers 10% split equally, the rest goes to servers by
-  hours."* Claude turns that into structured rules and flags legal problems.
+  hours."* The AI turns that into structured rules and flags legal problems.
 - **Tips in.** One shared QR code per location (print as many as you need: table tents, cards, stickers,
   posters, or 6 per page), or personal codes for businesses where a tip goes to one person. Orders are created
   and captured on the server, so the amount can't be changed in the browser. Tip buttons fit the business:
@@ -82,7 +83,7 @@ flowchart LR
 - **Who worked, without typing.** Staff clock in and out from their own private tips page. Each person can
   have a usual week (Mon–Fri 6h). The close-out fills itself in; the manager fixes exceptions.
 - **The split.** Plain Python does the money math in exact cents (the AI never decides amounts), so the
-  shares always add up to the total. Claude writes a short explanation for every person.
+  shares always add up to the total. The AI writes a short explanation for every person.
 - **Team tips or personal tips.** Pooled (restaurants), personal (salons, delivery), or the guest chooses.
 - **Tips out.** One PayPal Payouts batch pays everyone to their PayPal or **Venmo**. Each worker confirms
   their own payout address; changes need a manager's approval. Failed or unclaimed payouts can be reminded,
@@ -139,7 +140,8 @@ Shift status: paid.
 
 ## AI used
 
-**Claude API** (`claude-opus-5-5`, structured outputs) by default, or any of **Gemini** (Google, free tier),
+**Claude API** (`claude-opus-5-5`, structured outputs) by default, or any of **Gemini** (Google, free tier; the
+live demo uses it),
 **ChatGPT** (OpenAI), **DeepSeek**, **Kimi** (Moonshot) or **Mistral**: the operator picks one in Platform
 settings and pastes a key; TipPool checks it, picks a model and tests it. Every AI feature gets the same
 instructions, data and answer format (a JSON schema, checked on arrival) whichever service answers, and the
@@ -148,7 +150,7 @@ free built-in assistant takes over when none is on or a limit is reached. Used f
 - **Reading a photo of the schedule** (vision) to fill in who worked.
 - **Explaining each person's share** in one or two sentences.
 - **The close-out check** before any payout: rule findings (a 15-hour shift, a forgotten clock-out, an
-  unconfirmed address, a flagged problem, a total far from normal) plus Claude's review and suggested fixes.
+  unconfirmed address, a flagged problem, a total far from normal) plus the AI's review and suggested fixes.
 - **Ask about your tips, an agent that moves money:** answers from the business's own numbers, and does
   things in plain words: *"Close out tonight, add $40 cash and pay everyone"* becomes a 3-step plan (close
   out from clock-ins, split, add the cash, pay through PayPal Payouts) confirmed once and done in order.
@@ -158,7 +160,10 @@ free built-in assistant takes over when none is on or a limit is reached. Used f
 
 **Guardrails.** The AI never decides amounts (exact-cent Python does). It can **stop** a payout but never
 start one. Every action it proposes needs the manager's confirmation, through a signed, expiring,
-single-use token. Text sent to PayPal is always written by us, never by the AI.
+single-use token that pins the exact split it showed; a plan pays only the shift its own steps changed.
+Text written by staff or guests (names, flags, messages) is data to the AI, never instructions, and an
+action is only accepted when the manager's question asks for one. Text sent to PayPal is always written by
+us, never by the AI.
 
 `AI_MODE=mock` runs a free built-in rule parser, template explanations and offline answers to common
 questions, so the app works without an API key (and the demo history is generated this way).
@@ -169,10 +174,21 @@ questions, so the app works without an API key (and the demo history is generate
   that one business can't reach another's data.
 - Each business's PayPal secret is encrypted at rest (Fernet).
 - Payouts can't go out twice: one fixed `sender_batch_id` per shift attempt, unclear answers from PayPal
-  are checked, never blindly re-sent, and a shift is only marked paid when every payout arrived.
-- Webhooks are applied only when PayPal's signature verifies; otherwise the app asks PayPal directly.
+  are checked, never blindly re-sent, and a shift is only marked paid when every payout arrived. If PayPal
+  never answers, only the owner can undo it, after checking their PayPal account.
+- Money only goes to an address its person confirmed, unless the owner says otherwise; the owner is told
+  whenever a manager changes where someone is paid.
+- Webhooks are applied only when PayPal's signature verifies; otherwise the app asks PayPal directly. An
+  event is recorded and applied together, so one that fails is applied when PayPal sends it again, and a
+  late "captured" event never brings back a refunded tip.
 - Rate limits on sign-in (failures only), password reset, tip orders and the demo. After 10 wrong passwords
-  in a row an account pauses for a minute and its owner gets an alert email. Optional two-step sign-in (TOTP).
+  in a row an account pauses (1, then 5, then 15 minutes) and its owner gets an alert email. Optional
+  two-step sign-in (TOTP), required for whoever runs the site.
+- An optional bot check on guest tip pages (Cloudflare Turnstile, set up in Platform settings) stops scripts
+  from flooding a tip page with PayPal orders; it fails open, so a guest is never stopped from tipping.
+- A strict Content-Security-Policy: only TipPool's own scripts and styles (each page's inline ones carry a
+  fresh nonce), PayPal's SDK and Cloudflare's check run; no `unsafe-inline`, no framing by other sites.
+  The Django admin is a plain "not found" to everyone but the operator.
 - Changing a password needs a 6-character code sent by email (valid 5 minutes); a new password can't be the
   current one, and every change or reset sends a notice.
 - Managers and shift leads can be limited to their own locations; leads can close out but never pay.
@@ -186,7 +202,8 @@ questions, so the app works without an API key (and the demo history is generate
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Anthropic Claude API · plain HTML/CSS/JS (no front-end framework) · 360 tests and a lint check, run on GitHub Actions.
+Claude, Gemini or another AI service · plain HTML/CSS/JS (no front-end framework) · 386 tests and a lint
+check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 
@@ -234,10 +251,11 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
    - **Email:** pick **Brevo** (free, 300 a day), add your sender address there and paste an API key, then
      "Send me a test email". Brevo is used through its web API, because Render's free plan blocks email
      ports (SMTP). Gmail, Outlook and other SMTP services work locally or on a paid plan.
-   - **AI:** paste a Claude API key and choose the model.
+   - **AI:** choose a service (Claude, Gemini with a free tier, ChatGPT, DeepSeek, Kimi or Mistral) and paste its key; TipPool picks and tests a model.
    - **TipPool's PayPal:** two codes from PayPal, for the demo and for businesses not connected yet.
      PayPal's update address (webhook) is registered automatically.
    - **The demo:** a test buyer login and the demo team's test payout emails.
+   - **Bot check (optional):** two keys from Cloudflare Turnstile (free) for the guest tip pages.
    - **Scheduler:** two free [cron-job.org](https://cron-job.org) jobs with the ready-made addresses: the work
      (automatic close-outs, smart alerts, summaries) every 30 minutes, and a keep-awake ping (`/up/`, which
      never touches the database) every 10 minutes. The free server stays awake while the free database can
@@ -252,12 +270,13 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-360 tests cover:
+386 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes
 - the close-out check and Ask actions
-- security: business isolation, rate limits, tokens, unsigned webhooks
+- security: business isolation, rate limits, tokens, unsigned webhooks, the CSP on every page, who may
+  pay or resend to an unconfirmed address, and AI actions a manager didn't ask for
 - the demo, the tour, the guest page languages, and the owner features (alerts, digest, limits, per-location managers)
 
 They run on every push with GitHub Actions, together with `ruff check .`.
@@ -269,7 +288,9 @@ config/             Django settings and URLs
 tips/
   models.py         businesses, locations, staff, shifts, tips, payouts
   split.py          the exact-cent split engine
-  ai.py             Claude calls (rules, explanations, checks, Ask) and the offline fallback
+  ai.py             AI calls (rules, explanations, checks, Ask) and the offline fallback
+  ask.py, actions.py   Ask about your tips: answers, and actions confirmed by the manager
+  botcheck.py       the bot check on guest tip pages (Cloudflare Turnstile)
   paypal.py         PayPal REST client (Orders, Payouts, balances, webhooks)
   services.py       tip capture, close-out, paying a shift (locks, freeze, approval limit)
   check.py          the close-out check before any payout
