@@ -43,6 +43,13 @@ def _sync_tips(night):
         log.exception("Tip sync failed")
 
 
+def home(request):
+    """The site's front door: visitors see what TipPool does; a signed-in manager goes straight to the shift."""
+    if not request.user.is_authenticated:
+        return render(request, "landing.html")
+    return dashboard(request)
+
+
 @manager_required
 def dashboard(request):
     location = request.location
