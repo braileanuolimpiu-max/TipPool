@@ -172,15 +172,6 @@
         <p>It uses the real PayPal APIs with PayPal's sandbox (test) money, so you can tip, split and pay without any real money moving.</p></details>
     </div>
 
-    <div class="lp-end">
-      <h2>Your next close-out could take <em>two minutes.</em></h2>
-      <div class="lp-end-go">
-        <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="sw-btn sw-btn--primary">Try the demo</button></form>
-        <a class="sw-btn sw-btn--ghost" href="{% url 'signup' %}">Sign up</a>
-        <a class="sw-btn sw-btn--ghost" href="{% url 'login' %}">Log in</a>
-      </div>
-    </div>
-
     <footer class="lp-credits">
       <p>TipPool · built for the PayPal AI hackathon · PayPal sandbox money only</p>
     </footer>
