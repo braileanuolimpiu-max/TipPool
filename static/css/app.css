@@ -1642,3 +1642,11 @@ html:has(.login) { scrollbar-gutter: auto; }
 /* the account pages never show a scrollbar; on an unusually short screen the page still scrolls by wheel, trackpad or touch */
 html:has(.login) { scrollbar-width: none; }
 html:has(.login)::-webkit-scrollbar, body:has(.login)::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* tablets in portrait (an iPad): sign-up in two columns too, so its receipt fits the screen */
+@media (min-width: 600px) and (max-width: 860px) {
+  .login .right > form.signup { max-width: 640px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
+  .login .right > form.signup > * { margin-top: 0; }
+  .login .right > form.signup::before, .login .right > form.signup > h2, .login .right > form.signup > p, .login .right > form.signup > .flash,
+  .login .right > form.signup > hr, .login .right > form.signup > button, .login .right > form.signup > div:has(#password) { grid-column: 1 / -1; }
+  .login .right > form.signup .hint { margin-top: 4px; font-size: .8rem; line-height: 1.35; }
+}
