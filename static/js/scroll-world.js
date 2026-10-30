@@ -200,7 +200,9 @@ function mountScrollWorld(container, config) {
 
   function jumpTo(i) {
     const seg = SECTIONS[i]._seg;
-    window.scrollTo({ top: seg.start + (seg.end - seg.start) * 0.5, behavior: reduce ? 'auto' : 'smooth' });
+    // TipPool: the first chapter's words fade as soon as you scroll, so its dot goes to the very top
+    const top = i === 0 ? 0 : seg.start + (seg.end - seg.start) * 0.5;
+    window.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
   }
 
   function loadClip(s) {

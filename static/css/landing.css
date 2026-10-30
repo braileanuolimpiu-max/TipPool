@@ -56,7 +56,7 @@ body.lp::after {
 /* the film's words, on the dark side of the frame */
 .sw-copy__num { color: var(--cream-dim); }
 .sw-copy__eyebrow { font: 500 .78rem var(--mono); letter-spacing: .18em; }
-.sw-copy__title { font-weight: 500; letter-spacing: -.02em; line-height: 1.02; font-size: clamp(2.2rem, 4.8vw, 4rem); text-wrap: balance; }
+.sw-copy__title { font-weight: 500; letter-spacing: -.02em; line-height: 1.02; font-size: clamp(1.9rem, min(4.8vw, 6.6vh), 4rem);  /* shorter screens get a smaller title, so the text always fits */ text-wrap: balance; }
 .sw-copy__body { color: #ddd4c4; font-size: clamp(.95rem, 1.15vw, 1.05rem); }
 .sw-copy__tags li { color: var(--cream); background: color-mix(in srgb, var(--sw-accent) 16%, transparent);
   border-color: color-mix(in srgb, var(--sw-accent) 45%, transparent); font: 500 .74rem var(--mono); letter-spacing: .06em; }
@@ -174,3 +174,9 @@ html:has(body.lp) { scrollbar-width: none; }
 html:has(body.lp)::-webkit-scrollbar, body.lp::-webkit-scrollbar { display: none; width: 0; height: 0; }
 /* the chapter dots: no button padding, so each dot sits right on the line */
 .sw-route__dot { padding: 0; }
+/* centre each chapter's words on wide screens: the engine's script rewrites `transform` while scrolling
+   (dropping the CSS centring), so the centring uses `translate`, which adds to it instead */
+@media (min-width: 861px) { .sw-copy { translate: 0 -50%; } }
+/* no "02 / 07" counter over each chapter */
+.sw-copy__num { display: none; }
+.sw-copy__eyebrow { margin-top: 0; }
