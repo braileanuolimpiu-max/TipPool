@@ -1508,3 +1508,14 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
 .kv dt { font-weight: 700; }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 560px) { .kv > div { grid-template-columns: 1fr; gap: 0; } }
+
+/* the closed demo tour: a slim tab on the right edge, off the page's content (opened, it's the panel in the corner) */
+@media (min-width: 641px) {
+  .tour:not([open]) { right: 0; bottom: auto; top: 50%; transform: translateY(-50%); width: auto; max-width: none;
+    border-radius: 6px 0 0 6px; border-top: 1px solid var(--hair); border-right: 0; border-left: 4px solid var(--marker); }
+  .tour:not([open]) summary { writing-mode: vertical-rl; transform: rotate(180deg); padding: 14px 8px; gap: 10px; }
+  .tour:not([open]) summary::after { display: none; }
+  .tour:not([open]) .tour-title { font-size: .9rem; }
+  body:has(.save-bar) .tour:not([open]), body:has(.sticky-bar) .tour:not([open]) { bottom: auto; }
+  .main:has(.tour) { padding-bottom: 0; }
+}

@@ -96,9 +96,12 @@ def pay(night, allow_unconfirmed=False, by_owner=False, expected_split=None):
     try:
         started = _client().workflows.start_task(f"{settings.TIPPOOL_WORKFLOW_SLUG}/{TASK}", [run.pk],
                                                  idempotency_key=f"tippool-payout-run-{run.pk}")
-    except Exception:
+    except Exception as exc:
         log.warning("Render Workflows didn't start payout run %s; sending it right away", run.pk, exc_info=True)
-        step(run, "Render Workflows didn't answer, so TipPool is sending it right away", "wait", PayoutRun.State.SENDING)
+        # Render's own answer (e.g. "create task failed: Unauthorized"), so the cause shows without the logs
+        why = " ".join(str(exc).split())[:120] or type(exc).__name__
+        step(run, f"Render Workflows didn't start it ({why}), so TipPool is sending it right away", "wait",
+             PayoutRun.State.SENDING)
         try:
             sent = services.send_prepared(batch)
         except PayPalError as exc:
