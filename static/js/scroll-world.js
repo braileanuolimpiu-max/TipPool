@@ -298,8 +298,13 @@ function mountScrollWorld(container, config) {
       if (s.video.seeking) continue;
       if (!s.visible && Math.abs(s.cur - s.target) < 0.002) continue;
       const dur = s.video.duration || 1;
-      s.cur += (s.target - s.cur) * k;
-      if (Math.abs(s.target - s.cur) * dur < frame * 1.5) s.cur = s.target;  // the last bit: land, don't crawl
+      // ease in, but never slower than the clip's own speed: the end plays into its stop like a video slowing
+      // down to normal speed, instead of stepping one frame at a time in slow motion
+      const diff = s.target - s.cur, minStep = (dt / 1000) / dur;
+      let step = diff * k;
+      if (Math.abs(step) < minStep) step = Math.sign(diff) * Math.min(Math.abs(diff), minStep);
+      s.cur += step;
+      if (Math.abs(s.target - s.cur) * dur < frame / 2) s.cur = s.target;
       const t = Math.min(dur * 0.999, Math.round(clamp(s.cur, 0, 0.999) * dur / frame) * frame);
       if (Math.abs(s.video.currentTime - t) >= frame / 2) { try { s.video.currentTime = t; } catch (e) {} }
     }

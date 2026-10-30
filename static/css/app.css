@@ -1519,3 +1519,8 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
   body:has(.save-bar) .tour:not([open]), body:has(.sticky-bar) .tour:not([open]) { bottom: auto; }
   .main:has(.tour) { padding-bottom: 0; }
 }
+
+/* sign-in, sign-up and the other account pages: the way back to the home page, next to the name */
+.auth-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.auth-home { font-size: .9rem; color: var(--graphite); text-decoration: underline; text-underline-offset: 3px; }
+.auth-home:hover { color: var(--ink); }

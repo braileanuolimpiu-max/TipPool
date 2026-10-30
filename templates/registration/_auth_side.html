@@ -1,5 +1,8 @@
 {% load static %}  <div class="left">
-    <a class="brand" href="{% url 'login' %}"><img class="brand-mark" src="{% static 'icons/tippool.svg' %}" alt=""><b>TipPool</b></a>
+    <div class="auth-top">
+      <a class="brand" href="{% url 'dashboard' %}"><img class="brand-mark" src="{% static 'icons/tippool.svg' %}" alt=""><b>TipPool</b></a>
+      <a class="auth-home" href="{% url 'dashboard' %}">← Back to the home page</a>
+    </div>
     <div>
       <h1>Tip-outs, done before the end of the shift.</h1>
       <p>Guests tip with PayPal or Venmo. AI applies your house rules and explains every share. One click pays the whole team. For restaurants, cafés, bars, salons, hotels and any team that shares tips.</p>
