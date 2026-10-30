@@ -167,8 +167,8 @@ body.lp::after {
 }
 @media (prefers-reduced-motion: reduce) { .lp-faq summary::after { transition: none; } }
 /* past the film, the bar gets a solid backing, so the details don't run under it */
-.lp-bar { transition: background-color .3s, border-color .3s; border-bottom: 1px solid transparent; }
-.lp-bar.solid { background: var(--ink); border-bottom-color: rgba(246, 240, 228, .1); }
+.lp-bar { transition: background-color .3s, box-shadow .3s; }
+.lp-bar.solid { background: var(--ink); box-shadow: 0 1px 0 rgba(246, 240, 228, .1); }
 /* the front page is a film: no scrollbar (the line along the top shows how far you are); scrolling works as usual */
 html:has(body.lp) { scrollbar-width: none; }
 html:has(body.lp)::-webkit-scrollbar, body.lp::-webkit-scrollbar { display: none; width: 0; height: 0; }
