@@ -288,7 +288,7 @@ function mountScrollWorld(container, config) {
       // cur keeps lerping, so we snap to the latest target the moment it's free.
       if (s.video.seeking) continue;
       if (!s.visible && Math.abs(s.cur - s.target) < 0.002) continue;
-      s.cur += (s.target - s.cur) * (reduce ? 1 : 0.18);
+      s.cur += (s.target - s.cur) * (reduce ? 1 : 0.1);  // TipPool: a softer follow (was 0.18)
       const dur = s.video.duration || 1;
       const t = clamp(s.cur, 0, 0.999) * dur;
       if (Math.abs(s.video.currentTime - t) > eps) { try { s.video.currentTime = t; } catch (e) {} }

@@ -19,7 +19,7 @@
     };
   });
   window.mountScrollWorld(world, {
-    nav: false, atmosphere: true, hint: "scroll", diveScroll: 1.2, crossfade: 0.18, sections,
+    nav: false, atmosphere: true, hint: "scroll", diveScroll: 2.4, crossfade: 0.3, sections,
   });
   // the first chapter's title is the page's main heading
   const first = world.querySelector(".sw-copy__title");
