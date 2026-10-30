@@ -225,3 +225,12 @@ html:has(body.lp)::-webkit-scrollbar, body.lp::-webkit-scrollbar { display: none
   .sw-btn--primary { padding-right: 12px; }
   .sw-btn--primary::before, .sw-btn--primary::after { display: none; }
 }
+/* phones: the scene's frames are drawn on a canvas, exactly where the still and the video sit */
+.sw-scene__canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; display: block; }
+/* wider screens: Try the demo across the full width, Sign up and Log in under it as two equal halves */
+@media (min-width: 861px) {
+  .sw-copy__cta, .lp-end-go { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 440px); }
+  .sw-copy__cta > form, .lp-end-go > form, .sw-copy__cta > .lp-more { grid-column: 1 / -1; }
+  .sw-copy__cta .sw-btn, .lp-end-go .sw-btn { width: 100%; }
+  .lp-end-go { margin-inline: auto; }
+}

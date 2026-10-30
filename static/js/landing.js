@@ -11,7 +11,8 @@
     const d = li.dataset;
     return {
       id: `chapter-${i + 1}`, label: d.label, accent: d.accent,
-      still: d.still, stillMobile: d.stillM, clip: d.clip, clipMobile: d.clipM,
+      still: d.still, stillMobile: d.stillM, clip: d.clip,
+      seqBase: d.seq, seqCount: d.seqN ? Number(d.seqN) : 0,  // phones: still frames instead of the video
       eyebrow: d.eyebrow, title: li.querySelector("h1, h2").textContent, body: li.querySelector("p").textContent,
       tags: d.tags ? d.tags.split("|") : [],
       scroll: d.scroll ? Number(d.scroll) : undefined, linger: d.linger ? Number(d.linger) : undefined,

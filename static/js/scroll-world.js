@@ -91,6 +91,7 @@ function mountScrollWorld(container, config) {
   const SEGMENTS = [];
   SECTIONS.forEach((s, i) => {
     const dive = { kind: 'dive', si: i, clip: s.clip, clipM: s.clipMobile, still: s.still, stillM: s.stillMobile,
+                   seqBase: s.seqBase, seqCount: s.seqCount,
                    accent: s.accent, w: s.scroll || DIVE_W, linger: s.linger || 0 };
     SEGMENTS.push(dive);
     s._seg = dive;
@@ -139,6 +140,10 @@ function mountScrollWorld(container, config) {
 
   [sky, scrollbar, topbar, stage, copylayer, route, hint, track].forEach(n => container.appendChild(n));
 
+  // TipPool: phones (and narrow windows) scrub through still frames instead of seeking a video. Seeking a video
+  // is slow and asynchronous on phones, which made the film lag and stutter; a frame that's already loaded
+  // draws at once, and two neighbouring frames are blended, so the motion stays smooth between them.
+  const USE_SEQ = isMobile();
   // segment scenes
   SEGMENTS.forEach(s => {
     const scene = el('div', 'sw-scene'); scene.style.setProperty('--sw-accent', s.accent || '');
@@ -148,6 +153,12 @@ function mountScrollWorld(container, config) {
     scene.appendChild(img); stage.appendChild(scene);
     s.el = scene; s.img = img; s.video = null; s.hasClip = false;
     s.loading = false; s.ready = false; s.cur = 0; s.target = 0; s.visible = false;
+    // TipPool: on phones a scene plays from still frames on a canvas instead of a video (see loadSeq)
+    if (USE_SEQ && s.seqBase && s.seqCount) {
+      const canvas = el('canvas', 'sw-scene__canvas');
+      scene.appendChild(canvas);
+      s.seq = { canvas, ctx: canvas.getContext('2d'), n: s.seqCount, imgs: new Array(s.seqCount), drawn: '' };
+    }
   });
 
   // per-section copy / route / nav
@@ -205,7 +216,60 @@ function mountScrollWorld(container, config) {
     window.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
   }
 
+  // Load a scene's frames coarse to fine (every 8th, then every 4th, ...), a few at a time, so a scene can
+  // already move on its first handful of frames while the rest arrive.
+  function loadSeq(s) {
+    if (reduce || s.loading) return;
+    s.loading = true;
+    const q = s.seq, order = [], seen = new Set();
+    [8, 4, 2, 1].forEach(step => { for (let i = 0; i < q.n; i += step) if (!seen.has(i)) { seen.add(i); order.push(i); } });
+    if (!seen.has(q.n - 1)) order.splice(1, 0, q.n - 1);
+    let next = 0;
+    const one = () => {
+      if (next >= order.length) return;
+      const i = order[next++], im = new Image();
+      im.decoding = 'async';
+      im.onload = () => {
+        const done = () => { q.imgs[i] = im; q.drawn = ''; if (!s.ready) { s.ready = true; s.hasClip = true; } one(); };
+        if (im.decode) im.decode().then(done, done); else done();
+      };
+      im.onerror = one;
+      im.src = s.seqBase + String(i + 1).padStart(2, '0') + '.webp';
+    };
+    for (let k = 0; k < 4; k++) one();
+  }
+
+  function drawSeq(s) {
+    const q = s.seq, c = q.canvas;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+    if (!w || !h) return;
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; q.drawn = ''; }
+    const p = clamp(s.cur, 0, 1) * (q.n - 1);
+    let a = Math.floor(p), b = Math.ceil(p);
+    while (a > 0 && !q.imgs[a]) a--;
+    while (b < q.n - 1 && !q.imgs[b]) b++;
+    if (!q.imgs[a]) a = b;
+    if (!q.imgs[b]) b = a;
+    if (!q.imgs[a]) return;
+    const mix = b > a ? (p - a) / (b - a) : 0;
+    const key = a + ':' + b + ':' + mix.toFixed(3) + ':' + w + 'x' + h;
+    if (key === q.drawn) return;
+    q.drawn = key;
+    const cover = (im, alpha) => {
+      const sc = Math.max(w / im.naturalWidth, h / im.naturalHeight);
+      const dw = im.naturalWidth * sc, dh = im.naturalHeight * sc;
+      q.ctx.globalAlpha = alpha;
+      q.ctx.drawImage(im, (w - dw) / 2, (h - dh) * 0.46, dw, dh);
+    };
+    cover(q.imgs[a], 1);
+    if (mix > 0.001 && b !== a) cover(q.imgs[b], mix);
+    q.ctx.globalAlpha = 1;
+    if (!s.el.classList.contains('has-clip')) s.el.classList.add('has-clip');
+  }
+
   function loadClip(s) {
+    if (s.seq) { loadSeq(s); return; }
     // Under prefers-reduced-motion we never load the clips at all — the stills stay up
     // and simply cross-dissolve as you scroll. No scrubbed video motion, no decode cost.
     if (reduce || s.loading || !s.clip) return;
@@ -293,13 +357,13 @@ function mountScrollWorld(container, config) {
     const frame = isMobile() ? 1 / 20 : 1 / 30;        // the clips' own frame rate (phones get 20fps encodes)
     for (let i = 0; i < NSEG; i++) {
       const s = SEGMENTS[i];
-      if (!s.hasClip || !s.ready || !s.video) continue;
+      if (!s.hasClip || !s.ready || !(s.video || s.seq)) continue;
       // Never queue a seek while the decoder is still resolving the last one.
       // On phones a fast flick would otherwise pile up seeks and freeze the clip;
       // cur keeps easing, so we snap to the latest target the moment it's free.
-      if (s.video.seeking) continue;
+      if (s.video && s.video.seeking) continue;
       if (!s.visible && Math.abs(s.cur - s.target) < 0.002) continue;
-      const dur = s.video.duration || 1;
+      const dur = s.seq ? s.seq.n / 20 : (s.video.duration || 1);  // a sequence plays as 20 frames a second
       if (!s.visible) s.cur = s.target;  // off screen: be on the right frame already when it fades in
       // ease in, but never slower than the clip's own speed: the end plays into its stop like a video slowing
       // down to normal speed, instead of stepping one frame at a time in slow motion
@@ -308,6 +372,11 @@ function mountScrollWorld(container, config) {
       if (Math.abs(step) < minStep) step = Math.sign(diff) * Math.min(Math.abs(diff), minStep);
       if (!reduce && Math.abs(step) > maxStep) step = Math.sign(diff) * maxStep;
       s.cur += step;
+      if (s.seq) {
+        if (Math.abs(s.target - s.cur) * dur < 0.01) s.cur = s.target;  // blended, so it can land exactly
+        if (s.visible) drawSeq(s);
+        continue;
+      }
       if (Math.abs(s.target - s.cur) * dur < frame / 2) s.cur = s.target;
       const t = Math.min(dur * 0.999, Math.round(clamp(s.cur, 0, 0.999) * dur / frame) * frame);
       if (Math.abs(s.video.currentTime - t) >= frame / 2) { try { s.video.currentTime = t; } catch (e) {} }
