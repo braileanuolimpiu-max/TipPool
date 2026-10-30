@@ -5,7 +5,7 @@ attribution required. The originals:
   2-clockin  https://www.pexels.com/video/a-barista-putting-on-her-apron-8426095/
   3-tip      https://www.pexels.com/video/a-customer-doing-a-cashless-payment-at-a-cafe-6683943/
   4-split    https://www.pexels.com/video/nightclub-bartender-pouring-evening-cocktail-32054975/
-  5-agent    https://www.pexels.com/video/a-man-using-smartphone-while-drinking-at-the-bar-counter-7426378/
+  5-agent    https://www.pexels.com/video/woman-sitting-in-restaurant-and-using-smart-phone-10238035/
   6-paid     https://www.pexels.com/video/woman-smiling-while-using-her-mobile-phone-4391503/
   7-close    https://www.pexels.com/video/a-woman-removing-her-apron-after-shift-8441757/
 These clips are not covered by TipPool's MIT license.
