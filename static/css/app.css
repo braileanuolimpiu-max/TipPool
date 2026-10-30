@@ -1639,8 +1639,6 @@ html:has(.login) { scrollbar-gutter: auto; }
   .login .right { padding-block: 6px; }
   .login .right > form.signup > div:has(#password) { display: block; }
 }
-/* big screens: the account pages grow with the screen (the words, the receipt, its fields), instead of staying laptop-sized in
-   a sea of photo; each step only applies when the screen is also tall enough for the grown receipt to fit */
-@media (min-width: 1700px) and (min-height: 900px) { .login .left > *, .login .right > * { zoom: 1.15; } }
-@media (min-width: 2200px) and (min-height: 1150px) { .login .left > *, .login .right > * { zoom: 1.35; } }
-@media (min-width: 3000px) and (min-height: 1500px) { .login .left > *, .login .right > * { zoom: 1.7; } }
+/* the account pages never show a scrollbar; on an unusually short screen the page still scrolls by wheel, trackpad or touch */
+html:has(.login) { scrollbar-width: none; }
+html:has(.login)::-webkit-scrollbar, body:has(.login)::-webkit-scrollbar { display: none; width: 0; height: 0; }

@@ -371,3 +371,38 @@ document.querySelectorAll("input[data-find]").forEach((input) => {
   });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });  // never submits the roster
 });
+
+/* Account pages (sign-in, sign-up, ...) on wider screens: the words and the receipt are sized to the window.
+   Measured at their natural size, then zoomed so everything fits the window's height (a short laptop window,
+   Windows display scaling) and grows on big screens; phones keep their own layout, which scrolls if it must. */
+(() => {
+  const page = document.querySelector(".login");
+  if (!page) return;
+  const left = page.querySelector(".left"), right = page.querySelector(".right");
+  if (!left || !right) return;
+  const parts = () => [...left.children, ...right.children];
+  const px = (v) => parseFloat(v) || 0;
+  const needed = (box) => {  // the height this column's contents take at their natural size
+    const cs = getComputedStyle(box), kids = [...box.children].filter((c) => getComputedStyle(c).display !== "none");
+    let h = px(cs.paddingTop) + px(cs.paddingBottom) + Math.max(0, kids.length - 1) * px(cs.rowGap);
+    kids.forEach((c) => { const m = getComputedStyle(c); h += c.getBoundingClientRect().height + px(m.marginTop) + px(m.marginBottom); });
+    return h;
+  };
+  const fit = () => {
+    parts().forEach((el) => { el.style.zoom = ""; });
+    if (window.innerWidth <= 860) return;
+    const tall = Math.max(needed(left), needed(right));
+    let z = (window.innerHeight * 0.98) / tall;                                   // what fits the height
+    const grow = window.innerWidth >= 1700 ? 1 + (window.innerWidth - 1600) / 2200 : 1;
+    const card = right.firstElementChild;
+    const roomAcross = card ? (right.clientWidth - 40) / card.getBoundingClientRect().width : 2;
+    z = Math.max(0.6, Math.min(z, grow, roomAcross, 1.7));
+    if (Math.abs(z - 1) < 0.01) return;
+    parts().forEach((el) => { el.style.zoom = z.toFixed(3); });
+  };
+  let queued = false;
+  const later = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; fit(); }); } };
+  fit();
+  window.addEventListener("resize", later);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+})();
