@@ -287,8 +287,10 @@ function mountScrollWorld(container, config) {
   function raf(now) {
     const dt = lastNow ? Math.min(100, now - lastNow) : 16;
     lastNow = now;
-    const k = reduce ? 1 : 1 - Math.exp(-dt / 110);   // about 90% of the way in a quarter of a second
-    const frame = isMobile() ? 1 / 15 : 1 / 30;        // coarser steps on phones = fewer decodes
+    const k = reduce ? 1 : 1 - Math.exp(-dt / 150);   // about 90% of the way in a third of a second
+    const maxSpeed = 4;                                // a big, fast scroll catches up at most this many times
+                                                       // the clip's own speed, instead of racing through it
+    const frame = isMobile() ? 1 / 20 : 1 / 30;        // the clips' own frame rate (phones get 20fps encodes)
     for (let i = 0; i < NSEG; i++) {
       const s = SEGMENTS[i];
       if (!s.hasClip || !s.ready || !s.video) continue;
@@ -298,11 +300,13 @@ function mountScrollWorld(container, config) {
       if (s.video.seeking) continue;
       if (!s.visible && Math.abs(s.cur - s.target) < 0.002) continue;
       const dur = s.video.duration || 1;
+      if (!s.visible) s.cur = s.target;  // off screen: be on the right frame already when it fades in
       // ease in, but never slower than the clip's own speed: the end plays into its stop like a video slowing
       // down to normal speed, instead of stepping one frame at a time in slow motion
-      const diff = s.target - s.cur, minStep = (dt / 1000) / dur;
+      const diff = s.target - s.cur, minStep = (dt / 1000) / dur, maxStep = minStep * maxSpeed;
       let step = diff * k;
       if (Math.abs(step) < minStep) step = Math.sign(diff) * Math.min(Math.abs(diff), minStep);
+      if (!reduce && Math.abs(step) > maxStep) step = Math.sign(diff) * maxStep;
       s.cur += step;
       if (Math.abs(s.target - s.cur) * dur < frame / 2) s.cur = s.target;
       const t = Math.min(dur * 0.999, Math.round(clamp(s.cur, 0, 0.999) * dur / frame) * frame);

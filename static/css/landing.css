@@ -180,3 +180,48 @@ html:has(body.lp)::-webkit-scrollbar, body.lp::-webkit-scrollbar { display: none
 /* no "02 / 07" counter over each chapter */
 .sw-copy__num { display: none; }
 .sw-copy__eyebrow { margin-top: 0; }
+/* a scene's still sits exactly where its video will: the engine zoomed and shifted it while the video loaded,
+   so on a phone (where videos arrive later) the picture jumped when the video took over */
+.sw-scene__still { transform: none !important; }
+
+/* ---------- the buttons: a ticket and a viewfinder ---------- */
+/* Try the demo is an admission ticket: notches on both sides, a perforated stub with the arrow */
+.sw-btn { position: relative; gap: 12px; min-height: 52px; padding: 0 26px; justify-content: center; text-decoration: none;
+  transition: transform .15s ease, background-color .2s, background-size .25s ease; }
+.sw-btn:active { transform: translateY(1px); }
+.sw-btn--primary {
+  background: var(--hot); color: var(--ink); padding-right: 70px;
+  -webkit-mask: radial-gradient(circle 7px at 0 50%, #0000 97%, #000) left / 51% 100% no-repeat,
+                radial-gradient(circle 7px at 100% 50%, #0000 97%, #000) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle 7px at 0 50%, #0000 97%, #000) left / 51% 100% no-repeat,
+        radial-gradient(circle 7px at 100% 50%, #0000 97%, #000) right / 51% 100% no-repeat;
+}
+.sw-btn--primary::after { content: ""; position: absolute; right: 50px; top: 9px; bottom: 9px; border-left: 2px dotted rgba(7, 6, 10, .4); }
+.sw-btn--primary::before { content: "→"; position: absolute; right: 19px; top: 50%; translate: 0 -52%; font: 500 1.05rem var(--mono);
+  transition: transform .2s ease; }
+.sw-btn--primary:hover { background: #ffe37a; }
+.sw-btn--primary:hover::before { transform: translateX(3px); }
+
+/* Sign up and Log in are a camera viewfinder: four corner marks that close in on hover */
+.sw-btn--ghost {
+  --c: rgba(246, 240, 228, .85); --l: 12px; border: 0; color: var(--cream);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / var(--l) 1.5px no-repeat, linear-gradient(var(--c), var(--c)) top left / 1.5px var(--l) no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / var(--l) 1.5px no-repeat, linear-gradient(var(--c), var(--c)) top right / 1.5px var(--l) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / var(--l) 1.5px no-repeat, linear-gradient(var(--c), var(--c)) bottom left / 1.5px var(--l) no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / var(--l) 1.5px no-repeat, linear-gradient(var(--c), var(--c)) bottom right / 1.5px var(--l) no-repeat,
+    rgba(7, 6, 10, .38);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.sw-btn--ghost:hover { --c: var(--hot); --l: 18px; color: #fff; }
+
+/* phones: Try the demo and Sign up side by side at the same width, Log in under them */
+@media (max-width: 860px) {
+  .sw-copy__cta, .lp-end-go { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sw-copy__cta > *, .lp-end-go > * { min-width: 0; }
+  .sw-copy__cta form .sw-btn, .lp-end-go form .sw-btn, .sw-copy__cta .sw-btn, .lp-end-go .sw-btn { width: 100%; }
+  .sw-copy__cta > a:nth-of-type(2), .lp-end-go > a:nth-of-type(2), .sw-copy__cta > .lp-more { grid-column: 1 / -1; }
+  .sw-btn { padding: 0 12px; font-size: .76rem; letter-spacing: .1em; }
+  .sw-btn--primary { padding-right: 12px; }
+  .sw-btn--primary::before, .sw-btn--primary::after { display: none; }
+}

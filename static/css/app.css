@@ -1524,3 +1524,49 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
 .auth-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .auth-home { font-size: .9rem; color: var(--graphite); text-decoration: underline; text-underline-offset: 3px; }
 .auth-home:hover { color: var(--ink); }
+
+/* sign-in, sign-up and the other account pages on wider screens: the left side is a photo of a shift starting,
+   with the words and the tip-out sheet on its dark side (phones keep the plain panel and skip the download) */
+@media (min-width: 861px) {
+  .login .left, :root[data-theme="dark"] .login .left {
+    position: relative; isolation: isolate; color: #f6f0e4;
+    background: #0b1512 url("../img/auth-shift.webp") right center / cover no-repeat;
+  }
+  .login .left::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(100deg, rgba(7, 10, 9, .9) 0%, rgba(7, 10, 9, .7) 38%, rgba(7, 10, 9, .15) 70%, rgba(7, 10, 9, 0) 100%),
+                linear-gradient(0deg, rgba(7, 10, 9, .55), rgba(7, 10, 9, 0) 35%); }
+  .login .left h1 { color: #f6f0e4; text-shadow: 0 2px 24px rgba(0, 0, 0, .45); }
+  .login .left p, .login .left .legal-links a { color: rgba(246, 240, 228, .82); }
+  .login .left .brand, .login .left .brand b { color: #f6f0e4; }
+  .login .left .auth-home { color: rgba(246, 240, 228, .85); }
+  .login .left .auth-home:hover { color: #fff; }
+  .login .left .receipt { box-shadow: 0 24px 60px rgba(0, 0, 0, .5); }
+  .login .left .receipt p { color: var(--graphite); text-shadow: none; }
+}
+
+/* sign-in and the other account pages on phones: a slim strip with the name and the way home, then the form
+   fills the screen (no tall grey block to scroll past); privacy and terms sit at the very bottom */
+@media (max-width: 860px) {
+  .login { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+  .login .left { display: contents; }
+  .login .left > div:not(.auth-top), .login .left .receipt-wrap { display: none; }
+  .login .auth-top { order: 0; padding: 14px 18px; color: #f6f0e4;
+    background: linear-gradient(90deg, rgba(7, 10, 9, .94), rgba(7, 10, 9, .6)), #0b1512 url("../img/auth-shift.webp") 70% 22% / cover no-repeat; }
+  .login .auth-top .brand, .login .auth-top .brand b { color: #f6f0e4; }
+  .login .auth-top .auth-home { color: rgba(246, 240, 228, .85); }
+  .login .right { order: 1; flex: 1; padding: 22px 16px; }
+  .login .left .legal-links { order: 2; justify-content: center; padding: 6px 18px calc(16px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 860px) {
+  .login .right { padding: 12px 16px; place-items: start center; }
+  .login .right form.stack > * + * { margin-top: 12px; }
+  .login .right h2 { margin: 6px 0 0; }
+  .login .demo-box { margin-top: 12px; padding: 12px 14px; gap: 8px; }
+}
+/* short phones (an iPhone SE): the demo box keeps its button and the staff link, not the explanation */
+@media (max-width: 860px) and (max-height: 700px) {
+  .login .demo-box > div .small { display: none; }
+  .login .right form.stack > * + * { margin-top: 10px; }
+}
+.auth-home-short { display: none; }
+@media (max-width: 400px) { .auth-home-long { display: none; } .auth-home-short { display: inline; } }

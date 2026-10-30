@@ -1,7 +1,7 @@
 {% load static %}  <div class="left">
     <div class="auth-top">
       <a class="brand" href="{% url 'dashboard' %}"><img class="brand-mark" src="{% static 'icons/tippool.svg' %}" alt=""><b>TipPool</b></a>
-      <a class="auth-home" href="{% url 'dashboard' %}">← Back to the home page</a>
+      <a class="auth-home" href="{% url 'dashboard' %}">← <span class="auth-home-long">Back to the home page</span><span class="auth-home-short">Home</span></a>
     </div>
     <div>
       <h1>Tip-outs, done before the end of the shift.</h1>
