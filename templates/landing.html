@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>TipPool | Tip pooling with PayPal and AI</title>
   <meta name="description" content="Guests tip by QR with PayPal or Venmo. AI turns your house rules into an exact, explained split. One PayPal payout pays the whole team.">
   <meta name="theme-color" content="#07060a">
@@ -11,128 +11,82 @@
   <link rel="apple-touch-icon" href="{% static 'icons/icon-180.png' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/scroll-world.css' %}">
   <link rel="stylesheet" href="{% static 'css/landing.css' %}">
+  <link rel="preload" as="image" href="{% static 'landing/1-night.webp' %}">
   <script nonce="{{ csp_nonce }}">document.documentElement.classList.add("js");</script>
-  <script nonce="{{ csp_nonce }}" src="{% static 'js/receipt.js' %}" defer></script>
+  <script nonce="{{ csp_nonce }}" src="{% static 'js/scroll-world.js' %}" defer></script>
+  <script nonce="{{ csp_nonce }}" src="{% static 'js/landing.js' %}" defer></script>
 </head>
-<body class="rc">
-<canvas class="rc-smoke" id="rc-smoke" aria-hidden="true"></canvas>
-<div class="rc-grain" aria-hidden="true"></div>
-
-<header class="rc-bar">
-  <a class="rc-brand" href="{% url 'dashboard' %}" aria-label="TipPool home"><img src="{% static 'icons/tippool.svg' %}" alt=""><em>TipPool</em></a>
-  <nav class="rc-ways" aria-label="Ways in">
+<body class="lp">
+<header class="lp-bar">
+  <a class="lp-brand" href="{% url 'dashboard' %}" aria-label="TipPool home"><img src="{% static 'icons/tippool.svg' %}" alt=""><em>TipPool</em></a>
+  <nav class="lp-ways" aria-label="Ways in">
     <a href="{% url 'login' %}">Log in</a>
     <a href="{% url 'signup' %}">Sign up</a>
     <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button>Try the demo</button></form>
   </nav>
 </header>
 
-<main class="rc-stage">
-  <article class="rc-paper" aria-label="Tonight's tip-out, as a receipt">
-    <header class="rc-head">
-      <p class="rc-shop">TIPPOOL<small>tip pooling with PayPal and AI</small></p>
-      <p class="rc-meta"><span>LUNA BISTRO · 14 HARBOUR ST</span><span>FRI NIGHT SHIFT · 23:58</span></p>
-      <h1>Tip-outs, <em>done</em> before the lights go&nbsp;off.</h1>
-      <p class="rc-lede">Guests tip by QR with PayPal or Venmo. AI splits it by your house rules, to the cent, and says why. One PayPal payout pays the whole team.</p>
-      <div class="rc-cta">
-        <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="rc-print-btn">▶ Try the demo</button></form>
-        <a href="{% url 'signup' %}">or sign up, free</a>
+<main>
+  <div id="world" class="lp-world"></div>
+
+  {# The film's chapters. With scripts on, landing.js turns them into the scroll film; without, they're the page. #}
+  <ol class="lp-chapters" id="lp-chapters">
+    <li data-label="Tonight" data-accent="#ffd84a"
+        data-still="{% static 'landing/1-night.webp' %}" data-still-m="{% static 'landing/1-night-m.webp' %}"
+        data-clip="{% static 'landing/1-night.mp4' %}" data-clip-m="{% static 'landing/1-night-m.mp4' %}"
+        data-eyebrow="Friday, 23:58 · Luna Bistro" data-tags="PayPal|Venmo|AI" data-scroll="1.4">
+      <img src="{% static 'landing/1-night.webp' %}" alt="A bartender closing up by candlelight">
+      <h1>Tip-outs, done before the lights go off.</h1>
+      <p>Guests tip by QR, AI splits it by your house rules, and one PayPal payout pays the whole team.</p>
+    </li>
+    <li data-label="Guests tip" data-accent="#7aa2ff"
+        data-still="{% static 'landing/2-tip.webp' %}" data-still-m="{% static 'landing/2-tip-m.webp' %}"
+        data-clip="{% static 'landing/2-tip.mp4' %}" data-clip-m="{% static 'landing/2-tip-m.mp4' %}"
+        data-eyebrow="01 · Guests tip" data-tags="PayPal Orders v2|Venmo|7 languages">
+      <img src="{% static 'landing/2-tip.webp' %}" alt="A guest scanning a QR code with a phone">
+      <h2>A QR code on every table.</h2>
+      <p>Guests tip with PayPal or Venmo, in their own language. No app, no account.</p>
+    </li>
+    <li data-label="The split" data-accent="#ff9e3d"
+        data-still="{% static 'landing/3-split.webp' %}" data-still-m="{% static 'landing/3-split-m.webp' %}"
+        data-clip="{% static 'landing/3-split.mp4' %}" data-clip-m="{% static 'landing/3-split-m.mp4' %}"
+        data-eyebrow="02 · The split" data-tags="Rules in plain words|Exact cents|Every share explained" data-linger="0.3">
+      <img src="{% static 'landing/3-split.webp' %}" alt="A bartender pouring a drink under neon light">
+      <h2>Your rules, in plain words. Split to the cent.</h2>
+      <p>“Bar gets 20%, bussers 10%, servers by hours.” The AI reads it; the money is counted in code, and every share says why.</p>
+    </li>
+    <li data-label="Payout" data-accent="#7ee0a3"
+        data-still="{% static 'landing/4-paid.webp' %}" data-still-m="{% static 'landing/4-paid-m.webp' %}"
+        data-clip="{% static 'landing/4-paid.mp4' %}" data-clip-m="{% static 'landing/4-paid-m.mp4' %}"
+        data-eyebrow="03 · The payout" data-tags="PayPal Payouts|Render Workflows|Never paid twice" data-linger="0.3">
+      <img src="{% static 'landing/4-paid.webp' %}" alt="A server smiling at her phone">
+      <h2>One payout pays everyone.</h2>
+      <p>One PayPal batch, checked first. It runs as a Render Workflow that retries on its own, never pays twice, and shows each person's money land.</p>
+    </li>
+    <li data-label="Your turn" data-accent="#ffd84a"
+        data-still="{% static 'landing/5-close.webp' %}" data-still-m="{% static 'landing/5-close-m.webp' %}"
+        data-clip="{% static 'landing/5-close.mp4' %}" data-clip-m="{% static 'landing/5-close-m.mp4' %}"
+        data-eyebrow="04 · Closing time" data-cta="#lp-go" data-scroll="1.5">
+      <img src="{% static 'landing/5-close.webp' %}" alt="Chairs up on the tables at closing time">
+      <h2>See a whole shift paid out in two minutes.</h2>
+      <p>Try the demo with PayPal sandbox money. No sign-up, nothing to install.</p>
+      <div class="lp-go-static">
+        <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="sw-btn sw-btn--primary">Try the demo</button></form>
+        <a class="sw-btn sw-btn--ghost" href="{% url 'signup' %}">Sign up</a>
+        <a class="sw-btn sw-btn--ghost" href="{% url 'login' %}">Log in</a>
       </div>
-      <p class="rc-dim">No sign-up for the demo · PayPal sandbox money only</p>
-      <p class="rc-feed" aria-hidden="true">▼ scroll to print tonight's tip-out ▼</p>
-    </header>
+    </li>
+  </ol>
 
-    <section class="rc-sec" aria-labelledby="rc-s1">
-      <h2 class="rc-p" id="rc-s1"><span>01</span>Guests tip</h2>
-      <p class="rc-note rc-note-r">A QR code on every table. Guests tip with PayPal or Venmo, in their own language. No app, no account.</p>
-      <ul class="rc-lines">
-        <li class="rc-p"><span>T4 · PAYPAL</span><b>24.00</b></li>
-        <li class="rc-p"><span>T7 · VENMO</span><b>18.60</b></li>
-        <li class="rc-p"><span>T12 · PAYPAL</span><b>42.00</b></li>
-        <li class="rc-p"><span>T2 · PAYPAL</span><b>31.00</b></li>
-        <li class="rc-p"><span>T9 · VENMO</span><b>33.00</b></li>
-        <li class="rc-p"><span>CARD MACHINE</span><b>86.40</b></li>
-        <li class="rc-p"><span>CASH JAR</span><b>31.50</b></li>
-      </ul>
-      <p class="rc-p rc-sum"><span>TIPS TONIGHT</span><b>$266.50</b></p>
-    </section>
-
-    <section class="rc-sec" aria-labelledby="rc-s2">
-      <h2 class="rc-p" id="rc-s2"><span>02</span>Split by your rules</h2>
-      <blockquote class="rc-p rc-rule">“Bar gets 20%, the busser 10%, servers split the rest by hours.”</blockquote>
-      <p class="rc-note rc-note-l">You write the rules in plain words. The AI reads them; the money itself is counted in code, to the cent, never by the AI.</p>
-      <ul class="rc-lines rc-people">
-        <li class="rc-p"><span>MARIA<i>server · 6h of 17.5</i></span><b>63.96</b></li>
-        <li class="rc-p"><span>LEA<i>server · 6h of 17.5</i></span><b>63.96</b></li>
-        <li class="rc-p"><span>JOHN<i>server · 5.5h of 17.5</i></span><b>58.63</b></li>
-        <li class="rc-p"><span>ALEX<i>bar · 20% of the pool</i></span><b>53.30</b></li>
-        <li class="rc-p"><span>SAM<i>busser · 10% of the pool</i></span><b>26.65</b></li>
-      </ul>
-      <p class="rc-p rc-sum rc-mark"><span>TO PAY OUT</span><b>$266.50</b></p>
-      <p class="rc-p rc-dim rc-center">266.50 IN = 266.50 OUT · ADDS UP ✓</p>
-    </section>
-
-    <section class="rc-sec" aria-labelledby="rc-s3">
-      <h2 class="rc-p" id="rc-s3"><span>03</span>One payout</h2>
-      <p class="rc-note rc-note-r">One PayPal batch pays the whole shift. It's checked before it's sent, and the same shift is never paid twice.</p>
-      <ul class="rc-lines">
-        <li class="rc-p"><span>PAYPAL PAYOUTS · BATCH 0412</span><b>5 PEOPLE</b></li>
-        <li class="rc-p"><span>CHECKED · NOT PAID BEFORE</span><b>OK</b></li>
-        <li class="rc-p"><span>MARIA · LEA · JOHN · ALEX · SAM</span><b>SENT</b></li>
-      </ul>
-      <p class="rc-stamp" aria-label="Paid via PayPal"><b>PAID</b><small>via PayPal · 23:59</small></p>
-    </section>
-
-    <section class="rc-sec" aria-labelledby="rc-s4">
-      <h2 class="rc-p" id="rc-s4"><span>04</span>Or just ask</h2>
-      <p class="rc-note rc-note-l">The agent does the shift for you, after you confirm once. It can stop a payout. It can never start one on its own.</p>
-      <p class="rc-p rc-ask">&gt; close out tonight, add $40 cash and pay everyone</p>
-      <ol class="rc-lines rc-plan">
-        <li class="rc-p"><span>1 · CLOSE OUT FRIDAY AND SPLIT IT</span></li>
-        <li class="rc-p"><span>2 · ADD $40.00 CASH, SHARED BY THE TEAM</span></li>
-        <li class="rc-p"><span>3 · PAY THE SHIFT THROUGH PAYPAL</span></li>
-      </ol>
-      <p class="rc-p rc-sum"><span>CONFIRM? [Y]</span><b>Y</b></p>
-      <p class="rc-p rc-sum"><span>✓ PAID 5 PEOPLE</span><b>$306.50</b></p>
-    </section>
-
-    <section class="rc-sec" aria-labelledby="rc-s5">
-      <h2 class="rc-p" id="rc-s5"><span>**</span>House rules of the machine</h2>
-      <ul class="rc-small">
-        <li class="rc-p">Amounts are counted in code, never by the AI.</li>
-        <li class="rc-p">The AI can stop a payout, never start one.</li>
-        <li class="rc-p">Every split adds up to the cent and shows its working.</li>
-        <li class="rc-p">Two-step sign-in, a strict security policy, and a history of every change.</li>
-      </ul>
-    </section>
-
-    <footer class="rc-end">
-      <p class="rc-p rc-bars" aria-hidden="true"></p>
-      <p class="rc-p rc-center">THANK YOU, TEAM.<br><span class="rc-dim">CUSTOMER COPY · KEEP FOR YOUR RECORDS</span></p>
-    </footer>
-
-    <div class="rc-tear" aria-hidden="true"></div>
-
-    <section class="rc-stub" aria-labelledby="rc-stub-title">
-      <p class="rc-dim">Your turn ✂</p>
-      <h2 id="rc-stub-title">See a whole shift <em>paid out</em> in two minutes.</h2>
-      <div class="rc-stub-go">
-        <form method="post" action="{% url 'demo_start' %}" id="rc-demo-end">{% csrf_token %}<button class="rc-print-btn">▶ Try the demo</button></form>
-        <a class="rc-line-btn" href="{% url 'signup' %}">Sign up</a>
-        <a class="rc-line-btn" href="{% url 'login' %}">Log in</a>
-      </div>
-      <p class="rc-dim">No sign-up for the demo · PayPal sandbox money only</p>
-    </section>
-  </article>
+  <template id="lp-go">
+    <form method="post" action="{% url 'demo_start' %}">{% csrf_token %}<button class="sw-btn sw-btn--primary">Try the demo</button></form>
+    <a class="sw-btn sw-btn--ghost" href="{% url 'signup' %}">Sign up</a>
+    <a class="sw-btn sw-btn--ghost" href="{% url 'login' %}">Log in</a>
+    <p class="lp-credits">Built for the PayPal AI hackathon · PayPal sandbox money only · video from Pexels · scroll engine: scroll-world (MIT)</p>
+  </template>
 </main>
-
-<div class="rc-slot" id="rc-slot" aria-hidden="true"><i></i><span>TIPPOOL · POS-80</span></div>
-
-<footer class="rc-foot">
-  <p>TipPool · built for the PayPal AI hackathon</p>
-  <p>PayPal sandbox money only</p>
-</footer>
 </body>
 </html>

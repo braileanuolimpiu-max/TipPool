@@ -116,9 +116,16 @@ else:
 RATELIMIT_ENABLED = not TESTING  # the rate-limit tests turn it on for themselves
 # how many proxies put the visitor's address into X-Forwarded-For (Render: 1); 0 = use the connection
 TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0" if (DEBUG or TESTING) else "1"))
-# Rate limits are counted in the cache, so every worker must share it: the database in production.
-CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}} if (DEBUG or TESTING) else {
-    "default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "tippool_cache"}}
+# Rate limits are counted in the cache, so every worker must share it: a Render Key Value store when there
+# is one (KEY_VALUE_URL, a redis:// link), otherwise the database.
+KEY_VALUE_URL = os.environ.get("KEY_VALUE_URL", "")
+if TESTING or (DEBUG and not KEY_VALUE_URL):
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+elif KEY_VALUE_URL:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": KEY_VALUE_URL,
+                          "KEY_PREFIX": "tippool", "OPTIONS": {"socket_connect_timeout": 3, "socket_timeout": 3}}}
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "tippool_cache"}}
 
 
 # Password validation
@@ -211,6 +218,10 @@ TIPPOOL_ENCRYPTION_KEY = os.environ.get("TIPPOOL_ENCRYPTION_KEY", "")
 if not TIPPOOL_ENCRYPTION_KEY and not (DEBUG or TESTING):
     raise ImproperlyConfigured("TIPPOOL_ENCRYPTION_KEY must be set in production. Make one with: "
                                "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"")
+# Render Workflows: payouts are sent and followed to the end by the workflow service in workflows/main.py.
+# Both are needed; without them a payout is sent right away by the web server, as before.
+RENDER_API_KEY = os.environ.get("RENDER_API_KEY", "")
+TIPPOOL_WORKFLOW_SLUG = os.environ.get("TIPPOOL_WORKFLOW_SLUG", "")
 # an outside scheduler calls /internal/tick/?key=CRON_SECRET every few minutes (close-outs, demo clean-up)
 CRON_SECRET = os.environ.get("CRON_SECRET", "")
 # shown on the privacy and terms pages

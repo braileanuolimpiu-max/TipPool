@@ -470,10 +470,12 @@ def split_fingerprint(shares):
     return hashlib.sha256("|".join(rows).encode()).hexdigest()[:24]
 
 
-def pay_night(night, allow_unconfirmed=False, by_owner=False, expected_split=None):
+def pay_night(night, allow_unconfirmed=False, by_owner=False, expected_split=None, send=True):
     """Send one PayPal Payouts batch with everyone's share.
     Not while the owner froze payouts; above the owner's limit only with the owner's OK.
-    `expected_split`: the split_fingerprint the manager confirmed; anything else isn't paid."""
+    `expected_split`: the split_fingerprint the manager confirmed; anything else isn't paid.
+    `send=False`: every check runs now, but the batch is only prepared; send_prepared() sends it
+    (from a Render Workflow, see payout_runs.py)."""
     business = business_of(night)
     check_not_frozen(business)
     total = over_limit(night, business)
@@ -531,7 +533,8 @@ def pay_night(night, allow_unconfirmed=False, by_owner=False, expected_split=Non
         night.status = Night.Status.PAYING
         night.hold = ""
         night.save()
-    _send_batch(batch, business, subject=f"Your tips for {night.date:%b %d}")
+    if send:
+        _send_batch(batch, business, subject=f"Your tips for {night.date:%b %d}")
     from .models import Alert
     Alert.objects.filter(business=business, key=f"owner-ok:{night.pk}", resolved_at__isnull=True) \
         .update(resolved_at=timezone.now(), resolved_by="Paid")  # the owner's OK isn't waiting any more
@@ -575,6 +578,36 @@ def _send_batch(batch, business, subject, replaces=None):
     batch.status = header["batch_status"]
     batch.save(update_fields=["paypal_batch_id", "status"])
     return batch
+
+
+def send_prepared(batch):
+    """Send a payout that pay_night(send=False) prepared, under a lock. Safe to call again and again (a
+    workflow retrying): once PayPal has answered nothing is sent, and before that it's the very same request
+    with the same id, which PayPal never pays twice. Returns None if the payout was undone meanwhile."""
+    with transaction.atomic():
+        batch = PayoutBatch.objects.select_for_update().filter(pk=batch.pk).select_related("night").first()
+        if batch is None or batch.paypal_batch_id or not batch.request_items:
+            return batch
+    # outside the transaction, so what PayPal answered is kept even when it's an error (undone, or unclear)
+    return _send_batch(batch, business_of(batch.night), subject=f"Your tips for {batch.night.date:%b %d}")
+
+
+def undo_unsent(batch):
+    """Take back a prepared payout before it was sent (payouts were frozen in the meantime): the shift goes
+    back to review, and a new id is used next time. False if it may have reached PayPal already."""
+    with transaction.atomic():
+        batch = PayoutBatch.objects.select_for_update().filter(pk=batch.pk).first()
+        if batch is None:
+            return True
+        if batch.paypal_batch_id or batch.status != "SENDING":
+            return False
+        night = Night.objects.select_for_update().get(pk=batch.night_id)
+        Night.objects.filter(pk=night.pk).update(payout_attempt=models.F("payout_attempt") + 1)
+        was_retry = batch.is_retry
+        batch.delete()
+        if not was_retry and night.status == Night.Status.PAYING:
+            Night.objects.filter(pk=night.pk).update(status=Night.Status.REVIEW)
+    return True
 
 
 def resend_payout(item, by_owner=False):

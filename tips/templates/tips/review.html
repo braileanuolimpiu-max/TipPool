@@ -10,6 +10,7 @@
   </div>
 </header>
 {% include "tips/_stepper.html" with step=2 %}
+{% if stopped_run %}{% with s=stopped_run.steps|last %}<div class="flash error"><strong>The last payout was stopped.</strong> {{ s.text }}</div>{% endwith %}{% endif %}
 
 {% if night.hold and "owner's OK" in night.hold %}<div class="flash warning"><strong>Waiting for the owner.</strong> {{ night.hold }}{% if user.manager.is_owner %} As the owner, you can pay it below.{% endif %}</div>{% endif %}
 {% if flags %}<div class="flash warning"><strong>Check before paying.</strong>

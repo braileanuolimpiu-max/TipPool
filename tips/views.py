@@ -23,8 +23,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, botcheck, guest_i18n, hours as hours_from, insights, platform, roles as role_presets, services
-from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, Role, Share,
+from . import ai, autoclose, botcheck, guest_i18n, hours as hours_from, insights, payout_runs, platform, roles as role_presets, services
+from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, PayoutRun, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, owner_required, two_step_setup_context
 from .check import blocking as check_blocking, live as check_live
@@ -1022,8 +1022,11 @@ def review(request, pk):
         except PayPalError:
             balance = None
     paid_total = sum((s.amount for s in shares), Decimal("0"))
+    # a payout the workflow had to stop (PayPal refused it, or payouts were frozen): say why, once back here
+    last_run = payout_runs.current_run(night) if night.status == Night.Status.REVIEW else None
+    stopped = last_run if last_run is not None and last_run.state == PayoutRun.State.STOPPED else None
     return render(request, "tips/review.html", {
-        "night": night, "shares": shares, "total": night.tip_total,
+        "night": night, "shares": shares, "total": night.tip_total, "stopped_run": stopped,
         "fees": night.fee_total, "fees_passed_on": passed_on, "to_share": night.tip_total - passed_on,
         "fee_mode": business.fee_mode, "balance": balance,
         "balance_short": balance is not None and balance < paid_total,
@@ -1048,12 +1051,13 @@ def pay(request, pk):
         messages.error(request, "The close-out check found things to look at. Tick \"I checked these\" to pay anyway.")
         return redirect("review", pk=pk)
     try:
-        services.pay_night(night, allow_unconfirmed=allow, by_owner=request.user.manager.is_owner)
+        payout_runs.pay(night, allow_unconfirmed=allow, by_owner=request.user.manager.is_owner)
         paid = sum((s.amount for s in night.shares.all()), Decimal("0"))
         Change.log(request, f"Paid the {night}: {request.business.symbol}{paid} to "
                             f"{night.shares.filter(amount__gt=0).count()} people"
                             + (" after checking: " + "; ".join(f["text"] for f in stops)[:150] if stops else ""))
-        messages.success(request, "Payout sent to PayPal.")
+        messages.success(request, "Payout started: a Render Workflow sends it to PayPal and follows it below."
+                         if payout_runs.enabled() else "Payout sent to PayPal.")
     except services.NeedsOwner as exc:
         Change.log(request, f"Asked the owner to approve paying the {night}")
         messages.warning(request, str(exc))
@@ -1104,10 +1108,13 @@ def payout_status(request, pk):
     items = (PayoutItem.objects.filter(batch__night=night).select_related("share__staff", "batch")
              .order_by("superseded", "-share__amount", "-pk"))
     paid = sum((i.share.amount for i in items if i.status == "SUCCESS" and not i.superseded), Decimal("0"))
+    run = payout_runs.current_run(night)
+    sending = run is not None and run.active and run.state != PayoutRun.State.FOLLOWING
     return render(request, "tips/payout_status.html", {
-        "night": night, "batch": batch, "items": items, "paid": paid,
+        "night": night, "batch": batch, "items": items, "paid": paid, "run": run,
         "sample": (batch.paypal_batch_id or "").startswith("DEMO"),
-        "unclear": any(services.needs_recheck(b) for b in night.payout_batches.all()),
+        # while a workflow is still sending it, "unclear" is just "on its way"
+        "unclear": not sending and any(services.needs_recheck(b) for b in night.payout_batches.all()),
         "unclear_old": [b for b in night.payout_batches.all() if services.needs_recheck(b)
                         and b.created_at <= timezone.now() - services.NOT_SENT_AFTER],
         "payout_fees": sum((i.fee for i in items), Decimal("0")),
@@ -1185,12 +1192,18 @@ def payout_action(request, pk):
 def payout_status_json(request, pk):
     night = get_object_or_404(Night, pk=pk, location=request.location)
     batch = getattr(night, "payout_batch", None)
+    run = payout_runs.current_run(night)
     if batch is None:
-        raise Http404
+        if run is None:
+            raise Http404
+        # a workflow stopped it before PayPal had it (refused or frozen): the page reloads to the review
+        return JsonResponse({"night_status": night.status, "settled": True, "run": payout_runs.live_status(run.pk)})
     from django.core.cache import cache
     for each in night.payout_batches.all():
         if (each.paypal_batch_id or "").startswith("DEMO"):
             continue  # sample history: nothing to ask PayPal about
+        if run is not None and run.active and run.on_render:
+            continue  # the workflow is asking PayPal already
         # however many pages are open, PayPal is asked about a batch at most every 15 seconds
         if not cache.add(f"batch-refresh:{each.pk}", 1, 15):
             continue
@@ -1204,6 +1217,7 @@ def payout_status_json(request, pk):
         "batch_status": batch.status, "night_status": night.status,
         "items": {str(i.pk): i.status for i in current},
         "settled": all(i.status in services.ITEM_DONE | services.ITEM_FAILED for i in current),
+        "run": payout_runs.live_status(run.pk) if run is not None else None,
     })
 
 

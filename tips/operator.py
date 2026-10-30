@@ -75,7 +75,28 @@ def platform_settings(request):
         "form": form,
         "https": request.is_secure(),
         "botcheck_on": bool(cfg.turnstile_site_key and cfg.turnstile_secret_encrypted),
+        "render": _render_status(),
     })
+
+
+def _render_status():
+    """What runs on Render: payouts through Render Workflows, the shared cache in a Render Key Value store."""
+    from django.conf import settings
+    from django.core.cache import cache
+
+    from . import payout_runs
+    from .models import PayoutRun
+    key_value = bool(settings.KEY_VALUE_URL)
+    reachable = False
+    if key_value:
+        try:
+            cache.set("platform-ping", 1, 30)
+            reachable = cache.get("platform-ping") == 1
+        except Exception:
+            reachable = False
+    return {"workflows_on": payout_runs.enabled(), "slug": settings.TIPPOOL_WORKFLOW_SLUG,
+            "key_value": key_value, "key_value_ok": reachable,
+            "runs": list(PayoutRun.objects.select_related("night__location")[:5])}
 
 
 @require_POST

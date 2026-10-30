@@ -16,7 +16,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from . import check, hours, services
+from . import check, hours, payout_runs, services
 from .alerts import raise_alert
 from .models import Change, CloseTime, Location, Night, Tip, TipRuleSet
 from .paypal import PayPalError
@@ -125,7 +125,7 @@ def pay_after_review(location, now):
             results.append(f"{night}: held, {stops[0]['text']}")
             continue
         try:
-            services.pay_night(night)
+            payout_runs.pay(night)
             results.append(f"{night}: paid after the review window")
         except services.PayoutsFrozen:
             break
@@ -222,7 +222,7 @@ def split_and_pay(night, location, needs_check, pay=True):
         return f"{night}: closed and split; pays in {location.review_minutes} minutes unless someone flags a problem"
     if location.after_close == Location.AfterClose.PAY:
         try:
-            services.pay_night(night)
+            payout_runs.pay(night)
             return f"{night}: closed, split and paid automatically"
         except services.PayoutsFrozen:
             return f"{night}: closed and split; payouts are frozen, so it waits"

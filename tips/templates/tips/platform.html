@@ -11,6 +11,7 @@
   <a href="#ai" class="{% if ai_on %}ok{% endif %}"><b>AI</b><span>{% if ai_on %}{{ ai_name }} is on{% else %}Built-in assistant{% endif %}</span></a>
   <a href="#paypal" class="{% if paypal_on %}ok{% endif %}"><b>TipPool's PayPal</b><span>{% if paypal_on %}{% if cfg.paypal_live %}Real money{% else %}Test money{% endif %}{% else %}Not connected{% endif %}</span></a>
   <a href="#scheduler" class="{% if minutes_since_tick is not None and minutes_since_tick < 45 %}ok{% endif %}"><b>Scheduler</b><span>{% if minutes_since_tick is None %}Never checked in{% elif minutes_since_tick < 2 %}Checked in just now{% else %}Last check-in {{ minutes_since_tick }} min ago{% endif %}</span></a>
+  <a href="#render" class="{% if render.workflows_on %}ok{% endif %}"><b>Render</b><span>{% if render.workflows_on %}Workflows on{% if render.key_value_ok %} · Key Value{% endif %}{% else %}Plain web server{% endif %}</span></a>
 </section>
 
 <div class="stack st-11">
@@ -164,8 +165,31 @@
   </div>
 </section>
 
+<section class="panel setting" id="render">
+  <div class="setting-intro"><span class="setting-no">06</span><h2>Render</h2>
+    <p>Payouts run as Render Workflows: sending and following a payout are tasks that retry on their own if PayPal or the network fails, and each step shows live on the payout page. The cache (sign-in limits, live payout steps) is a Render Key Value store shared by every server.</p>
+    {% if render.workflows_on %}<span class="pill ok">Workflows on</span>{% else %}<span class="pill wait">Not set up</span>{% endif %}</div>
+  <div class="setting-body stack">
+    <dl class="kv">
+      <div><dt>Render Workflows</dt><dd>{% if render.workflows_on %}On: <code>{{ render.slug }}/pay_shift</code>{% else %}Off: payouts are sent by the web server right away{% endif %}</dd></div>
+      <div><dt>Render Key Value</dt><dd>{% if render.key_value %}{% if render.key_value_ok %}Connected{% else %}Set, but not answering: the site works without it{% endif %}{% else %}Off: the database is the cache{% endif %}</dd></div>
+    </dl>
+    {% if not render.workflows_on %}
+    <ol class="guide-steps">
+      <li><span>Deploy with the Blueprint (<code>render.yaml</code>): it creates the Workflow and Key Value next to the web service.</span></li>
+      <li><span>Make an API key: Render, <strong>Account settings</strong>, <strong>API Keys</strong>. Paste it as <code>RENDER_API_KEY</code> in the web service's <strong>Environment</strong>.</span></li>
+      <li><span>Come back here: it says "Workflows on".</span></li>
+    </ol>
+    {% endif %}
+    {% if render.runs %}
+    <p class="small muted st-20"><strong>Latest payout runs</strong></p>
+    <ul class="plain-list small">{% for r in render.runs %}<li>{{ r.started_at|date:"M j, H:i" }} · {{ r.night.location.display_name }}, {{ r.night }} · <strong>{{ r.get_state_display }}</strong>{% if r.task_run_id %} · <code>{{ r.task_run_id }}</code>{% endif %}</li>{% endfor %}</ul>
+    {% endif %}
+  </div>
+</section>
+
 <form method="post" class="panel setting" id="contact">{% csrf_token %}<input type="hidden" name="section" value="contact">
-  <div class="setting-intro"><span class="setting-no">06</span><h2>Contact</h2>
+  <div class="setting-intro"><span class="setting-no">07</span><h2>Contact</h2>
     <p>Shown on the privacy and terms pages, for people with questions.</p></div>
   <div class="setting-body stack">
     <div><label for="contact_email">Contact email</label><input type="email" id="contact_email" name="contact_email" value="{{ form.contact_email }}" placeholder="hello@yourdomain.com"></div>
@@ -174,7 +198,7 @@
 </form>
 
 <form method="post" class="panel setting" id="botcheck">{% csrf_token %}<input type="hidden" name="section" value="botcheck">
-  <div class="setting-intro"><span class="setting-no">07</span><h2>Bot check on tip pages</h2>
+  <div class="setting-intro"><span class="setting-no">08</span><h2>Bot check on tip pages</h2>
     <p>Stops scripts from flooding a business's tip page with PayPal orders nobody pays. Guests usually see nothing. Free, with Cloudflare Turnstile.</p>
     {% if botcheck_on %}<span class="pill ok">On</span>{% else %}<span class="pill wait">Off</span>{% endif %}</div>
   <div class="setting-body stack">

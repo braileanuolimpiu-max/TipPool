@@ -1,8 +1,10 @@
-# One-click deploy on Render (free plan).
-# You paste one thing in Render: DATABASE_URL (a free Neon Postgres link). Render makes the two keys itself.
-# Everything else (email, Claude, PayPal, the demo, the scheduler) is set up on the website afterwards:
-# sign up, open "Platform" at the top and type the setup code from the service's Logs.
+# One-click deploy on Render: the web app, the payout workflow and a Key Value store.
+# You paste two things in Render: DATABASE_URL (a free Neon Postgres link) and RENDER_API_KEY (Render, Account
+# settings, API Keys), which lets the web app start workflow runs. Render makes the other keys itself.
+# Everything else (email, AI, PayPal, the demo, the scheduler) is set up on the website afterwards:
+# sign up, open "Platform" at the top and type the setup code from the web service's Logs.
 services:
+  # The website. Free works; Starter keeps it awake (no slow first visit).
   - type: web
     name: tippool
     runtime: python
@@ -20,3 +22,59 @@ services:
         generateValue: true
       - key: TIPPOOL_ENCRYPTION_KEY
         generateValue: true
+      # starts payout runs on the workflow below; without it, payouts are sent by the web app right away
+      - key: RENDER_API_KEY
+        sync: false
+      - key: TIPPOOL_WORKFLOW_SLUG
+        fromService:
+          name: tippool-payouts
+          type: workflow
+          property: slug
+      # sign-in limits, rate limits and live payout steps, shared by every server and the workflow
+      - key: KEY_VALUE_URL
+        fromService:
+          name: tippool-cache
+          type: keyvalue
+          property: connectionString
+
+  # Payouts as Render Workflows (workflows/main.py): send a shift's PayPal payout, retrying safely when PayPal
+  # or the network fails, then follow it until every person's payout is final. Billed per second of task time.
+  - type: workflow
+    name: tippool-payouts
+    runtime: python
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python workflows/main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      # the same database and keys as the website
+      - key: DATABASE_URL
+        fromService:
+          name: tippool
+          type: web
+          envVarKey: DATABASE_URL
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: tippool
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: TIPPOOL_ENCRYPTION_KEY
+        fromService:
+          name: tippool
+          type: web
+          envVarKey: TIPPOOL_ENCRYPTION_KEY
+      - key: KEY_VALUE_URL
+        fromService:
+          name: tippool-cache
+          type: keyvalue
+          property: connectionString
+
+  # Render Key Value (Redis-compatible), private network only. Free plan: 25 MB, nothing kept on restart,
+  # which is fine for a cache.
+  - type: keyvalue
+    name: tippool-cache
+    region: oregon
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru

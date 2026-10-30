@@ -94,6 +94,7 @@ def content_security_policy(nonce, inline_styles=False):
         f"style-src {styles} https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         f"img-src 'self' data: {PAYPAL}",
+        "media-src 'self' blob:",  # the front page's film: its clips play from blobs the page fetched itself
         f"connect-src 'self' {PAYPAL} {TURNSTILE}",
         f"frame-src {PAYPAL} https://*.venmo.com {TURNSTILE}",
         "frame-ancestors 'none'",

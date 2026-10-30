@@ -44,7 +44,8 @@ card in the corner ticks off each step as you go:
   a test tip with; demo payouts go to sandbox accounts.
 - To run it yourself instead, see [Run it locally](#run-it-locally-sandbox): it works without any keys
   (the demo uses a built-in AI fallback), and with your own sandbox keys for real PayPal calls.
-- Hosted on **Render** (blueprint in `render.yaml`) with a Neon Postgres database. The live demo's AI is
+- Hosted on **Render** (blueprint in `render.yaml`): payouts run as **Render Workflows** and the cache is a
+  **Render Key Value** store (see [Built on Render](#built-on-render)), with a Neon Postgres database. The live demo's AI is
   **Gemini** (Google); if it's busy or over its free limit, the built-in assistant answers and says so.
 
 ## The problem
@@ -168,6 +169,39 @@ us, never by the AI.
 `AI_MODE=mock` runs a free built-in rule parser, template explanations and offline answers to common
 questions, so the app works without an API key (and the demo history is generated this way).
 
+## Built on Render
+
+Moving money is the riskiest thing TipPool does, so the payout itself runs on **Render Workflows**, and the
+whole stack is one Render Blueprint.
+
+```mermaid
+flowchart LR
+    M[Manager presses Pay<br/>or the agent / auto close-out] --> C{Checks run now:<br/>split, owner's limit,<br/>who's confirmed, balance}
+    C -->|batch prepared| S["pay_shift<br/>(Render Workflow run)"]
+    S --> A["send_payout task<br/>retries on its own"]
+    A -->|one fixed id:<br/>PayPal never pays it twice| P[PayPal Payouts]
+    S --> F["follow_payout task<br/>asks PayPal until final"]
+    F --> K[(Render Key Value)]
+    A --> K
+    K -->|live steps| U[Payout page]
+```
+
+- **Render Workflows** (`workflows/main.py`). A payout is a `pay_shift` run with two tasks of its own:
+  `send_payout` sends the PayPal batch and, if PayPal's answer is unclear (a timeout, a server error), retries
+  with backoff, always sending the *very same* request with the same id, which PayPal never pays twice.
+  A clear "no" stops the run, undoes the payout and tells the manager why. `follow_payout` then asks PayPal
+  until every person's payout is final. The manager watches each step live on the payout page ("PayPal
+  accepted the payout", "Maria: $50.00 paid", ...), with the run's id. The web request only runs the checks
+  and returns at once. If payouts are frozen before the run sends, it stops and nothing is paid.
+- **Render Key Value** is the shared cache: sign-in and rate limits for every server process, and the live
+  payout steps, which the payout page reads every few seconds without touching the database.
+- **One Blueprint** (`render.yaml`) creates the web service, the workflow and the Key Value store, and wires
+  them together (the workflow gets the web service's database and keys, the web app gets the workflow's slug
+  and the store's private address).
+- **Works without them too.** With no `RENDER_API_KEY`, or if Render can't be reached, a payout is sent by the
+  web app right away, exactly as before; with no Key Value, the database is the cache. Platform settings
+  shows what's on, and the latest runs.
+
 ## Security and money safety
 
 - Every business is isolated: every query is scoped to the signed-in manager's business, and tests check
@@ -237,13 +271,15 @@ service in **Platform → Email**. Locally, the password-change code is also sho
 Check the PayPal side for real: `python manage.py sandbox_check` (add `--wait 300` to also approve a tip
 in your browser as a sandbox buyer and have it captured).
 
-## Deploy (free), then set everything up on the website
+## Deploy, then set everything up on the website
 
 The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or `.env` editing is needed.
 
 1. Create a free Postgres database on [Neon](https://neon.tech) and copy its connection link.
 2. On [Render](https://render.com): **New → Blueprint**, pick this repo, and paste the link as `DATABASE_URL`.
-   That's the only value you type: Render generates the two secret keys itself.
+   It creates the website, the payout workflow and a free Key Value store, and generates the secret keys.
+   For payouts through Render Workflows, also paste a Render API key (**Account settings → API Keys**) as
+   `RENDER_API_KEY`; leave it empty and payouts are sent by the website directly.
 3. Open the site and **create your account**, then open **Platform** at the top and type the setup code from
    the server's log (on Render: your service → **Logs**, "TipPool setup code"). Signing up first is not enough,
    so nobody who finds a new site before you can take it over. Platform then asks you to turn on two-step

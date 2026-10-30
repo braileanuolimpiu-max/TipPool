@@ -1494,3 +1494,17 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
   .role-preset { flex-wrap: wrap; }
   .role-preset select, .role-preset .btn { flex: 1 1 100%; width: 100%; }
 }
+
+/* a payout run's steps (Render Workflows), oldest first, each with its time */
+.run-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.run-steps li { display: grid; grid-template-columns: 10px auto 1fr; gap: 4px 10px; align-items: baseline; font-size: .92rem; }
+.run-steps li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--go); transform: translateY(-1px); }
+.run-steps li.wait::before { background: var(--wait); }
+.run-steps li.bad::before { background: var(--void); }
+.run-steps time { font: 500 .78rem var(--mono); opacity: .7; white-space: nowrap; }
+/* a short list of names and values (Platform: Render) */
+.kv { margin: 0; display: grid; gap: 6px; }
+.kv > div { display: grid; grid-template-columns: minmax(130px, auto) 1fr; gap: 12px; }
+.kv dt { font-weight: 700; }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .kv > div { grid-template-columns: 1fr; gap: 0; } }

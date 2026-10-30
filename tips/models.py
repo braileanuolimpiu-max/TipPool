@@ -592,8 +592,46 @@ class PayoutBatch(models.Model):
         return f"Payout {self.paypal_batch_id or self.sender_batch_id} ({self.status})"
 
 
+class PayoutRun(models.Model):
+    """One payout sent and followed to the end by a Render Workflow (or right away, without one).
+    Its steps are what the manager watches on the payout page."""
+
+    class State(models.TextChoices):
+        QUEUED = "queued", "Waiting to start"
+        SENDING = "sending", "Sending to PayPal"
+        FOLLOWING = "following", "Following the payout"
+        DONE = "done", "Finished"
+        STOPPED = "stopped", "Stopped, nothing paid"
+        STUCK = "stuck", "Needs a check"
+
+    ACTIVE = {State.QUEUED, State.SENDING, State.FOLLOWING}
+
+    night = models.ForeignKey(Night, related_name="payout_runs", on_delete=models.CASCADE)
+    # kept after PayPal refuses a payout (its batch is undone then), so the run still tells what happened
+    batch = models.ForeignKey(PayoutBatch, related_name="runs", null=True, blank=True, on_delete=models.SET_NULL)
+    task_run_id = models.CharField(max_length=64, blank=True)  # the Render Workflows run, e.g. trn-...
+    state = models.CharField(max_length=12, choices=State.choices, default=State.QUEUED)
+    steps = models.JSONField(default=list, blank=True)  # [{"at": iso time, "text": ..., "kind": ok|wait|bad}]
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-pk"]
+
+    def __str__(self):
+        return f"Payout run {self.pk} for the {self.night} ({self.state})"
+
+    @property
+    def active(self):
+        return self.state in self.ACTIVE
+
+    @property
+    def on_render(self):
+        return bool(self.task_run_id)
+
+
 class PayoutItem(models.Model):
-    FAILED = {"FAILED", "RETURNED", "BLOCKED", "DENIED", "REFUNDED", "REVERSED"}
+    FAILED ={"FAILED", "RETURNED", "BLOCKED", "DENIED", "REFUNDED", "REVERSED"}
 
     batch = models.ForeignKey(PayoutBatch, related_name="items", on_delete=models.CASCADE)
     # a share that was paid can never be deleted by a new split (only together with its whole shift)

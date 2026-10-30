@@ -55,6 +55,16 @@
   </div></div>
 
   <div class="stack">
+    {% if run %}
+    <section class="panel" id="run-panel">
+      <div class="panel-head"><h2>{% if run.on_render %}Render Workflow{% else %}Payout steps{% endif %}</h2>
+        <span class="pill {% if run.state == 'done' %}ok{% elif run.state == 'stopped' or run.state == 'stuck' %}bad{% else %}wait{% endif %}" id="run-state">{{ run.get_state_display }}</span></div>
+      <div class="panel-body stack">
+        <ol class="run-steps" id="run-steps">{% for s in run.steps %}<li class="{{ s.kind }}"><time datetime="{{ s.at }}"></time><span>{{ s.text }}</span></li>{% endfor %}</ol>
+        {% if run.on_render %}<p class="small muted st-20">Run <code>{{ run.task_run_id }}</code> on Render Workflows: sending and following run as separate tasks that retry on their own. A retry sends the very same request, which PayPal never pays twice.</p>{% endif %}
+      </div>
+    </section>
+    {% endif %}
     {% for item in items %}{% if not item.superseded and item.status != "SUCCESS" and item.status != "PENDING" and item.status != "PROCESSING" %}
     <section class="panel">
       <div class="panel-head"><h2>{{ item.share.staff.name }}: {% if item.status == "UNCLAIMED" %}not accepted yet{% else %}didn't arrive{% endif %}</h2></div>
@@ -92,17 +102,41 @@
 </div>
 {% endblock %}
 {% block scripts %}
-{% if night.status == "paying" %}
 <script nonce="{{ csp_nonce }}">
-  // Ask PayPal every few seconds until every payment is final (for 15 minutes; then "Check with PayPal" or reload)
+  // each step's time, in the viewer's own time zone
+  const showTimes = () => document.querySelectorAll("#run-steps time").forEach((t) => {
+    const d = new Date(t.dateTime);
+    if (!isNaN(d)) t.textContent = d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+  });
+  showTimes();
+{% if night.status == "paying" or run.active %}
+  // Follow the payout every few seconds until every payment is final (for 15 minutes; then "Check with PayPal"
+  // or reload). The workflow's steps appear as they happen.
   const pollUntil = Date.now() + 15 * 60 * 1000;
+  const labels = {queued: "Waiting to start", sending: "Sending to PayPal", following: "Following the payout",
+                  done: "Finished", stopped: "Stopped, nothing paid", stuck: "Needs a check"};
+  const drawRun = (run) => {
+    const list = document.getElementById("run-steps"), pill = document.getElementById("run-state");
+    if (!run || !list) return;
+    list.replaceChildren(...run.steps.map((s) => {
+      const li = document.createElement("li"), time = document.createElement("time"), text = document.createElement("span");
+      li.className = s.kind; time.dateTime = s.at; text.textContent = s.text;
+      li.append(time, text);
+      return li;
+    }));
+    showTimes();
+    pill.textContent = labels[run.state] || run.state;
+    pill.className = "pill " + (run.state === "done" ? "ok" : run.state === "stopped" || run.state === "stuck" ? "bad" : "wait");
+  };
   const poll = setInterval(async () => {
     if (Date.now() > pollUntil) { clearInterval(poll); return; }
     const res = await fetch("{% url 'payout_status_json' night.pk %}");
     if (!res.ok) return;
     const data = await res.json();
-    if (data.night_status === "paid" || data.settled) { clearInterval(poll); window.location.reload(); }
-  }, 4000);
-</script>
+    drawRun(data.run);
+    const running = data.run && data.run.active;
+    if (!running && (data.night_status === "paid" || data.settled)) { clearInterval(poll); window.location.reload(); }
+  }, 3000);
 {% endif %}
+</script>
 {% endblock %}
