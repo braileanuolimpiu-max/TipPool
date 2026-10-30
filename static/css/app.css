@@ -1595,3 +1595,12 @@ dialog.jump::backdrop { background: rgba(20, 20, 18, .45); }
   .login .right > :first-child h2 { font-size: 1.5rem; }
   .login .right > .demo-box { padding: 10px 14px 10px; }
 }
+/* the account pages fill the whole width: no space kept for a scrollbar they don't need */
+html:has(.login) { scrollbar-gutter: auto; }
+/* wider screens: the way home sits beside the name as a small chip, not floating in the middle of the page */
+@media (min-width: 861px) {
+  .login .auth-top { justify-content: flex-start; gap: 22px; }
+  .login .left .auth-home { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: 1px solid rgba(246, 240, 228, .3);
+    border-radius: 999px; text-decoration: none; font-size: .85rem; background: rgba(8, 8, 9, .35); transition: border-color .2s, background-color .2s; }
+  .login .left .auth-home:hover { border-color: rgba(246, 240, 228, .7); background: rgba(8, 8, 9, .6); }
+}
