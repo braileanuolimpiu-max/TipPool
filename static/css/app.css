@@ -1604,3 +1604,38 @@ html:has(.login) { scrollbar-gutter: auto; }
     border-radius: 999px; text-decoration: none; font-size: .85rem; background: rgba(8, 8, 9, .35); transition: border-color .2s, background-color .2s; }
   .login .left .auth-home:hover { border-color: rgba(246, 240, 228, .7); background: rgba(8, 8, 9, .6); }
 }
+
+/* ---------- account pages on laptops and desktops: fit the window, no scrolling ---------- */
+@media (min-width: 861px) {
+  /* sign-up: a wider receipt with the fields side by side, in two columns */
+  .login:has(.signup) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+  .login .right > form.signup { max-width: 720px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 22px; align-items: start; }
+  .login .right > form.signup > * { margin-top: 0; }
+  .login .right > form.signup::before, .login .right > form.signup > h2, .login .right > form.signup > p,
+  .login .right > form.signup > .flash, .login .right > form.signup > hr, .login .right > form.signup > button,
+  .login .right > form.signup > div:has(#password) { grid-column: 1 / -1; }
+  .login .right > form.signup > h2 + p { margin-top: -8px; }
+  .login .right > form.signup .hint { margin-top: 4px; font-size: .8rem; line-height: 1.35; }
+  .login .right > form.signup > div:has(#password) { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; align-items: end; }
+  .login .right > form.signup > div:has(#password) label { grid-column: 1 / -1; }
+  .login .right > form.signup > div:has(#password) .hint { margin: 0 0 10px; }
+  .login .right { padding-block: 20px; }
+}
+/* short windows (a laptop with the browser's bars): tighter receipt, the stub keeps only its button and link */
+@media (min-width: 861px) and (max-height: 820px) {
+  .login .right { padding-block: 12px; }
+  .login .right > :first-child { padding: 20px 26px 22px; }
+  .login .right > :first-child::before { margin-bottom: 10px; padding-bottom: 9px; }
+  .login .right form.stack > * + * { margin-top: 12px; }
+  .login .right > form.signup > * + * { margin-top: 0; }
+  .login .right > form.signup { row-gap: 9px; }
+  .login .right > .demo-box { padding: 12px 18px 10px; }
+  .login .right > .demo-box > div .small { display: none; }
+  .login .left { padding-block: 28px; }
+  .login .left h1 { font-size: clamp(2.4rem, 4.4vw, 3.6rem); }
+}
+@media (min-width: 861px) and (max-height: 660px) {
+  .login .right > form.signup > div .hint { display: none; }  /* the field hints, not the Terms line */
+  .login .right { padding-block: 6px; }
+  .login .right > form.signup > div:has(#password) { display: block; }
+}
