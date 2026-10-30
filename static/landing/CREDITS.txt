@@ -1,11 +1,13 @@
 Front page film (static/landing/*.mp4, *.webp): cut, cropped and colour-graded from free stock videos on
 Pexels, used under the Pexels License (https://www.pexels.com/license/): free to use and modify, no
 attribution required. The originals:
-  1-night  https://www.pexels.com/video/candlelit-bar-scene-with-calm-bartender-40404127/
-  2-tip    https://www.pexels.com/video/a-person-scanning-a-qr-code-5226464/
-  3-split  https://www.pexels.com/video/nightclub-bartender-pouring-evening-cocktail-32054975/
-  4-paid   https://www.pexels.com/video/woman-smiling-while-using-her-mobile-phone-4391503/
-  5-close  https://www.pexels.com/video/a-woman-removing-her-apron-after-shift-8441757/
+  1-night    https://www.pexels.com/video/candlelit-bar-scene-with-calm-bartender-40404127/
+  2-clockin  https://www.pexels.com/video/woman-putting-on-an-apron-6211507/
+  3-tip      https://www.pexels.com/video/a-person-scanning-a-qr-code-5226464/
+  4-split    https://www.pexels.com/video/nightclub-bartender-pouring-evening-cocktail-32054975/
+  5-agent    https://www.pexels.com/video/man-working-on-laptop-in-restaurant-10767767/
+  6-paid     https://www.pexels.com/video/woman-smiling-while-using-her-mobile-phone-4391503/
+  7-close    https://www.pexels.com/video/a-woman-removing-her-apron-after-shift-8441757/
 These clips are not covered by TipPool's MIT license.
 
 The scroll engine (static/js/scroll-world.js, static/css/scroll-world.css) is from

@@ -30,3 +30,13 @@
     first.replaceWith(h1);
   }
 })();
+
+/* past the film, the top bar gets a solid backing */
+(() => {
+  const bar = document.querySelector(".lp-bar"), after = document.querySelector(".lp-after");
+  if (!bar || !after) return;
+  let queued = false;
+  const check = () => { queued = false; bar.classList.toggle("solid", after.getBoundingClientRect().top <= bar.offsetHeight); };
+  window.addEventListener("scroll", () => { if (!queued) { queued = true; requestAnimationFrame(check); } }, {passive: true});
+  check();
+})();

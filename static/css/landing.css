@@ -98,6 +98,77 @@ body.lp::after {
 }
 @media (max-width: 360px) { .lp-ways a { padding: 0 6px; } }
 @media (prefers-reduced-motion: reduce) { body.lp::after { animation: none; } }
-.lp-credits { flex: 1 1 100%; margin: 6px 0 0; font-size: 10.5px; letter-spacing: .06em; color: var(--cream-dim); }
+.lp-more { flex: 1 1 100%; margin: 4px 0 0; font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--cream-dim); }
 @media (max-width: 860px) { .sw-hint { display: none; } }
 @media (max-width: 640px) { .sw-route { display: none; } }
+
+/* ---------- after the film: the details, rising over it like the end credits ---------- */
+.lp-after { position: relative; z-index: 55; background: var(--ink); padding: 0 clamp(16px, 5vw, 64px) 0; }
+.lp-after::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 38vh; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(7, 6, 10, 0), var(--ink)); }
+.lp-after > * { max-width: 1160px; margin-inline: auto; }
+.lp-label { margin: 0 0 14px; font: 500 11px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--hot); }
+.lp-after h2, .lp-after h3 { margin: 0; font-family: var(--serif); font-weight: 500; letter-spacing: -.02em; text-wrap: balance; }
+.lp-after h2 em, .lp-after h3 em { font-style: italic; color: var(--hot); }
+.lp-after-head { padding: clamp(40px, 8vw, 96px) 0 clamp(36px, 6vw, 64px); border-bottom: 1px solid rgba(246, 240, 228, .14); }
+.lp-after-head h2 { font-size: clamp(2.4rem, 6vw, 5rem); line-height: 1; max-width: 16ch; }
+.lp-lead { margin: 22px 0 0; max-width: 58ch; color: #ddd4c4; font-size: clamp(.95rem, 1.2vw, 1.05rem); }
+
+/* who it's for: three columns of plain lists, ruled like a menu */
+.lp-who { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid rgba(246, 240, 228, .14); }
+.lp-who article { padding: 40px 32px 44px 0; }
+.lp-who article + article { padding-left: 32px; border-left: 1px solid rgba(246, 240, 228, .14); }
+.lp-who h3 { font-size: clamp(1.5rem, 2.2vw, 1.9rem); line-height: 1.12; margin-bottom: 20px; }
+.lp-who ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lp-who li { position: relative; padding-left: 20px; color: #ddd4c4; font-size: .92rem; line-height: 1.5; }
+.lp-who li::before { content: "—"; position: absolute; left: 0; color: var(--hot); }
+
+/* safe with money: four numbered promises */
+.lp-safe { padding: clamp(40px, 6vw, 72px) 0; border-bottom: 1px solid rgba(246, 240, 228, .14);
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 12px 48px; align-items: start; }
+.lp-safe .lp-label { grid-column: 1 / -1; }
+.lp-safe h3 { font-size: clamp(1.9rem, 3.4vw, 2.9rem); line-height: 1.05; }
+.lp-safe ol { list-style: none; margin: 0; padding: 0; counter-reset: safe; display: grid; gap: 18px; }
+.lp-safe li { counter-increment: safe; position: relative; padding-left: 44px; color: #ddd4c4; font-size: .95rem; line-height: 1.55; }
+.lp-safe li::before { content: "0" counter(safe); position: absolute; left: 0; top: 0; font: 500 .8rem/1.9 var(--mono); color: var(--hot); }
+.lp-safe b { color: var(--cream); font-weight: 600; }
+
+/* questions */
+.lp-faq { padding: clamp(40px, 6vw, 72px) 0; border-bottom: 1px solid rgba(246, 240, 228, .14); }
+.lp-faq details { border-top: 1px solid rgba(246, 240, 228, .14); }
+.lp-faq details:last-child { border-bottom: 1px solid rgba(246, 240, 228, .14); }
+.lp-faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 20px; align-items: baseline;
+  padding: 20px 0; font: 500 clamp(1.15rem, 1.8vw, 1.45rem)/1.25 var(--serif); }
+.lp-faq summary::-webkit-details-marker { display: none; }
+.lp-faq summary::after { content: "+"; font: 400 1.4rem/1 var(--mono); color: var(--hot); transition: transform .2s; }
+.lp-faq details[open] summary::after { transform: rotate(45deg); }
+.lp-faq summary:hover { color: var(--hot); }
+.lp-faq details p { margin: 0 0 22px; max-width: 70ch; color: #ddd4c4; font-size: .95rem; line-height: 1.6; }
+
+/* the last word */
+.lp-end { padding: clamp(56px, 9vw, 120px) 0 clamp(40px, 6vw, 72px); text-align: center; }
+.lp-end h2 { font-size: clamp(2.2rem, 5.5vw, 4.4rem); line-height: 1.02; max-width: 18ch; margin-inline: auto; }
+.lp-end-go { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 32px; }
+.lp-end-go form { margin: 0; }
+.lp-credits { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; padding: 22px 0 calc(28px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(246, 240, 228, .14); font-size: 11px; letter-spacing: .06em; color: var(--cream-dim); }
+.lp-credits p { margin: 0; }
+
+@media (max-width: 900px) {
+  .lp-who { grid-template-columns: 1fr; }
+  .lp-who article, .lp-who article + article { padding: 32px 0; border-left: 0; }
+  .lp-who article + article { border-top: 1px solid rgba(246, 240, 228, .14); }
+  .lp-safe { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .lp-end-go > * { flex: 1 1 auto; }
+  .lp-end-go form .sw-btn { width: 100%; }
+  .lp-end-go .sw-btn { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .lp-faq summary::after { transition: none; } }
+/* past the film, the bar gets a solid backing, so the details don't run under it */
+.lp-bar { transition: background-color .3s, border-color .3s; border-bottom: 1px solid transparent; }
+.lp-bar.solid { background: var(--ink); border-bottom-color: rgba(246, 240, 228, .1); }
+/* the front page is a film: no scrollbar (the line along the top shows how far you are); scrolling works as usual */
+html:has(body.lp) { scrollbar-width: none; }
+html:has(body.lp)::-webkit-scrollbar, body.lp::-webkit-scrollbar { display: none; width: 0; height: 0; }
