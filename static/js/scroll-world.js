@@ -280,20 +280,28 @@ function mountScrollWorld(container, config) {
     ticking = false;
   }
 
-  function raf() {
-    const eps = isMobile() ? 0.02 : 0.008;   // coarser seek step on phones = fewer decodes
+  // TipPool: the video eases to the scroll position on a time-based curve and lands on whole frames. Moving a
+  // fixed share of the remaining distance each frame (as before) made the last half second crawl a frame at a
+  // time, which looked like a stutter whenever scrolling (or a jump from the dots) came to a stop.
+  let lastNow = 0;
+  function raf(now) {
+    const dt = lastNow ? Math.min(100, now - lastNow) : 16;
+    lastNow = now;
+    const k = reduce ? 1 : 1 - Math.exp(-dt / 110);   // about 90% of the way in a quarter of a second
+    const frame = isMobile() ? 1 / 15 : 1 / 30;        // coarser steps on phones = fewer decodes
     for (let i = 0; i < NSEG; i++) {
       const s = SEGMENTS[i];
       if (!s.hasClip || !s.ready || !s.video) continue;
       // Never queue a seek while the decoder is still resolving the last one.
       // On phones a fast flick would otherwise pile up seeks and freeze the clip;
-      // cur keeps lerping, so we snap to the latest target the moment it's free.
+      // cur keeps easing, so we snap to the latest target the moment it's free.
       if (s.video.seeking) continue;
       if (!s.visible && Math.abs(s.cur - s.target) < 0.002) continue;
-      s.cur += (s.target - s.cur) * (reduce ? 1 : 0.1);  // TipPool: a softer follow (was 0.18)
       const dur = s.video.duration || 1;
-      const t = clamp(s.cur, 0, 0.999) * dur;
-      if (Math.abs(s.video.currentTime - t) > eps) { try { s.video.currentTime = t; } catch (e) {} }
+      s.cur += (s.target - s.cur) * k;
+      if (Math.abs(s.target - s.cur) * dur < frame * 1.5) s.cur = s.target;  // the last bit: land, don't crawl
+      const t = Math.min(dur * 0.999, Math.round(clamp(s.cur, 0, 0.999) * dur / frame) * frame);
+      if (Math.abs(s.video.currentTime - t) >= frame / 2) { try { s.video.currentTime = t; } catch (e) {} }
     }
     requestAnimationFrame(raf);
   }
