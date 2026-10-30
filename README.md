@@ -236,7 +236,7 @@ flowchart LR
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Claude, Gemini or another AI service · plain HTML/CSS/JS (no front-end framework) · 386 tests and a lint
+Claude, Gemini or another AI service · plain HTML/CSS/JS (no front-end framework) · 406 tests and a lint
 check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
@@ -306,7 +306,7 @@ The repo includes a Render blueprint (`render.yaml`) and `build.sh`. No code or 
 python manage.py test tips
 ```
 
-386 tests cover:
+406 tests cover:
 - the split engine (cents always add up, edge cases, legal warnings) and the rule parser
 - the full tip → split → payout flow with PayPal mocked, including fees, payouts that fail or go unclaimed,
   refunds and disputes
