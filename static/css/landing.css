@@ -172,3 +172,5 @@ body.lp::after {
 /* the front page is a film: no scrollbar (the line along the top shows how far you are); scrolling works as usual */
 html:has(body.lp) { scrollbar-width: none; }
 html:has(body.lp)::-webkit-scrollbar, body.lp::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* the chapter dots: no button padding, so each dot sits right on the line */
+.sw-route__dot { padding: 0; }
