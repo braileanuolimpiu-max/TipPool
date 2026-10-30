@@ -234,3 +234,8 @@ html:has(body.lp)::-webkit-scrollbar, body.lp::-webkit-scrollbar { display: none
   .sw-copy__cta .sw-btn, .lp-end-go .sw-btn { width: 100%; }
   .lp-end-go { margin-inline: auto; }
 }
+/* the closing chapter's buttons are exactly as wide as the line under them */
+@media (min-width: 861px) {
+  .sw-copy__cta { width: max-content; max-width: 100%; }
+  .sw-copy__cta > .lp-more { white-space: nowrap; }
+}
