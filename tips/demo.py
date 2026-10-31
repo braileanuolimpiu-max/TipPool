@@ -39,6 +39,29 @@ def fill(location, seed=7):
 
 
 @transaction.atomic
+def _demo_rules(location):
+    """The demo's house rules, read by the AI once and then reused: they're the same text for every demo, and the
+    free AI tiers allow only a few requests a day, which belong to people's questions. A read by the built-in
+    reader (the AI unavailable) isn't kept, so the next demo asks the AI again."""
+    import hashlib
+
+    from django.core.cache import cache
+    key = "demo-rules:" + hashlib.sha256(f"{RULES}|{ai.name()}".encode()).hexdigest()[:16]
+    try:
+        kept = cache.get(key)
+    except Exception:
+        kept = None
+    if kept:
+        return kept
+    parsed = ai.parse_rules(RULES, location)
+    if parsed.get("read_by") != "the built-in rule reader":
+        try:
+            cache.set(key, parsed, 7 * 24 * 3600)
+        except Exception:
+            pass
+    return parsed
+
+
 def _fill(location, seed):
     rng = random.Random(seed)
     business = location.business
@@ -50,7 +73,7 @@ def _fill(location, seed):
         if day != 0:  # closed on Mondays
             CloseTime.objects.update_or_create(location=location, weekday=day,
                                                defaults={"time": time(23, 0), "enabled": True})
-    parsed = ai.parse_rules(RULES, location)
+    parsed = _demo_rules(location)
     rules = TipRuleSet.objects.create(location=location, text=RULES, rules=parsed["rules"], summary=parsed["summary"],
                                       warnings=parsed["warnings"])
     people = []

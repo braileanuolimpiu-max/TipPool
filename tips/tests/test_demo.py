@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -6,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from tips import demo
-from tips.models import Business, Message, Night, Tip
+from tips.models import Business, Location, Message, Night, Tip
 from tips.tests.helpers import make_manager
 
 
@@ -90,3 +91,32 @@ class SampleHistoryLabelTests(TestCase):
         self.assertContains(page, "no money was sent")
         self.assertNotContains(page, "Check PayPal again")
         self.assertContains(self.client.get(reverse("history")), ">Sample<")
+
+
+class DemoRulesTests(TestCase):
+    """The demo's fixed house rules are read by the AI once and reused, so demos don't spend the AI's daily requests."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.addCleanup(cache.clear)  # the made-up rules below must not reach the other demo tests
+
+    def test_an_ai_read_is_kept_and_reused(self):
+        from django.core.cache import cache
+        from tips import demo
+        cache.clear()
+        read = {"rules": {"pools": []}, "summary": "s", "warnings": [], "read_by": "Gemini"}
+        with mock.patch("tips.demo.ai.parse_rules", return_value=read) as parse:
+            demo._demo_rules(Location.default())
+            demo._demo_rules(Location.default())
+        self.assertEqual(parse.call_count, 1)
+
+    def test_a_built_in_read_is_not_kept(self):
+        from django.core.cache import cache
+        from tips import demo
+        cache.clear()
+        read = {"rules": {"pools": []}, "summary": "s", "warnings": [], "read_by": "the built-in rule reader"}
+        with mock.patch("tips.demo.ai.parse_rules", return_value=read) as parse:
+            demo._demo_rules(Location.default())
+            demo._demo_rules(Location.default())
+        self.assertEqual(parse.call_count, 2)
