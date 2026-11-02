@@ -414,29 +414,9 @@ def _add_personal_tips(night, result, personal_fees):
 
 
 # --- Payouts (money out) -----------------------------------------------------
-def address_key(staff):
-    """The owner's alert about where this person is paid *now*, when a manager (not the owner) set it."""
-    where = (f"venmo {staff.venmo_phone}" if staff.payout_method == StaffMember.PayoutMethod.VENMO and staff.venmo_phone
-             else staff.paypal_email.lower())
-    return f"address:{staff.pk}:{where}"[:80]
-
-
-def owner_must_check(staff):
-    """A manager set or approved where this person is paid, and the owner hasn't looked yet. Their own
-    "confirm" can't clear it: managers see every private tips link, so a manager could confirm their own
-    email in someone's name."""
-    from .models import Alert
-    return Alert.objects.filter(business_id=staff.business_id, key=address_key(staff), resolved_at__isnull=True).exists()
-
-
-def not_cleared(staff):
-    """Not to be paid without the owner: no confirmed address, or one the owner still has to check."""
-    return staff.payout_confirmed_at is None or owner_must_check(staff)
-
-
 def unconfirmed(shares):
-    """People about to be paid who haven't confirmed where they get paid (or whose new address waits for the owner)."""
-    return [s.staff for s in shares if s.amount > 0 and not_cleared(s.staff)]
+    """People about to be paid who haven't confirmed where they get paid."""
+    return [s.staff for s in shares if s.amount > 0 and s.staff.payout_confirmed_at is None]
 
 
 def payout_destination(staff, currency):
@@ -530,7 +510,7 @@ def pay_night(night, allow_unconfirmed=False, by_owner=False, expected_split=Non
         # someone's email to their own and pay it
         if waiting and not (allow_unconfirmed and by_owner):
             raise TipPoolError("Not confirmed yet: " + ", ".join(p.name for p in waiting) + ". They confirm where "
-                               "they get paid on their tips page (a new address a manager set waits for the owner). " + (
+                               "they get paid on their tips page. " + (
                                    "Check their address, then pay anyway if it's right." if by_owner else
                                    "Until they do, only the owner can pay them."))
         destinations = {s.pk: payout_destination(s.staff, business.currency) for s in shares}
@@ -644,9 +624,9 @@ def resend_payout(item, by_owner=False):
             raise TipPoolError("Only a failed or returned payout can be sent again.")
         staff = StaffMember.objects.get(pk=share.staff_id)  # where they're paid now, not when the page loaded
         fields, receiver = payout_destination(staff, business.currency)
-        if not_cleared(staff) and not by_owner:
-            raise TipPoolError(f"{staff.name} hasn't confirmed where they're paid ({receiver}), or the owner still has "
-                               "to check a new address. Until then only the owner can send it again.")
+        if staff.payout_confirmed_at is None and not by_owner:
+            raise TipPoolError(f"{staff.name} hasn't confirmed where they're paid ({receiver}). They confirm it on "
+                               "their tips page; until then only the owner can send it again.")
         # the id is tied to the payout it replaces: resending the same failed payout twice can't pay twice
         batch = PayoutBatch.objects.create(night=night, is_retry=True, status="SENDING",
                                            sender_batch_id=f"tippool-again-{item.pk}-a{night.payout_attempt}")

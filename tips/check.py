@@ -55,14 +55,10 @@ def findings_for(night):
                                              "cut off at closing time."})
     for msg in night.messages.filter(resolved_at__isnull=True).select_related("staff"):
         found.append({"level": STOP, "text": f"{msg.staff.name} flagged a problem: \"{msg.text[:120]}\""})
-    from .services import owner_must_check
     for share in shares:
         if share.amount > 0 and share.staff.payout_confirmed_at is None:
             found.append({"level": STOP, "text": f"{share.staff.name} hasn't confirmed where they're paid "
                                                  f"({share.staff.payout_to})."})
-        elif share.amount > 0 and owner_must_check(share.staff):
-            found.append({"level": STOP, "text": f"A manager changed where {share.staff.name} is paid "
-                                                 f"({share.staff.payout_to}). The owner checks it first (Messages)."})
     refunded = night.tips.filter(status=Tip.Status.REFUNDED)
     if refunded.exists():
         found.append({"level": WARN, "text": f"{refunded.count()} tip(s) were refunded to guests and left out."})

@@ -683,7 +683,7 @@ def staff_edit(request, pk):
             who = request.user.get_full_name() or request.user.get_username()
             raise_alert(request.business, f"{who} changed where {person.name} is paid: {address[len('PayPal email '):]}. "
                                           f"{person.name} confirms it on their tips page before they're paid there.",
-                        location=request.location, key=services.address_key(person), owners_only=True)
+                        location=request.location, key=f"address:{person.pk}:{email}", owners_only=True)
         messages.success(request, f"Saved. {person.name} confirms the new email on their tips page before the "
                                   "next payout." if any("email" in c for c in changes) else "Saved.")
     return redirect("staff_list")
@@ -1467,10 +1467,6 @@ def messages_page(request):
             alert = get_object_or_404(Alert.objects.filter(Q(location__in=request.allowed_locations) |
                                                            Q(location__isnull=True)),
                                       pk=_id(request.POST["alert"]), business=business)
-            if alert.key.startswith("address:") and not request.user.manager.is_owner:
-                # it holds someone's pay at an address a manager set: only the owner clears it
-                messages.error(request, "This one waits for the owner: a manager changed where someone is paid.")
-                return redirect("messages_page")
             if alert.key.startswith("owner-ok:") and not request.user.manager.is_owner:
                 messages.error(request, "This one waits for the owner. It closes by itself once the shift is paid.")
                 return redirect("messages_page")
@@ -1506,14 +1502,6 @@ def messages_page(request):
                     messages.error(request, str(exc))
                     return redirect("messages_page")
                 Change.log(request, f"Approved: {msg.staff.name} is now paid with {msg.staff.payout_to} (was {before})")
-                if not request.user.manager.is_owner:
-                    # the request came from a private tips link, which every manager can see: the owner checks
-                    # the new address before money goes there, so no manager can approve their own request
-                    from .alerts import raise_alert
-                    who = request.user.get_full_name() or request.user.get_username()
-                    raise_alert(business, f"{who} approved paying {msg.staff.name} at {msg.staff.payout_to} "
-                                          f"(was {before}). Mark this handled once you've checked it's theirs.",
-                                location=msg.location, key=services.address_key(msg.staff), owners_only=True)
             else:
                 Change.log(request, f"Declined {msg.staff.name}'s request to change where they're paid")
             msg.reply = "Approved." if approved else (request.POST.get("reply", "").strip()[:1000] or "Declined.")

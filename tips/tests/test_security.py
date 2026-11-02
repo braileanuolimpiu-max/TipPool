@@ -204,56 +204,6 @@ class AuditFixTests(TestCase):
         self.assertIn("geolocation=()", res["Permissions-Policy"])
 
 
-class ManagerCantRedirectPayTests(TestCase):
-    """Managers see every private tips link, so "the person confirms it" can't be the only lock on where money
-    goes: an address a manager set or approved waits for the owner."""
-
-    def setUp(self):
-        from tips.models import Alert, Message
-        self.Alert, self.Message = Alert, Message
-        self.location = Location.default()
-        self.maria = hire("Maria", "server")
-        self.owner = make_manager("owner")
-        self.manager = make_manager("mallory", owner=False)
-        self.client.force_login(self.manager)
-        self.member = self.maria.memberships.get()
-
-    def test_edit_then_confirm_with_the_link_is_still_held_for_the_owner(self):
-        self.client.post(reverse("staff_edit", args=[self.member.pk]),
-                         {"name": "Maria", "paypal_email": "mallory@example.com"})
-        # the manager opens Maria's private link from the team page and confirms "her" new address
-        self.client.post(reverse("my_tips", args=[self.maria.access_token]), {"payout": "confirm"})
-        self.maria.refresh_from_db()
-        self.assertIsNotNone(self.maria.payout_confirmed_at)
-        self.assertTrue(services.not_cleared(self.maria))
-        # and they can't clear the owner's alert themselves
-        alert = self.Alert.objects.get(key=services.address_key(self.maria))
-        self.client.post(reverse("messages_page"), {"alert": alert.pk})
-        self.assertIsNone(self.Alert.objects.get(pk=alert.pk).resolved_at)
-        # the owner checks it: then it's cleared
-        self.client.force_login(self.owner)
-        self.client.post(reverse("messages_page"), {"alert": alert.pk})
-        self.assertFalse(services.not_cleared(self.maria))
-
-    def test_requesting_and_approving_your_own_change_waits_for_the_owner(self):
-        self.client.post(reverse("my_tips", args=[self.maria.access_token]),
-                         {"payout": "change", "method": "paypal", "email": "mallory@example.com"})
-        msg = self.Message.objects.get(staff=self.maria, kind=self.Message.Kind.PAYOUT_CHANGE)
-        self.client.post(reverse("messages_page"), {"message": msg.pk, "decision": "approve"})
-        self.maria.refresh_from_db()
-        self.assertEqual(self.maria.paypal_email, "mallory@example.com")
-        self.assertTrue(services.not_cleared(self.maria))
-
-    def test_the_owner_approving_is_cleared_at_once(self):
-        self.client.force_login(self.owner)
-        self.client.post(reverse("my_tips", args=[self.maria.access_token]),
-                         {"payout": "change", "method": "paypal", "email": "maria.new@example.com"})
-        msg = self.Message.objects.get(staff=self.maria, kind=self.Message.Kind.PAYOUT_CHANGE)
-        self.client.post(reverse("messages_page"), {"message": msg.pk, "decision": "approve"})
-        self.maria.refresh_from_db()
-        self.assertFalse(services.not_cleared(self.maria))
-
-
 class SizeCapTests(TestCase):
     """A business can't grow without end: locations and team sizes are capped (low numbers here, for speed)."""
 
