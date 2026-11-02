@@ -23,7 +23,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, botcheck, guest_i18n, hours as hours_from, insights, payout_runs, platform, roles as role_presets, services
+from . import ai, autoclose, botcheck, guest_i18n, hours as hours_from, insights, limits, payout_runs, platform, roles as role_presets, services
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, PayoutRun, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, owner_required, two_step_setup_context
@@ -432,7 +432,7 @@ def staff_list(request):
         except ValidationError:
             messages.error(request, f"\"{email}\" isn't a valid email. Use the email of their PayPal account.")
             return redirect("staff_list")
-        clash = _name_taken(request.business, name, email)
+        clash = _name_taken(request.business, name, email) or limits.cant_add_person(location, email)
         if clash:
             messages.error(request, clash)
             return redirect("staff_list")
@@ -553,6 +553,10 @@ def staff_bulk(request):
             continue
         if _name_taken(request.business, name, email):
             skipped.append(f"line {n} ({name}): someone on the team already has that name")
+            continue
+        full = limits.cant_add_person(location, email)
+        if full:
+            skipped.append(f"line {n} ({name}): {full}")
             continue
         person = _add_person(request, location, name, email, role)
         added.append(person)
@@ -744,6 +748,10 @@ def staff_schedule(request, pk):
 @managers_only
 def staff_toggle(request, pk):
     member = get_object_or_404(Membership, pk=pk, location=request.location)
+    full = limits.team_full(request.location) if not member.active else ""
+    if full:
+        messages.error(request, full)
+        return redirect("staff_list")
     member.active = not member.active
     member.save()
     Change.log(request, f"{'Brought back' if member.active else 'Removed'} {member.staff.name}")
@@ -1561,6 +1569,9 @@ def location_archive(request, pk):
         return redirect("settings")
     location = get_object_or_404(Location, pk=pk, business=request.business)
     restore = request.POST.get("restore") == "1"
+    if restore and location.archived and limits.cant_restore_location(request.business):
+        messages.error(request, limits.cant_restore_location(request.business))
+        return redirect(f"{reverse('settings')}#locations")
     if not restore:
         if not Location.objects.filter(business=request.business, archived=False).exclude(pk=location.pk).exists():
             messages.error(request, "You can't archive your only location.")
@@ -1589,6 +1600,10 @@ def location_add(request):
     if not name:
         messages.error(request, "Give the new location a name.")
         return redirect("settings")
+    full = limits.cant_add_location(request.business)
+    if full:
+        messages.error(request, full)
+        return redirect(f"{reverse('settings')}#locations")
     if Location.objects.filter(business=request.business, name__iexact=name, archived=False).exists():
         messages.error(request, f"You already have a location called {name}. Pick a name that tells them apart "
                                 "(e.g. the street or neighborhood).")

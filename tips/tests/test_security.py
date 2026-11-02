@@ -252,3 +252,49 @@ class ManagerCantRedirectPayTests(TestCase):
         self.client.post(reverse("messages_page"), {"message": msg.pk, "decision": "approve"})
         self.maria.refresh_from_db()
         self.assertFalse(services.not_cleared(self.maria))
+
+
+class SizeCapTests(TestCase):
+    """A business can't grow without end: locations and team sizes are capped (low numbers here, for speed)."""
+
+    def setUp(self):
+        self.location = Location.default()
+        Role.objects.get_or_create(location=self.location, key="server", defaults={"name": "Server"})
+        self.client.force_login(make_manager("owner"))
+
+    @mock.patch("tips.limits.MAX_LOCATIONS", 2)
+    def test_open_locations_are_capped_and_archiving_frees_a_place(self):
+        self.client.post(reverse("location_add"), {"name": "Second"})
+        res = self.client.post(reverse("location_add"), {"name": "Third"}, follow=True)
+        self.assertContains(res, "up to 2 open locations")
+        self.assertEqual(Location.objects.filter(business=self.location.business).count(), 2)
+        second = Location.objects.get(name="Second")
+        self.client.post(reverse("location_archive", args=[second.pk]))
+        self.client.post(reverse("location_add"), {"name": "Third"})
+        self.assertTrue(Location.objects.filter(name="Third").exists())
+        res = self.client.post(reverse("location_archive", args=[second.pk]), {"restore": "1"}, follow=True)
+        self.assertContains(res, "Archive another one first")
+
+    @mock.patch("tips.limits.MAX_LOCATIONS_EVER", 2)
+    def test_archiving_and_adding_again_cant_grow_forever(self):
+        self.client.post(reverse("location_add"), {"name": "Second"})
+        self.client.post(reverse("location_archive", args=[Location.objects.get(name="Second").pk]))
+        self.client.post(reverse("location_add"), {"name": "Third"})
+        self.assertFalse(Location.objects.filter(name="Third").exists())
+
+    @mock.patch("tips.limits.MAX_TEAM", 2)
+    def test_a_team_is_capped_for_single_bulk_and_bringing_back(self):
+        from tips.models import Membership
+        hire("Ann", "server")
+        self.client.post(reverse("staff_list"), {"name": "Bo", "paypal_email": "bo@example.com", "default_role": "server"})
+        res = self.client.post(reverse("staff_list"), {"name": "Cy", "paypal_email": "cy@example.com",
+                                                       "default_role": "server"}, follow=True)
+        self.assertContains(res, "the most one location can have")
+        self.client.post(reverse("staff_bulk"), {"people": "Di, di@example.com, server"})
+        self.assertEqual(Membership.objects.filter(location=self.location, active=True).count(), 2)
+        ann = Membership.objects.get(staff__name="Ann")
+        self.client.post(reverse("staff_toggle", args=[ann.pk]))  # off the team: a place is free
+        self.client.post(reverse("staff_bulk"), {"people": "Di, di@example.com, server"})
+        self.client.post(reverse("staff_toggle", args=[ann.pk]))  # bringing Ann back would be a third
+        self.assertFalse(Membership.objects.get(pk=ann.pk).active)
+        self.assertEqual(Membership.objects.filter(location=self.location, active=True).count(), 2)
