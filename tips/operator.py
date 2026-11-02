@@ -147,7 +147,8 @@ def _save_email(request, cfg):
         host, port = platform.EMAIL_PRESETS[provider]
     else:
         host = request.POST.get("email_host", "").strip()[:120]
-        port = int(request.POST.get("email_port") or 587) if str(request.POST.get("email_port", "587")).isdigit() else 587
+        typed_port = str(request.POST.get("email_port") or "587")
+        port = int(typed_port) if typed_port.isascii() and typed_port.isdigit() and 0 < int(typed_port) < 65536 else 587
     user = request.POST.get("email_user", "").strip()[:200]
     if provider == "brevo":
         return _save_brevo(request, cfg, host, port, user)

@@ -114,6 +114,10 @@ class ContentSecurityPolicyMiddleware:
         import secrets
         request.csp_nonce = secrets.token_urlsafe(16)
         response = self.get_response(request)
+        # no page needs these; a compromised third-party script (PayPal, Cloudflare) can't ask for them either.
+        # Not the camera *app*: the schedule photo's <input capture> opens it without this permission.
+        response.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), "
+                                                  "midi=(), magnetometer=(), gyroscope=(), accelerometer=()")
         if "Content-Security-Policy" not in response and response.get("Content-Type", "").startswith("text/html"):
             if request.path.startswith(admin_prefix()):
                 # Django's own admin has inline styles and scripts we can't change; only the operator (signed in,

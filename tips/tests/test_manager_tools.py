@@ -110,6 +110,9 @@ class ManagerToolTests(TestCase):
         night.refresh_from_db()
         self.assertEqual(night.status, Night.Status.PAYING)
 
+    # the close-outs run with the times given below, not the real clock: otherwise the page's own request
+    # (long after Oct 15) would pay the shift before the manager's edit, whenever no earlier test had just run them
+    @override_settings(AUTOCLOSE_IN_REQUESTS=False)
     def test_a_manager_editing_an_automatic_shift_takes_it_over(self):
         self.auto_pay_location(60)
         night = self.auto_closed_in_review("A4")

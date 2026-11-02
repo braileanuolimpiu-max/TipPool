@@ -1119,16 +1119,16 @@ body.menu-open .tour { display: none; }
   --marker: #f5d63d; --marker-soft: #3b3417; --go: #5bd394; --go-soft: #13301f; --wait: #f0b357;
   --wait-soft: #35270f; --void: #ff8577; --void-soft: #3d1a16; --thermal: #1f1f1d;
   color-scheme: dark; background: var(--paper); color: var(--ink); }
-:root[data-theme="dark"] body.app-shell .btn-primary, .avatar, .is-done .tour-mark { color: var(--paper); }
+:root[data-theme="dark"] body.app-shell .btn-primary, :root[data-theme="dark"] body.app-shell .avatar, :root[data-theme="dark"] body.app-shell .is-done .tour-mark { color: var(--paper); }
 :root[data-theme="dark"] body.app-shell .btn-primary:hover { color: #141414; }
 :root[data-theme="dark"] body.app-shell select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ecebe5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); }
 :root[data-theme="dark"] body.app-shell ::placeholder { color: #7a7972; }
-:root[data-theme="dark"] body.app-shell input[type=checkbox]:not(.switch input), input[type=radio] { border-color: #6a6963; }
-:root[data-theme="dark"] body.app-shell input[type=time]::-webkit-calendar-picker-indicator, input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); }
+:root[data-theme="dark"] body.app-shell input[type=checkbox]:not(.switch input), :root[data-theme="dark"] body.app-shell input[type=radio] { border-color: #6a6963; }
+:root[data-theme="dark"] body.app-shell input[type=time]::-webkit-calendar-picker-indicator, :root[data-theme="dark"] body.app-shell input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); }
 :root[data-theme="dark"] body.app-shell .hl { background: linear-gradient(100deg, transparent 2%, rgba(245, 214, 61, .38) 3% 97%, transparent 98%) 0 85% / 100% 42% no-repeat; }
-:root[data-theme="dark"] body.app-shell .panel, .kpis > div, .tour { box-shadow: none; }
+:root[data-theme="dark"] body.app-shell .panel, :root[data-theme="dark"] body.app-shell .kpis > div, :root[data-theme="dark"] body.app-shell .tour { box-shadow: none; }
 :root[data-theme="dark"] body.app-shell .demo-banner { border-color: #6b5c17; }
-:root[data-theme="dark"] body.app-shell .receipt, .qr-face, .tent, .sheet, .show-screen, .house-qr, .two-step-setup img { --ink: #141414; --paper: #ffffff; --graphite: #5c5c58; --hair: #dcdcd6; --hair-soft: #ececE7; --steel-1: #f2f3f1; --marker-soft: #fff6c7; --go: #12703d; --wait: #9a5b00; --void: #c4291f; --thermal: #fffefc; color-scheme: light; }
+:root[data-theme="dark"] body.app-shell .receipt, :root[data-theme="dark"] body.app-shell .qr-face, :root[data-theme="dark"] body.app-shell .tent, :root[data-theme="dark"] body.app-shell .sheet, :root[data-theme="dark"] body.app-shell .show-screen, :root[data-theme="dark"] body.app-shell .house-qr, :root[data-theme="dark"] body.app-shell .two-step-setup img { --ink: #141414; --paper: #ffffff; --graphite: #5c5c58; --hair: #dcdcd6; --hair-soft: #ececE7; --steel-1: #f2f3f1; --marker-soft: #fff6c7; --go: #12703d; --wait: #9a5b00; --void: #c4291f; --thermal: #fffefc; color-scheme: light; }
 :root[data-theme="dark"] body.app-shell .ticket[aria-current="page"] { color: #141414; }
 :root[data-theme="dark"] body.app-shell .tour { background: var(--tray-deep); border-color: var(--hair); }
 :root[data-theme="dark"] body.app-shell .btn-danger { color: #141414; }
@@ -1649,4 +1649,10 @@ html:has(.login)::-webkit-scrollbar, body:has(.login)::-webkit-scrollbar { displ
   .login .right > form.signup::before, .login .right > form.signup > h2, .login .right > form.signup > p, .login .right > form.signup > .flash,
   .login .right > form.signup > hr, .login .right > form.signup > button, .login .right > form.signup > div:has(#password) { grid-column: 1 / -1; }
   .login .right > form.signup .hint { margin-top: 4px; font-size: .8rem; line-height: 1.35; }
+}
+
+/* touch screens: the small text links ("← Home", "← Back") get a finger-sized hit area (24px+), same look */
+@media (pointer: coarse) {
+  .auth-home { padding-block: 6px; }
+  .back { padding-block: 6px; margin-top: -6px; margin-bottom: 6px; }
 }

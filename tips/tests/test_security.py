@@ -171,3 +171,30 @@ class ProductionSettingsTests(TestCase):
         self.assertIn("TIPPOOL_ENCRYPTION_KEY must be set", result.stderr)
         result = self.start(DJANGO_DEBUG="0", DJANGO_SECRET_KEY="k" * 50, TIPPOOL_ENCRYPTION_KEY="x")
         self.assertIn("DATABASE_URL", result.stderr)
+
+
+class AuditFixTests(TestCase):
+    """Fixes from the November 2026 full check."""
+
+    def setUp(self):
+        self.location = Location.default()
+
+    def test_full_screen_code_keeps_the_table_inside_the_link(self):
+        res = self.client.get(reverse("qr_show"), {"at": self.location.slug, "table": "5&at=other-place"})
+        from urllib.parse import parse_qs, urlsplit
+        query = parse_qs(urlsplit(res.context["url"]).query)
+        self.assertEqual(query["at"], [self.location.slug])  # one business only
+        self.assertEqual(query["table"], ["5&at=other-place"])
+
+    def test_huge_person_numbers_are_refused_not_crashed(self):
+        res = self.client.get(reverse("qr_show"), {"at": self.location.slug, "to": "9" * 30})
+        self.assertEqual(res.status_code, 200)
+        with mock.patch("tips.services.get_client", return_value=FakePayPal()):
+            res = self.client.post(reverse("api_create_order"), content_type="application/json",
+                                   data=json.dumps({"amount": "5", "at": self.location.slug, "to": "9" * 30}))
+        self.assertEqual(res.status_code, 400)
+
+    def test_pages_turn_off_device_features(self):
+        res = self.client.get(reverse("login"))
+        self.assertIn("camera=()", res["Permissions-Policy"])
+        self.assertIn("geolocation=()", res["Permissions-Policy"])

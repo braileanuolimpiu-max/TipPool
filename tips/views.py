@@ -268,8 +268,9 @@ def api_create_order(request):
         for_staff = None
         to = str(data.get("to") or "")
         if to:
-            member = (Membership.objects.filter(pk=int(to), location=location, active=True).select_related("staff")
-                      .first() if to.isascii() and to.isdigit() else None)
+            # _id: a 30-digit "to" would overflow the database's integer and crash instead of saying no
+            member = (Membership.objects.filter(pk=_id(to), location=location, active=True).select_related("staff")
+                      .first() if _id(to) else None)
             no_tips = member is not None and Role.objects.filter(location=location, key=member.default_role,
                                                                 no_tips=True).exists()
             if member is None or no_tips:
@@ -325,12 +326,14 @@ def qr_show(request):
     location = public_location(request) if request.GET.get("at") else request.location
     if location is None:
         raise Http404("Unknown business.")
+    from urllib.parse import urlencode
     table = request.GET.get("table", "")[:20]
-    to = request.GET.get("to", "")
-    member = (Membership.objects.filter(pk=int(to), location=location, active=True).select_related("staff").first()
-              if to.isascii() and to.isdigit() else None)
-    url = request.build_absolute_uri(reverse("tip_page")) + f"?at={location.slug}" + (
-        f"&table={table}" if table else "") + (f"&to={member.pk}" if member else "")
+    to = _id(request.GET.get("to"))
+    member = (Membership.objects.filter(pk=to, location=location, active=True).select_related("staff").first()
+              if to else None)
+    # encoded: a table like "5&at=other" must stay a table name, never add a second business to the link
+    query = {"at": location.slug, **({"table": table} if table else {}), **({"to": member.pk} if member else {})}
+    url = request.build_absolute_uri(reverse("tip_page")) + "?" + urlencode(query)
     label = f"Tip {member.staff.name}" if member else (
         (f"Table {table}" if table.isdigit() else table) if table else "Leave a tip")
     return render(request, "tips/qr_show.html", {"url": url, "label": label, "table": table})

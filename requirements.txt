@@ -3,7 +3,7 @@ requests==2.34.2
 anthropic==1.14.0
 pydantic==2.14.1
 qrcode[pil]==8.2
-cryptography==46.0.3
+cryptography==50.0.2
 dj-database-url==3.0.1
 psycopg[binary]==3.2.12
 gunicorn==26.2.0
