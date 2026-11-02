@@ -244,6 +244,10 @@ CSRF_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"     # private tips links never leak to other sites
+# PayPal's checkout opens in a popup that reports back to the tip page (paid, cancelled). Django's default
+# "same-origin" cuts that line: the page never hears the guest paid or closed it. Still isolated from any
+# page that opens *us*.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
 if not (DEBUG or TESTING):
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

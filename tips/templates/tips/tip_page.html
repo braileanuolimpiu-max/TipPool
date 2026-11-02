@@ -202,10 +202,10 @@
   async function onPayPalWebSdkLoaded() {
     try {
       const sdk = await window.paypal.createInstance({
-        clientId: "{{ paypal_client_id }}",
+        clientId: "{{ paypal_client_id|escapejs }}",
         components: ["paypal-payments", "venmo-payments"],
         pageType: "checkout",
-        locale: "{{ paypal_locale }}",
+        locale: "{{ paypal_locale|escapejs }}",
       });
       const methods = await sdk.findEligibleMethods({currencyCode: CURRENCY});
 
