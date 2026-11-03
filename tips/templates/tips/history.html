@@ -1,4 +1,4 @@
-{% extends "app.html" %}
+{% extends "app.html" %}{% load static %}
 {% block title %}Past shifts{% endblock %}
 {% block content %}
 <header class="page-head">
@@ -6,7 +6,8 @@
 </header>
 <section class="panel">
   {% if rows %}
-  <div class="table-wrap"><table class="data">
+  {{ grid_rows|json_script:"grid-history" }}
+  <div class="table-wrap" data-grid="history" data-grid-rows="grid-history" data-cur="{{ cur }}" data-grid-label="Past shifts" data-search-label="Search shifts"><table class="data">
     <thead><tr><th>Shift</th><th class="r">Tips</th><th class="r">People paid</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for row in rows %}
@@ -30,4 +31,8 @@
   <div class="panel-body"><p class="muted st-20">Nothing here yet. When you close out a shift, it shows up here. <a href="{% url 'close_night' %}">Close out the current shift</a></p></div>
   {% endif %}
 </section>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}" src="{% static 'vendor/ag-grid/ag-grid-community-36.2.0.min.noStyle.js' %}" defer></script>
+<script nonce="{{ csp_nonce }}" src="{% static 'js/grids.js' %}" defer></script>
 {% endblock %}

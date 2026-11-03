@@ -1,4 +1,4 @@
-{% extends "app.html" %}
+{% extends "app.html" %}{% load static %}
 {% block title %}Reports{% endblock %}
 {% block content %}
 <header class="page-head">
@@ -54,7 +54,8 @@
   <div class="panel-head"><h2>Per person</h2>
     <a class="btn btn-secondary small" href="?{{ query }}{% if query %}&{% endif %}export=people">Download CSV</a></div>
   {% if report.people %}
-  <div class="table-wrap"><table class="data">
+  {{ grid_people|json_script:"grid-people" }}
+  <div class="table-wrap" data-grid="people" data-grid-rows="grid-people" data-cur="{{ cur }}" data-grid-label="Tips per person" data-search-label="Search people or roles"><table class="data">
     <thead><tr><th>Name</th><th>Role</th><th class="r">Shifts</th><th class="r">Hours</th><th class="r">Shared</th><th class="r">Personal</th><th class="r">Total</th><th class="r">Shared / hour</th></tr></thead>
     <tbody>
     {% for p in report.people %}
@@ -73,7 +74,8 @@
   <div class="panel-head"><h2>Per shift</h2>
     <a class="btn btn-secondary small" href="?{{ query }}{% if query %}&{% endif %}export=shifts">Download CSV</a></div>
   {% if report.shifts %}
-  <div class="table-wrap"><table class="data">
+  {{ grid_shifts|json_script:"grid-shifts" }}
+  <div class="table-wrap" data-grid="shifts" data-grid-rows="grid-shifts" data-cur="{{ cur }}" data-grid-label="Tips per shift" data-search-label="Search shifts"><table class="data">
     <thead><tr><th>Shift</th>{% if report.several_locations %}<th>Location</th>{% endif %}<th class="r">Tips</th><th class="r">People</th><th>Status</th></tr></thead>
     <tbody>
     {% for s in report.shifts %}
@@ -87,6 +89,8 @@
 </section>
 {% endblock %}
 {% block scripts %}
+<script nonce="{{ csp_nonce }}" src="{% static 'vendor/ag-grid/ag-grid-community-36.2.0.min.noStyle.js' %}" defer></script>
+<script nonce="{{ csp_nonce }}" src="{% static 'js/grids.js' %}" defer></script>
 <script nonce="{{ csp_nonce }}">
   // Ask: only the answer area changes while the AI works; the rest of the page stays put
   (() => {

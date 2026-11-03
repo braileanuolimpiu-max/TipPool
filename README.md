@@ -107,8 +107,11 @@ flowchart LR
 - **Owner controls.** A payout approval limit (bigger payouts wait for the owner, even automatic ones), an
   emergency freeze for every payout, managers and shift leads limited to their own locations, and a daily
   or weekly summary email.
-- **Reports and history.** Tips per person, role and shift, CSV export for payroll, and a full activity log
-  (who did what, filterable, downloadable).
+- **Reports and history, as interactive tables ([AG Grid](https://www.ag-grid.com/) Community).** Tips per person and
+  per shift, past shifts and the activity log: sort any column, filter, search, a totals row that follows what's
+  shown (search "server" and the totals are the servers'), click a shift to open it, keyboard friendly. On phones
+  the grid keeps the columns that matter; it follows dark mode; printing and no-JavaScript fall back to the plain
+  table. CSV export for payroll (spreadsheet formulas neutralized).
 - **Quick setup.** Add a whole team at once (paste a list or a CSV) and email everyone their private link.
   Dark mode for late close-outs.
 - **Staff side.** A private link per person (no account needed): their shifts, shares, explanations and
@@ -236,8 +239,9 @@ flowchart LR
 ## Tech
 
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
-Claude, Gemini or another AI service · plain HTML/CSS/JS (no front-end framework) · 406 tests and a lint
-check, run on GitHub Actions.
+Claude, Gemini or another AI service · plain HTML/CSS/JS (no front-end framework) · AG Grid Community 36 for the
+tables (self-hosted, MIT, under the same strict Content-Security-Policy: its styles carry the page's nonce) ·
+420 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 

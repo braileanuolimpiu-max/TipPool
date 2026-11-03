@@ -1,4 +1,4 @@
-{% extends "app.html" %}
+{% extends "app.html" %}{% load static %}
 {% block title %}Activity log{% endblock %}
 {% block content %}
 <header class="page-head">
@@ -16,7 +16,9 @@
   <div class="actions"><button class="btn btn-primary">Filter</button>{% if query %}<a class="btn btn-quiet" href="{% url 'activity' %}">Clear</a>{% endif %}</div>
 </form>
 {% if changes %}
-<div class="table-wrap"><table class="data changes">
+{{ grid_rows|json_script:"grid-activity" }}
+<div class="panel">
+<div class="table-wrap" data-grid="activity" data-grid-rows="grid-activity" data-grid-label="Activity log" data-search-label="Search these entries"><table class="data changes">
   <thead><tr><th>When</th>{% if locations|length > 1 %}<th>Location</th>{% endif %}<th>Who</th><th>What</th></tr></thead>
   <tbody>
   {% for c in changes %}
@@ -24,7 +26,12 @@
   {% endfor %}
   </tbody>
 </table></div>
+</div>
 {% else %}
 <div class="panel panel-body"><p class="muted st-20">Nothing matches.</p></div>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}" src="{% static 'vendor/ag-grid/ag-grid-community-36.2.0.min.noStyle.js' %}" defer></script>
+<script nonce="{{ csp_nonce }}" src="{% static 'js/grids.js' %}" defer></script>
 {% endblock %}

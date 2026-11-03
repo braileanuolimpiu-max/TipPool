@@ -23,7 +23,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import ai, autoclose, botcheck, guest_i18n, hours as hours_from, insights, limits, payout_runs, platform, roles as role_presets, services
+from . import ai, autoclose, botcheck, grids, guest_i18n, hours as hours_from, insights, limits, payout_runs, platform, roles as role_presets, services
 from .models import (Alert, Change, CloseTime, Location, Membership, Night, PayoutBatch, PayoutItem, PayoutRun, Role, Share,
                      Shift, StaffMember, Tip, TipRuleSet, WebhookEvent)
 from .accounts import manager_required, managers_only, owner_required, two_step_setup_context
@@ -133,7 +133,7 @@ def history(request):
         batches = [b for b in n.payout_batches.all() if not b.is_retry]
         rows.append({"night": n, "total": (n.total or Decimal("0")).quantize(Decimal("0.01")),
                      "people": n.paid_people, "batch": batches[0] if batches else None})
-    return render(request, "tips/history.html", {"rows": rows})
+    return render(request, "tips/history.html", {"rows": rows, "grid_rows": grids.history_rows(rows)})
 
 
 def _id(value):
@@ -1438,6 +1438,7 @@ def reports_page(request):
                                                           "query": params.urlencode()})
     return render(request, "tips/reports.html", {
         "report": report, "periods": reports.PERIODS, "period": period, "scope": scope,
+        "grid_people": grids.people_rows(report), "grid_shifts": grids.shift_rows(report),
         "query": params.urlencode(), "question": typed if asked is None else question, "asked": asked,
         "examples": ask.EXAMPLES, "ai_mode": ai.mode(),
     })
@@ -1967,8 +1968,9 @@ def activity(request):
         return response
     query = request.GET.copy()
     query.pop("export", None)
+    shown = list(rows[:300])
     return render(request, "tips/activity.html", {
-        "changes": rows[:300], "count": rows.count(), "locations": allowed, "where": where, "who": who, "q": words,
+        "changes": shown, "grid_rows": grids.activity_rows(shown, len(allowed) > 1), "count": rows.count(), "locations": allowed, "where": where, "who": who, "q": words,
         "first": first, "last": last, "people": sorted(set(Change.objects.filter(location__in=allowed)
                                                           .values_list("who", flat=True))),
         "query": query.urlencode(),

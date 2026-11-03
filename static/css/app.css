@@ -1656,3 +1656,25 @@ html:has(.login)::-webkit-scrollbar, body:has(.login)::-webkit-scrollbar { displ
   .auth-home { padding-block: 6px; }
   .back { padding-block: 6px; margin-top: -6px; margin-bottom: 6px; }
 }
+
+/* ---------- interactive tables (AG Grid Community, static/js/grids.js) ---------- */
+.grid-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 22px; border-bottom: 1px solid var(--hair-soft); }
+.grid-search { flex: 1 1 220px; max-width: 320px; }
+.grid-count { margin-left: auto; }
+.tp-grid { width: 100%; }
+.tp-grid.tall { height: min(680px, 78vh); }
+.tp-grid .grid-row-link { cursor: pointer; }
+.tp-grid .grid-strong { font-weight: 700; }
+.tp-grid .grid-mono { font-family: var(--mono); font-size: .88em; }
+.tp-grid .grid-total { font-weight: 700; background: var(--steel-1); }
+.tp-grid .ag-cell { font-variant-numeric: tabular-nums; }
+.tp-grid .ag-cell a { color: var(--ink); }
+@media (max-width: 640px) { .grid-tools { padding: 10px 14px; } .grid-search { max-width: none; } .grid-count { margin-left: 0; } }
+/* printing: the plain table, not the grid */
+@media print { .table-wrap[hidden] { display: block !important; } .grid-tools, .tp-grid { display: none !important; } }
+/* short grids end at their last row (no blank strip); wrapped text keeps normal line spacing */
+.tp-grid .ag-grid-scrolling-rows.ag-layout-auto-height { min-height: 48px !important; }  /* one row: room for "Nothing matches" */
+.tp-grid .ag-cell-wrap-text { line-height: 1.45; padding-top: 11px; padding-bottom: 11px; word-break: normal; overflow-wrap: anywhere; }
+/* a long word with no spaces (an email, a long name) wraps instead of pushing the page sideways on phones */
+.changes td, .tent-label, .tent-how, .team-rows strong { overflow-wrap: anywhere; }
+.team-rows li > div, .changes td { min-width: 0; }
