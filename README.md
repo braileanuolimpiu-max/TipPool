@@ -334,7 +334,7 @@ tips/
   operator.py, platform.py           Platform settings (stored encrypted, no code needed)
   tests/            the test suite
 templates/, static/ plain HTML, CSS and JS
-docs/               screenshots and the demo video script
+docs/               screenshots for this README
 ```
 
 ## License

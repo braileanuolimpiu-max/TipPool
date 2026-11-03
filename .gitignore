@@ -7,3 +7,7 @@ db.sqlite3
 media/
 staticfiles/
 .playwright-mcp/
+
+# hackathon notes kept on this computer only (video script, Devpost draft)
+docs/demo-video-script.md
+docs/devpost-submission.md
