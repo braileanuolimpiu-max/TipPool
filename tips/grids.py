@@ -40,9 +40,10 @@ def shift_rows(report):
     for s in report["shifts"]:
         url, action = _shift_link(s["night"])
         rows.append({"date": s["date"].isoformat(), "label": date_format(s["date"], "D, M j"), "short": date_format(s["date"], "M j"),
-                     "location": s["location"],
                      "total": _money(s["total"]), "people": s["people"], "status": s["status"], "url": url,
-                     "action": action})
+                     "action": action,
+                     # a Location column only when the report covers several, like the plain table
+                     **({"location": s["location"]} if report.get("several_locations") else {})})
     return rows
 
 

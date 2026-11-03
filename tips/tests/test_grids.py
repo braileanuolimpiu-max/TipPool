@@ -35,6 +35,8 @@ class GridPagesTests(TestCase):
         self.assertContains(res, f'<script nonce="{nonce}" src="/static/vendor/ag-grid/ag-grid-community-36.2.0.min.noStyle.js" defer>', html=False)
         self.assertContains(res, 'data-grid="people"')
         self.assertContains(res, "<table class=\"data\">")  # the plain table is still there without JavaScript
+        # one location: no Location column in the per-shift grid (the plain table hides it too)
+        self.assertNotIn("location", self.rows(res, "grid-shifts")[0])
 
     def test_past_shifts_link_to_our_own_pages(self):
         res = self.client.get(reverse("history"))

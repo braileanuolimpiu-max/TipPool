@@ -76,7 +76,7 @@
     ];
     if (kind === "shifts") return [
       shiftDate,
-      ...(rows.some((r) => r.location) ? [text("location", "Location", {flex: 1, narrow: false})] : []),
+      ...(rows.some((r) => "location" in r) ? [text("location", "Location", {flex: 1, narrow: false})] : []),
       num("total", "Tips", {valueFormatter: m}),
       num("people", "People", {narrow: false}),
       text("status", "Status", {flex: 1, minWidth: 110, cellClass: "muted", wrapText: true, autoHeight: true}),
