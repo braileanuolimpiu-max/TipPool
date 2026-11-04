@@ -805,7 +805,7 @@ class PlatformConfig(models.Model):
     claude_model = models.CharField(max_length=60, blank=True)
     gemini_key_encrypted = models.TextField(blank=True)
     gemini_model = models.CharField(max_length=80, blank=True)
-    # ChatGPT, DeepSeek, Kimi, Mistral: {"deepseek": "<encrypted key>"} and {"deepseek": "deepseek-flash"}
+    # ChatGPT, DeepSeek, Kimi, Mistral: {"deepseek": "<encrypted key>"} and {"deepseek": "deepseek-v4-flash"}
     other_ai_keys = models.JSONField(default=dict, blank=True)
     other_ai_models = models.JSONField(default=dict, blank=True)
     # AI answers per day for the whole site (0 = no limit): a ceiling on cost and free quota, whatever happens

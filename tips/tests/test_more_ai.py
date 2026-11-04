@@ -76,14 +76,14 @@ class OtherAISetupTests(TestCase):
         self.url = reverse("platform_settings")
 
     def test_saving_deepseek_picks_its_model(self):
-        listing = reply(payload={"data": [{"id": "deepseek-chat"}, {"id": "deepseek-flash"}]})
+        listing = reply(payload={"data": [{"id": "deepseek-chat"}, {"id": "deepseek-v4-pro"}, {"id": "deepseek-v4-flash"}]})
         with mock.patch("tips.openai_compat.requests.get", return_value=listing), \
                 mock.patch("tips.openai_compat.requests.post", return_value=answer_with({"x": 1})):
             self.client.post(self.url, {"section": "ai", "ai_provider": "deepseek", "ai_enabled": "on",
                                         "key_deepseek": "sk-deep"})
         cfg = PlatformConfig.load()
         self.assertEqual((cfg.ai_provider, cfg.ai_enabled, cfg.other_ai_models["deepseek"]),
-                         ("deepseek", True, "deepseek-flash"))
+                         ("deepseek", True, "deepseek-v4-flash"))
         self.assertNotIn("sk-deep", json.dumps(cfg.other_ai_keys))
         self.assertEqual(platform.other_ai_key("deepseek"), "sk-deep")
 

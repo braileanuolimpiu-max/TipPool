@@ -16,7 +16,7 @@ PROVIDERS = {
     "openai": ("ChatGPT", "https://api.openai.com/v1", "https://platform.openai.com/api-keys", "sk-",
                ["gpt-5.4-mini", "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"]),
     "deepseek": ("DeepSeek", "https://api.deepseek.com/v1", "https://platform.deepseek.com/api_keys", "sk-",
-                 ["deepseek-flash", "deepseek-chat"]),
+                 ["deepseek-v4-flash", "deepseek-flash", "deepseek-chat"]),
     "kimi": ("Kimi", "https://api.moonshot.ai/v1", "https://platform.moonshot.ai/console/api-keys", "sk-",
              ["kimi-k2.6", "kimi-k2.5", "kimi-k2-turbo-preview", "kimi-latest", "moonshot-v1-32k"]),
     "mistral": ("Mistral", "https://api.mistral.ai/v1", "https://console.mistral.ai/api-keys", "",
