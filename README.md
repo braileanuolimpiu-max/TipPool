@@ -46,7 +46,7 @@ card in the corner ticks off each step as you go:
   (the demo uses a built-in AI fallback), and with your own sandbox keys for real PayPal calls.
 - Hosted on **Render** (blueprint in `render.yaml`): payouts run as **Render Workflows** and the cache is a
   **Render Key Value** store (see [Built on Render](#built-on-render)), with a Neon Postgres database. The live demo's AI is
-  **Gemini** (Google); if it's busy or over its free limit, the built-in assistant answers and says so.
+  **DeepSeek**; if it's busy or out of credit, the built-in assistant answers and says so.
 
 ## The problem
 
