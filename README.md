@@ -247,7 +247,7 @@ flowchart LR
 Django 5.2 · Python 3.11 · PostgreSQL (production) / SQLite (local) · PayPal REST APIs and JS SDK v6 ·
 Claude, Gemini or another AI service · plain HTML/CSS/JS (no front-end framework) · AG Grid Community 36 for the
 tables (self-hosted, MIT, under the same strict Content-Security-Policy: its styles carry the page's nonce) ·
-424 tests and a lint check, run on GitHub Actions.
+425 tests and a lint check, run on GitHub Actions.
 
 ## Run it locally (sandbox)
 

@@ -104,6 +104,16 @@ class AskTests(TestCase):
         self.assertIn("Question: How did Maria do?", sent)
 
 
+    def test_the_ai_knows_the_shift_going_on_now(self):
+        from tips.models import ClockEntry
+        night = Night.objects.create(location=self.location, date=date(2026, 9, 20))
+        Tip.objects.create(night=night, amount=Decimal("12"), paypal_order_id="OPEN1", status="completed")
+        ClockEntry.objects.create(staff=self.maria, night=night)
+        text = ask._waiting(self.location)
+        self.assertIn("shift 2026-09-20 (Sunday): OPEN (going on now, can be closed out), $12.00 in tips so far", text)
+        self.assertIn("Maria (on the clock now)", text)
+
+
 class AskInPlaceTests(TestCase):
     """The answer area is filled without reloading the page; Confirm sits in its own form."""
 

@@ -162,11 +162,19 @@ def _plan(steps, location, user):
 
 def _waiting(location):
     from .models import Night
-    rows = Night.objects.filter(location=location, status__in=[Night.Status.CLOSED, Night.Status.REVIEW])
+    rows = Night.objects.filter(location=location, status__in=[Night.Status.OPEN, Night.Status.CLOSED,
+                                                                 Night.Status.REVIEW]).order_by("date")
     team = ", ".join(m.staff.name for m in location.memberships.filter(active=True).select_related("staff"))
     lines = ["", f"## Now at {location.display_name}", f"Team: {team or 'nobody yet'}"]
     cur = location.business.symbol
     for n in rows:
+        if n.status == Night.Status.OPEN:
+            # the shift going on now: what "tonight" and "today's shift" mean (close_shift, add_tip)
+            clocked = [f"{e.staff.name} (on the clock now)" if e.ended_at is None else e.staff.name
+                       for e in n.clock_entries.select_related("staff").order_by("started_at")]
+            lines.append(f"- shift {n.date.isoformat()} ({n.date:%A}): OPEN (going on now, can be closed out), "
+                         f"{cur}{n.tip_total} in tips so far; clocked in: {', '.join(dict.fromkeys(clocked)) or 'nobody yet'}")
+            continue
         lines.append(f"- shift {n.date.isoformat()} ({n.date:%A}): {n.get_status_display()}, {cur}{n.tip_total} in tips"
                      + (f", ON HOLD: {n.hold}" if n.hold else ""))
         shares = list(n.shares.select_related("staff"))
@@ -287,7 +295,7 @@ def _data_summary(locations, today):
     for i in range(8):
         start = week_start - timedelta(weeks=i)
         r = reports.build(locations, start, min(start + timedelta(days=6), today))
-        top = ", ".join(f"{p['name']} {_money(p['total'])}" for p in r["people"][:5])
+        top = ", ".join(f"{p['name']} {_money(p['total'])} ({p['hours']}h)" for p in r["people"][:5])
         lines.append(f"- week of {start:%b %d}: {r['shift_count']} shifts, {_money(r['collected'])}" + (f"; {top}" if top else ""))
     return "\n".join(lines)
 
