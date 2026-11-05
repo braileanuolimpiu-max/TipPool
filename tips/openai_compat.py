@@ -81,6 +81,27 @@ def parse(provider, system, content, output_model):
             raise AIError(f"{label} took too long to answer.")
         return _post(base, key, body, timeout=(5, left))
 
+    for attempt in range(2):  # an empty or unreadable answer gets one more try, time allowing
+        response, body = _ask(send, tries, end, label, AIError)
+        text = _text_of(response, label, AIError)
+        out = _read(text, output_model)
+        if out is not None:
+            break
+        log.warning("%s answer didn't fit %s (try %s): %r", label, output_model.__name__, attempt + 1, text[:300])
+        tries = [body]
+        if end - time.monotonic() < 8:
+            break
+    if out is None:
+        raise AIError(f"{label}'s answer could not be read. Please try again.")
+    data = response.json()
+    usage = (data.get("usage") if isinstance(data, dict) else None) or {}
+    log.info("%s usage: in=%s out=%s", label, usage.get("prompt_tokens"), usage.get("completion_tokens"))
+    return out
+
+
+def _ask(send, tries, end, label, AIError):
+    """Send the request (JSON schema first, plain JSON mode if the service refuses schemas).
+    Returns (the response, the body that got it); raises AIError for errors a person should see."""
     try:
         for i, body in enumerate(tries):
             response = send(body)
@@ -106,6 +127,11 @@ def parse(provider, system, content, output_model):
     if response.status_code >= 400:
         log.warning("%s error %s: %s", label, response.status_code, response.text[:300])
         raise AIError(f"{label} API error ({response.status_code}).")
+    return response, body
+
+
+def _text_of(response, label, AIError):
+    """The answer's text ("" when the service sent none)."""
     try:
         data = response.json()
     except ValueError as exc:
@@ -115,18 +141,34 @@ def parse(provider, system, content, output_model):
         raise AIError(f"{label} declined this request.")
     message = (choices[0] if isinstance(choices[0], dict) else {}).get("message")
     text = (message if isinstance(message, dict) else {}).get("content") or ""
-    if not isinstance(text, str):
-        raise AIError(f"{label}'s answer could not be read. Please try again.")
-    text = text.strip()
+    text = text.strip() if isinstance(text, str) else ""
     if text.startswith("```"):  # some services wrap JSON in a code block
         text = text.strip("`").removeprefix("json").strip()
+    return text
+
+
+def _read(text, output_model):
+    """The answer as `output_model`, or None. A part that is optional and doesn't fit (say, a half-filled
+    action on a plain question) is left out rather than losing the whole answer; required parts must fit."""
+    if not text:
+        return None
     try:
-        out = output_model.model_validate_json(text)
+        return output_model.model_validate_json(text)
     except (ValidationError, ValueError) as exc:
-        raise AIError(f"{label}'s answer could not be read. Please try again.") from exc
-    usage = data.get("usage") or {}
-    log.info("%s usage: in=%s out=%s", label, usage.get("prompt_tokens"), usage.get("completion_tokens"))
-    return out
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return None
+        if not isinstance(data, dict) or not isinstance(exc, ValidationError):
+            return None
+        optional = {name for name, field in output_model.model_fields.items() if not field.is_required()}
+        broken = {e["loc"][0] for e in exc.errors() if e.get("loc")}
+        if not broken or not broken <= optional:
+            return None
+        try:
+            return output_model.model_validate({k: v for k, v in data.items() if k not in broken})
+        except ValidationError:
+            return None
 
 
 def _about_format(response):

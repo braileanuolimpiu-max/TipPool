@@ -43,6 +43,17 @@ class CloseOutCheckTests(TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["summary"], "Ready to pay: nothing unusual found.")
 
+    def test_the_ai_is_told_who_pays_the_fees(self):
+        from tips.models import Business
+        night = self.night()
+        business = self.location.business
+        business.fee_mode = Business.FeeMode.BUSINESS
+        business.save()
+        self.assertIn("paid by the business", check._describe(night, []))
+        business.fee_mode = Business.FeeMode.POOL
+        business.save()
+        self.assertIn("taken out of the tips before sharing", check._describe(night, []))
+
     def test_long_shift_stops(self):
         result = self.split(self.night(hours=("15", "5")))
         self.assertFalse(result["ok"])

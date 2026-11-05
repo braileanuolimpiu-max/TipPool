@@ -15,7 +15,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from . import ai
-from .models import Night, Role, Tip
+from .models import Business, Night, Role, Tip
 
 log = logging.getLogger("tips.check")
 
@@ -35,7 +35,10 @@ CHECK_SYSTEM = """You check a shift's tip split before the money is paid out to 
 You get the shift's numbers and the problems simple rules already found. Use ONLY the numbers given.
 Write for a busy manager: short, plain, specific (names and amounts). Suggest concrete fixes.
 Set hold=true when something looks wrong enough that a person should look before paying
-(you can only stop a payout, never approve one). Don't repeat the rules' findings word for word."""
+(you can only stop a payout, never approve one). Don't repeat the rules' findings word for word.
+The shares are calculated exactly in code: don't redo the arithmetic, and don't question how fees are
+handled, which is the business's own setting and is stated in the data. A low total on its own is not a
+reason to hold: the rules already flag it."""
 
 
 def findings_for(night):
@@ -154,9 +157,14 @@ def run(night):
 
 def _describe(night, found):
     cur = night.location.business.symbol
-    lines = [f"Shift: {night} at {night.location.display_name}. Tips: {cur}{night.tip_total} "
-             f"(fees {cur}{night.fee_total}). Rules: {night.rule_set.summary if night.rule_set else 'none'}.",
-             "Shares:"]
+    passed_on = night.location.business.fee_mode == Business.FeeMode.POOL
+    fees = (f"Card and PayPal fees: {cur}{night.fee_total}, "
+            + ("taken out of the tips before sharing (the business's setting)." if passed_on else
+               "paid by the business (its setting), so the team shares the full tips and no share is "
+               "reduced for fees. That is correct, not a mistake."))
+    lines = [f"Shift: {night} at {night.location.display_name}. Tips: {cur}{night.tip_total}. {fees} "
+             f"Rules: {night.rule_set.summary if night.rule_set else 'none'}.",
+             "Shares (worked out exactly in code from the rules and hours):"]
     hours = {s.staff_id: s.hours for s in night.shifts.all()}
     for s in night.shares.select_related("staff"):
         lines.append(f"- {s.staff.name} ({s.role_name}, {hours.get(s.staff_id, 0)}h): {cur}{s.amount}")

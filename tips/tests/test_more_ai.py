@@ -62,6 +62,28 @@ class OpenAICompatibleTests(TestCase):
         with mock.patch("tips.openai_compat.requests.post", return_value=fenced):
             self.assertEqual(self.call().answer, "ok")
 
+    def test_a_broken_optional_part_is_left_out_not_the_whole_answer(self):
+        self.use("deepseek")
+        half = answer_with({"answer": "I don't follow, ask about your tips.", "action": {"kind": "none"}})
+        with mock.patch("tips.openai_compat.requests.post", return_value=half) as post:
+            out = self.call()
+        self.assertEqual((out.answer, out.action, post.call_count), ("I don't follow, ask about your tips.", None, 1))
+
+    def test_an_empty_answer_is_asked_once_more(self):
+        self.use("deepseek")
+        empty = reply(payload={"choices": [{"message": {"content": ""}}]})
+        with mock.patch("tips.openai_compat.requests.post", side_effect=[empty, answer_with({"answer": "ok"})]) as post:
+            self.assertEqual(self.call().answer, "ok")
+        self.assertEqual(post.call_count, 2)
+
+    def test_a_missing_required_part_still_fails(self):
+        self.use("deepseek")
+        bad = answer_with({"action": None})
+        with mock.patch("tips.openai_compat.requests.post", return_value=bad) as post:
+            with self.assertRaisesMessage(ai.AIError, "could not be read"):
+                self.call()
+        self.assertEqual(post.call_count, 2)
+
     def test_no_credit_is_said_plainly(self):
         self.use("openai")
         with mock.patch("tips.openai_compat.requests.post", return_value=reply(402, {"error": {}})):
