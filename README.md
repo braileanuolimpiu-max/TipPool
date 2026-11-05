@@ -8,6 +8,12 @@ the whole team with **PayPal Payouts**.
 
 Built for the PayPal AI Hackathon 2026 ("Build What's Next with PayPal and AI").
 
+> **This is a hackathon demo, not a live service.** It runs only on the PayPal sandbox (test money). No real
+> businesses use it, and there is no company or contract behind it. The Terms and Privacy pages are
+> written in plain language for the demo and haven't been reviewed by a lawyer. Before it could handle real tips it would need a registered business,
+> agreements with each venue, a live PayPal account approved for payouts, and checks against local tip and
+> payroll-tax law.
+
 > **Live demo: https://tippool-if7m.onrender.com** · click **Try the demo** on the sign-in page: no sign-up, sandbox
 > money only. (Free hosting: the first visit after a quiet spell can take up to a minute to wake up.)
 
