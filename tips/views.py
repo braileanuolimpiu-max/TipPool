@@ -498,9 +498,14 @@ def _tell_owner_about_new_people(request, location, people):
         return
     from .alerts import raise_alert
     who = request.user.get_full_name() or request.user.get_username()
-    listed = ", ".join(f"{p.name} ({p.paypal_email})" for p in people[:8]) + (" and more" if len(people) > 8 else "")
-    raise_alert(request.business, f"{who} added {listed} to the team, paid with PayPal at those emails.",
-                location=location, key=f"address:new:{people[0].pk}:{len(people)}", owners_only=True)
+    everyone = [f"{p.name} ({p.paypal_email})" for p in people]
+    if len(people) == 1:
+        text = f"{who} added {everyone[0]} to the team, paid with PayPal at that email."
+    else:  # the alert holds 300 characters: the full list is in the email and on the Team page
+        text = (f"{who} added {len(people)} people to the team, each paid with PayPal at the email given. "
+                "Check the list on the Team page (it's also in the email).")
+    raise_alert(request.business, text, location=location, key=f"address:new:{people[0].pk}:{len(people)}",
+                owners_only=True, details="Added, with where each is paid:\n" + "\n".join(everyone))
 
 
 BULK_MAX = 200

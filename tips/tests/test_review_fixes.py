@@ -57,3 +57,30 @@ class CronKeyTests(TestCase):
     def test_an_odd_key_is_simply_not_found(self):
         self.assertEqual(self.client.get(reverse("cron_tick") + "?key=%C3%A9").status_code, 404)
         self.assertEqual(self.client.get(reverse("cron_tick"), HTTP_X_CRON_KEY="é").status_code, 404)
+
+
+class AlertKeyTests(TestCase):
+    def test_a_long_key_is_still_found_and_never_shared(self):
+        from tips.alerts import alert_key, raise_alert
+        from tips.models import Alert
+        business = Location.default().business
+        long_a = "address:1:" + "a" * 90 + "@example.com"
+        long_b = "address:1:" + "a" * 90 + "@example.org"
+        self.assertNotEqual(alert_key(long_a), alert_key(long_b))
+        self.assertLessEqual(len(alert_key(long_a)), 80)
+        raise_alert(business, "one", key=long_a, owners_only=True)
+        raise_alert(business, "one again", key=long_a, owners_only=True)  # the same problem: once
+        raise_alert(business, "two", key=long_b, owners_only=True)
+        self.assertEqual(Alert.objects.count(), 2)
+
+
+@override_settings(RATELIMIT_ENABLED=True)
+class ConfirmEmailTests(TestCase):
+    def test_pressing_confirm_again_and_again_doesnt_flood_an_inbox(self):
+        from django.core import mail
+        cache.clear()
+        self.addCleanup(cache.clear)
+        sam = hire("Sam", "server", confirmed=False)
+        for _ in range(6):
+            self.client.post(reverse("my_tips", args=[sam.access_token]), {"payout": "confirm"})
+        self.assertEqual(len([m for m in mail.outbox if m.to == ["sam@example.com"]]), 3)

@@ -437,7 +437,9 @@ class MoneyTests(TestCase):
         texts = list(Alert.objects.filter(key__startswith="address:new:").values_list("text", flat=True))
         self.assertEqual(len(texts), 2)
         self.assertTrue(any("Ghost (mgr4@example.com)" in t for t in texts))
-        self.assertTrue(any("Ann (ann@example.com), Ben (ben@example.com)" in t for t in texts))
+        self.assertTrue(any("added 2 people" in t for t in texts))
+        self.assertTrue(any("Ann (ann@example.com)" in m.body and "Ben (ben@example.com)" in m.body
+                            and m.to == ["owner@example.com"] for m in mail.outbox))  # every address reaches the owner
 
     @override_settings(RATELIMIT_ENABLED=True)
     def test_the_staff_page_keeps_its_rate_limit(self):

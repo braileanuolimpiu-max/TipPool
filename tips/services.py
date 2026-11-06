@@ -857,6 +857,9 @@ def check_payout_address(staff, location=None):
     from . import emails, platform
     business = staff.business
     if staff.payout_method == StaffMember.PayoutMethod.PAYPAL and not business.is_demo and platform.email_enabled():
+        from .ratelimit import hit
+        if not hit(f"payout-check-mail:{staff.pk}", 3, 3600):
+            return "emailed"  # sent already: pressing again doesn't flood that inbox
         link = emails.absolute(reverse("payout_check", args=[payout_check_token(staff)]))
         if link.startswith("http") and emails.send(
                 staff.paypal_email, "Confirm where your tips are paid", heading="Is this your PayPal?",

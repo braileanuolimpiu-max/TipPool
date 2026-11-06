@@ -4,16 +4,26 @@ import logging
 log = logging.getLogger("tips.alerts")
 
 
-def raise_alert(business, text, location=None, night=None, key="", owners_only=False, once=False):
+def alert_key(key):
+    """Keys are stored up to 80 characters: a longer one (a long email in it) keeps its start and a hash of
+    the whole, so the same problem is still found and two different ones never share a key."""
+    if len(key) <= 80:
+        return key
+    import hashlib
+    return key[:63] + ":" + hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def raise_alert(business, text, location=None, night=None, key="", owners_only=False, once=False, details=""):
     """Record an alert once (same key = same problem) and email the business's managers who run that
-    location (or only the owners)."""
+    location (or only the owners). `details`: more for the email than fits on the alert."""
     from .models import Alert
+    key = alert_key(key)
     seen = Alert.objects.filter(business=business, key=key)
     if key and (seen if once else seen.filter(resolved_at__isnull=True)).exists():
         return None  # `once`: a problem someone already handled isn't raised again
-    alert = Alert.objects.create(business=business, location=location, night=night, text=text[:300], key=key[:80])
-    email_managers(business, f"Needs your attention: {text[:80]}", text, location=location, owners_only=owners_only,
-                   heading="Needs your attention")
+    alert = Alert.objects.create(business=business, location=location, night=night, text=text[:300], key=key)
+    email_managers(business, f"Needs your attention: {text[:80]}", text + (f"\n\n{details}" if details else ""),
+                   location=location, owners_only=owners_only, heading="Needs your attention")
     return alert
 
 
