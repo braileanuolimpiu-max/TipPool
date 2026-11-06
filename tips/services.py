@@ -175,6 +175,20 @@ def _apply_order_result(tip, result):
     fee = ((capture.get("seller_receivable_breakdown") or {}).get("paypal_fee") or {}).get("value")
     if fee is not None:
         tip.fee = Decimal(fee)
+    paid = capture.get("amount") or {}
+    if paid and capture.get("status") == "COMPLETED":
+        # the order is made on our server, so this can't differ; if it ever does, a person should look
+        currency = business_of(tip.night).currency
+        try:
+            same = Decimal(str(paid.get("value"))) == tip.amount and paid.get("currency_code", currency) == currency
+        except (ArithmeticError, ValueError):
+            same = False
+        if not same:
+            log.warning("Tip %s captured %s %s, expected %s %s", tip.pk, paid.get("value"),
+                        paid.get("currency_code"), tip.amount, currency)
+            raise_alert(business_of(tip.night), f"PayPal captured {paid.get('value')} {paid.get('currency_code')} "
+                        f"for a tip of {tip.amount} {currency}. Check it in your PayPal account.",
+                        location=tip.night.location, night=tip.night, key=f"tip-amount:{tip.pk}")
     became_complete = tip.status != Tip.Status.COMPLETED and capture.get("status") == "COMPLETED"
     tip.status = Tip.Status.COMPLETED if capture.get("status") == "COMPLETED" else tip.status
     tip.save()
@@ -553,7 +567,8 @@ def _send_batch(batch, business, subject, replaces=None):
         issues = [str(body.get("name", ""))] + [str(d.get("issue", "")) for d in (body.get("details") or [])
                                                  if isinstance(d, dict)]
         duplicate = any("DUPLICATE" in i.upper() or "ALREADY" in i.upper() for i in issues)
-        if exc.status is not None and 400 <= exc.status < 500 and batch.status != "UNKNOWN" and not duplicate:
+        if exc.status is not None and 400 <= exc.status < 500 and batch.status != "UNKNOWN" and not duplicate \
+                and not _answered_meanwhile(batch):
             # PayPal said no and sent nothing: undo so the manager can fix it and try again (new id next time)
             night = batch.night
             Night.objects.filter(pk=night.pk).update(payout_attempt=models.F("payout_attempt") + 1)
@@ -578,6 +593,13 @@ def _send_batch(batch, business, subject, replaces=None):
     batch.status = header["batch_status"]
     batch.save(update_fields=["paypal_batch_id", "status"])
     return batch
+
+
+def _answered_meanwhile(batch):
+    """Another send of this same batch (a workflow retry, "Check PayPal again") got an answer or an unclear
+    one while this one was on its way: then this "no" doesn't mean nothing was paid, so nothing is undone."""
+    fresh = PayoutBatch.objects.filter(pk=batch.pk).values("paypal_batch_id", "status").first()
+    return fresh is None or bool(fresh["paypal_batch_id"]) or fresh["status"] == "UNKNOWN"
 
 
 def send_prepared(batch):
@@ -674,6 +696,10 @@ def recheck_unclear(batch):
 NOT_SENT_AFTER = timedelta(minutes=10)
 
 
+# how long a payout workflow can still be sending: 5 tries of up to 3 minutes each, with waits in between
+RUN_MAY_STILL_SEND = timedelta(minutes=30)
+
+
 def mark_not_sent(batch):
     """The owner looked in their PayPal account: an unclear payout isn't there. Undo it, so the shift (or the
     payment sent again) can be paid once more, with a new id. Only for a payout PayPal never answered."""
@@ -684,6 +710,12 @@ def mark_not_sent(batch):
         if batch.created_at > timezone.now() - NOT_SENT_AFTER:
             raise TipPoolError("Give PayPal a few minutes first: press \"Check PayPal again\", and if it's still "
                                "unclear after 10 minutes, check your PayPal account.")
+        from .models import PayoutRun
+        if PayoutRun.objects.filter(batch=batch, state__in=PayoutRun.ACTIVE,
+                                    started_at__gt=timezone.now() - RUN_MAY_STILL_SEND).exists():
+            # the workflow may still be sending this very request: undoing now could mean paying twice
+            raise TipPoolError("The payout is still being sent to PayPal (it retries on its own). Wait until the "
+                               "steps on this page finish, then check again.")
         night = Night.objects.select_for_update().get(pk=batch.night_id)
         replaced = []
         if batch.is_retry:  # a payment sent again: the one it replaced can be sent again
@@ -791,16 +823,71 @@ def confirm_payout(staff):
     staff.save(update_fields=["payout_confirmed_at"])
 
 
+PAYOUT_CHECK_SALT = "tippool.payout-check"
+PAYOUT_CHECK_DAYS = 7
+
+
+def payout_check_token(staff):
+    """For the link emailed to a PayPal address: it confirms that exact address for that person."""
+    from django.core import signing
+    return signing.dumps({"s": staff.pk, "e": staff.paypal_email.lower()}, salt=PAYOUT_CHECK_SALT, compress=True)
+
+
+def staff_for_payout_check(token):
+    """The person a payout-check link is for, while it still matches where they're paid; else None."""
+    from django.core import signing
+    try:
+        data = signing.loads(token, salt=PAYOUT_CHECK_SALT, max_age=PAYOUT_CHECK_DAYS * 86400)
+    except signing.BadSignature:
+        return None
+    staff = StaffMember.objects.filter(pk=data.get("s") if isinstance(data, dict) else None).first()
+    if (staff is None or staff.payout_method != StaffMember.PayoutMethod.PAYPAL
+            or staff.paypal_email.lower() != data.get("e")):
+        return None
+    return staff
+
+
+def check_payout_address(staff, location=None):
+    """The person says "pay me here". A PayPal address is confirmed through a link emailed to it, so only
+    whoever reads that inbox can confirm it: a manager who has the person's tips link can't confirm an
+    address they typed in themselves. Where no email can go out (the demo, email not set up, Venmo), it's
+    confirmed at once and the owner is told. Returns "emailed" or "confirmed"."""
+    from django.urls import reverse
+
+    from . import emails, platform
+    business = staff.business
+    if staff.payout_method == StaffMember.PayoutMethod.PAYPAL and not business.is_demo and platform.email_enabled():
+        link = emails.absolute(reverse("payout_check", args=[payout_check_token(staff)]))
+        if link.startswith("http") and emails.send(
+                staff.paypal_email, "Confirm where your tips are paid", heading="Is this your PayPal?",
+                greeting=f"Hi {staff.name},",
+                paragraphs=[f"Your tips from {business.name} will be paid with PayPal to {staff.paypal_email}. "
+                            "Confirm it's yours, so nobody else can be paid in your place.",
+                            f"The link works for {PAYOUT_CHECK_DAYS} days. Not you? Ignore this email."],
+                button=("Yes, pay me here", link)):
+            return "emailed"
+    confirm_payout(staff)
+    if not business.is_demo:
+        raise_alert(business, f"{staff.name} confirmed they're paid at {staff.payout_to} without an email check "
+                              "(no email could be sent). Check it's right before the next payout.",
+                    location=location, key=f"payout-confirmed:{staff.pk}:{staff.payout_to}", owners_only=True)
+    return "confirmed"
+
+
 def apply_payout_change(staff, payload):
-    """A manager approved a worker's request to be paid somewhere else."""
+    """A manager approved a worker's request to be paid somewhere else. A new PayPal address still has to
+    be confirmed by its owner (check_payout_address), like one a manager types in."""
     if payload.get("method") == StaffMember.PayoutMethod.VENMO:
         staff.payout_method = StaffMember.PayoutMethod.VENMO
         staff.venmo_phone = payload.get("phone", "")[:20]
+        staff.payout_confirmed_at = timezone.now()
     else:
         email = payload.get("email", staff.paypal_email)
         if StaffMember.objects.filter(business=staff.business, paypal_email__iexact=email).exclude(pk=staff.pk).exists():
             raise TipPoolError(f"Someone else on the team is already paid at {email}. Ask {staff.name} for their own.")
+        same = (staff.payout_method == StaffMember.PayoutMethod.PAYPAL and staff.payout_confirmed_at is not None
+                and staff.paypal_email.lower() == email.lower())
         staff.payout_method = StaffMember.PayoutMethod.PAYPAL
         staff.paypal_email = email
-    staff.payout_confirmed_at = timezone.now()
+        staff.payout_confirmed_at = staff.payout_confirmed_at if same else None
     staff.save()

@@ -112,7 +112,7 @@ def claim_platform(request):
     if profile is None or not profile.is_owner or profile.business.is_demo:
         return redirect("dashboard")
     typed = request.POST.get("code", "").strip().upper()
-    if not hmac.compare_digest(typed, platform.setup_code()):
+    if not hmac.compare_digest(typed.encode(), platform.setup_code().encode()):
         messages.error(request, "That setup code isn't right. It's in your server's log (on Render: your service → Logs).")
         return redirect("platform_settings")
     with transaction.atomic():

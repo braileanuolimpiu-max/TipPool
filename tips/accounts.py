@@ -699,7 +699,7 @@ def cron_tick(request):
     from . import platform
     from .models import PlatformConfig
     given = request.headers.get("X-Cron-Key") or request.GET.get("key", "")
-    if not any(hmac.compare_digest(given, key) for key in platform.cron_secrets()):
+    if not any(hmac.compare_digest(given.encode(), key.encode()) for key in platform.cron_secrets()):
         raise Http404()
     PlatformConfig.objects.filter(pk=1).update(last_tick_at=timezone.now())  # shown on Platform settings
     done = autoclose.run()

@@ -209,6 +209,7 @@ def _guest_language(request, lang):
     return {"lang": lang, "t": t, "lang_links": links, "paypal_locale": guest_i18n.PAYPAL_LOCALES[lang], "js_words": {k: t[k] for k in guest_i18n.JS_KEYS}}
 
 
+@limited("thanks", 60, 600, methods=("GET",))  # each visit may ask PayPal to capture
 def tip_thanks(request):
     # "order" comes from our page; "token" is what PayPal adds when it redirects back here
     order_id = request.GET.get("order") or request.GET.get("token") or ""
@@ -445,8 +446,13 @@ def staff_list(request):
     roles = list(Role.objects.filter(location=location))
     memberships = list(Membership.objects.filter(location=location).select_related("staff"))
     counts = Counter(m.default_role for m in memberships if m.active)
+    # a person's private link shows (and acts at) every location they work at: a manager who doesn't run
+    # all of those doesn't get it
+    shared_elsewhere = set() if request.user.manager.all_access else set(
+        Membership.objects.filter(staff__in=[m.staff_id for m in memberships], active=True)
+        .exclude(location__in=request.allowed_locations).values_list("staff_id", flat=True))
     return render(request, "tips/staff_list.html", {
-        "staff": memberships, "roles": roles,
+        "staff": memberships, "roles": roles, "shared_elsewhere": shared_elsewhere,
         "role_rows": [{"role": r, "count": counts[r.key]} for r in roles],
         "presets": [(k, p["label"]) for k, p in role_presets.PRESETS.items()],
         "business_type": location.business_type,
@@ -682,7 +688,7 @@ def staff_edit(request, pk):
             from .alerts import raise_alert
             who = request.user.get_full_name() or request.user.get_username()
             raise_alert(request.business, f"{who} changed where {person.name} is paid: {address[len('PayPal email '):]}. "
-                                          f"{person.name} confirms it on their tips page before they're paid there.",
+                                          f"{person.name} confirms it through a link emailed to that address before they're paid there.",
                         location=request.location, key=f"address:{person.pk}:{email}", owners_only=True)
         messages.success(request, f"Saved. {person.name} confirms the new email on their tips page before the "
                                   "next payout." if any("email" in c for c in changes) else "Saved.")
@@ -1104,6 +1110,9 @@ def payout_status(request, pk):
     if batch is None:
         return redirect("review", pk=pk)
     if request.method == "POST":
+        if request.user.manager.is_lead:  # asking PayPal again can send a stuck payout: a manager's call
+            messages.error(request, "Only a manager can check a payout with PayPal again.")
+            return redirect("payout_status", pk=pk)
         try:
             for each in night.payout_batches.all():
                 if (each.paypal_batch_id or "").startswith("DEMO"):
@@ -1459,6 +1468,10 @@ def ask_confirm(request):
 
 
 # --- Messages from staff ------------------------------------------------------
+# alerts about where people are paid: raised for the owner, so only the owner closes them
+OWNER_ALERTS = ("address:", "payout-confirmed:")
+
+
 @manager_required
 def messages_page(request):
     from .models import Message
@@ -1470,6 +1483,9 @@ def messages_page(request):
                                       pk=_id(request.POST["alert"]), business=business)
             if alert.key.startswith("owner-ok:") and not request.user.manager.is_owner:
                 messages.error(request, "This one waits for the owner. It closes by itself once the shift is paid.")
+                return redirect("messages_page")
+            if alert.key.startswith(OWNER_ALERTS) and not request.user.manager.is_owner:
+                messages.error(request, "Only the owner can mark this one as handled: it's about where someone is paid.")
                 return redirect("messages_page")
             alert.resolved_at = timezone.now()
             alert.resolved_by = request.user.get_full_name() or request.user.get_username()
@@ -1503,6 +1519,16 @@ def messages_page(request):
                     messages.error(request, str(exc))
                     return redirect("messages_page")
                 Change.log(request, f"Approved: {msg.staff.name} is now paid with {msg.staff.payout_to} (was {before})")
+                if msg.staff.payout_confirmed_at is None:  # a new PayPal address: its owner confirms it by email
+                    if services.check_payout_address(msg.staff, request.location) == "emailed":
+                        messages.success(request, f"{msg.staff.name} gets an email to confirm {msg.staff.paypal_email} "
+                                                  "before they're paid there.")
+                elif not request.user.manager.is_owner and not request.business.is_demo:
+                    from .alerts import raise_alert
+                    who = request.user.get_full_name() or request.user.get_username()
+                    raise_alert(request.business, f"{who} approved a change: {msg.staff.name} is now paid with "
+                                                  f"{msg.staff.payout_to} (was {before}).", location=request.location,
+                                key=f"address:{msg.staff.pk}:{msg.staff.payout_to}", owners_only=True)
             else:
                 Change.log(request, f"Declined {msg.staff.name}'s request to change where they're paid")
             msg.reply = "Approved." if approved else (request.POST.get("reply", "").strip()[:1000] or "Declined.")
@@ -1612,6 +1638,19 @@ def location_add(request):
 
 # --- Staff's own page (secret link, no login) ----------------------------------
 @limited("staff-page", 30, 600, key=lambda request, token: token)
+@limited("payout-check", 20, 3600)
+def payout_check(request, token):
+    """The link emailed to a PayPal address: whoever reads that inbox confirms it's where the person is paid."""
+    staff = services.staff_for_payout_check(token)
+    if staff is None:
+        return render(request, "tips/payout_check.html", {"expired": True}, status=404)
+    if request.method == "POST":
+        services.confirm_payout(staff)
+        messages.success(request, f"Thanks! Your tips go to {staff.payout_to}.")
+        return redirect("my_tips", token=staff.access_token)
+    return render(request, "tips/payout_check.html", {"staff": staff})
+
+
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
     home = member.memberships.filter(active=True).select_related("location").first() or member.memberships.first()
@@ -1695,7 +1734,12 @@ def _staff_payout(request, member, token):
     from .alerts import email_managers
     from .models import Message
     if request.POST["payout"] == "confirm":
-        services.confirm_payout(member)
+        if member.payout_confirmed_at is None:
+            home = member.memberships.filter(active=True).select_related("location").first()
+            if services.check_payout_address(member, home.location if home else None) == "emailed":
+                messages.success(request, f"We emailed a link to {member.paypal_email}. Open it to confirm, so "
+                                          "only you can be paid there.")
+                return redirect("my_tips", token=token)
         messages.success(request, f"Thanks! Your tips go to {member.payout_to}.")
         return redirect("my_tips", token=token)
     method = request.POST.get("method", "paypal")

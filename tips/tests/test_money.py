@@ -257,6 +257,58 @@ class MoneyTests(TestCase):
         services.pay_night(night)  # paid again, with a new id
         self.assertTrue(night.payout_batch.sender_batch_id.endswith(f"-a{attempt + 1}"))
 
+    def test_an_unclear_payout_cant_be_undone_while_it_is_still_being_sent(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from tips.models import PayoutBatch, PayoutRun
+        night = self.paid_night()
+        batch = night.payout_batch
+        PayoutBatch.objects.filter(pk=batch.pk).update(paypal_batch_id="", status="UNKNOWN",
+                                                       created_at=timezone.now() - timedelta(minutes=11))
+        PayoutRun.objects.create(night=night, batch=batch, state=PayoutRun.State.SENDING)
+        with self.assertRaisesMessage(services.TipPoolError, "still being sent"):
+            services.mark_not_sent(batch)
+        PayoutRun.objects.update(started_at=timezone.now() - timedelta(minutes=31))  # long gone
+        services.mark_not_sent(batch)
+        self.assertFalse(PayoutBatch.objects.filter(pk=batch.pk).exists())
+
+    def test_a_refusal_doesnt_undo_a_payout_another_send_got_through(self):
+        from tips.models import PayoutBatch
+        from tips.paypal import PayPalError
+        night = self.shift_with(("100", "0"))
+        services.build_split(night, self.rules)
+        batch = services.pay_night(night, send=False)
+
+        def refused(*args, **kwargs):  # meanwhile the workflow's send went through
+            PayoutBatch.objects.filter(pk=batch.pk).update(paypal_batch_id="B-OTHER", status="PENDING")
+            raise PayPalError("refused", status=422, details={"name": "VALIDATION_ERROR"})
+        with mock.patch.object(self.paypal, "create_payout_batch", side_effect=refused):
+            with self.assertRaises(services.TipPoolError):
+                services.send_prepared(batch)
+        self.assertTrue(PayoutBatch.objects.filter(pk=batch.pk).exists())
+
+    def test_a_shift_lead_cant_ask_paypal_again(self):
+        from tips.models import Manager
+        night = self.paid_night()
+        lead = make_manager("lead", self.business, owner=False)
+        Manager.objects.filter(user=lead).update(level="lead")
+        self.client.force_login(lead)
+        with mock.patch("tips.services.recheck_unclear") as again, mock.patch("tips.services.refresh_batch") as refresh:
+            self.client.post(reverse("payout_status", args=[night.pk]))
+        again.assert_not_called()
+        refresh.assert_not_called()
+
+    def test_a_capture_for_another_amount_is_flagged(self):
+        from tips.models import Alert
+        order = services.create_tip_order(self.location, "10")
+        odd = {"purchase_units": [{"payments": {"captures": [{"id": "CAP-X", "status": "COMPLETED",
+                                                               "amount": {"value": "1.00", "currency_code": "USD"}}]}}],
+               "payer": {"name": {}}}
+        with mock.patch.object(self.paypal, "capture_order", return_value=odd):
+            services.capture_tip(order)
+        self.assertTrue(Alert.objects.filter(key__startswith="tip-amount:").exists())
+
     def test_success_cannot_be_resent(self):
         self.paid_night()
         item = PayoutItem.objects.get(share__staff=self.john)
@@ -324,12 +376,70 @@ class MoneyTests(TestCase):
         self.assertFalse(Alert.objects.filter(key__startswith="dispute").exists())
 
     # --- staff confirm / change where they're paid ---
-    def test_staff_confirms_their_address(self):
+    def test_staff_confirms_their_address_through_an_emailed_link(self):
         sam = hire("Sam", "server", confirmed=False)
         self.client.logout()
+        mail.outbox.clear()
         self.client.post(reverse("my_tips", args=[sam.access_token]), {"payout": "confirm"})
         sam.refresh_from_db()
+        self.assertIsNone(sam.payout_confirmed_at)  # the tips link alone isn't enough: the inbox confirms
+        self.assertEqual(mail.outbox[-1].to, ["sam@example.com"])
+        link = next(w for w in mail.outbox[-1].body.split() if "/paid-here/" in w)
+        path = link[link.index("/paid-here/"):]
+        self.assertContains(self.client.get(path), "sam@example.com")
+        self.client.post(path)
+        sam.refresh_from_db()
         self.assertIsNotNone(sam.payout_confirmed_at)
+
+    def test_an_emailed_link_stops_working_once_the_address_changes(self):
+        sam = hire("Sam", "server", confirmed=False)
+        token = services.payout_check_token(sam)
+        sam.paypal_email = "someone@else.com"
+        sam.save()
+        self.client.logout()
+        self.assertEqual(self.client.post(reverse("payout_check", args=[token])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("payout_check", args=["junk"])).status_code, 404)
+        sam.refresh_from_db()
+        self.assertIsNone(sam.payout_confirmed_at)
+
+    def test_without_email_the_address_is_confirmed_and_the_owner_told(self):
+        from tips.models import Alert
+        sam = hire("Sam", "server", confirmed=False)
+        self.client.logout()
+        with mock.patch("tips.platform.email_enabled", return_value=False):
+            self.client.post(reverse("my_tips", args=[sam.access_token]), {"payout": "confirm"})
+        sam.refresh_from_db()
+        self.assertIsNotNone(sam.payout_confirmed_at)
+        self.assertTrue(Alert.objects.filter(key__startswith=f"payout-confirmed:{sam.pk}:").exists())
+
+    def test_an_approved_new_address_still_needs_its_owner(self):
+        self.client.logout()
+        self.client.post(reverse("my_tips", args=[self.maria.access_token]),
+                         {"payout": "change", "method": "paypal", "email": "maria.new@example.com"})
+        request = Message.objects.get(kind="payout")
+        manager = make_manager("mgr2", self.business, owner=False)
+        self.client.force_login(manager)
+        mail.outbox.clear()
+        self.client.post(reverse("messages_page"), {"message": request.pk, "decision": "approve"})
+        self.maria.refresh_from_db()
+        self.assertEqual(self.maria.paypal_email, "maria.new@example.com")
+        self.assertIsNone(self.maria.payout_confirmed_at)
+        self.assertTrue(any(m.to == ["maria.new@example.com"] for m in mail.outbox))
+
+    def test_only_the_owner_closes_an_alert_about_where_someone_is_paid(self):
+        from tips.models import Alert
+        manager = make_manager("mgr3", self.business, owner=False)
+        self.client.force_login(manager)
+        self.client.post(reverse("staff_edit", args=[self.maria.memberships.first().pk]),
+                         {"name": "Maria", "paypal_email": "mgr3@example.com"})
+        alert = Alert.objects.get(key__startswith=f"address:{self.maria.pk}:")
+        self.client.post(reverse("messages_page"), {"alert": alert.pk})
+        alert.refresh_from_db()
+        self.assertIsNone(alert.resolved_at)
+        self.client.force_login(self.owner)
+        self.client.post(reverse("messages_page"), {"alert": alert.pk})
+        alert.refresh_from_db()
+        self.assertIsNotNone(alert.resolved_at)
 
     def test_change_needs_manager_approval(self):
         self.client.logout()

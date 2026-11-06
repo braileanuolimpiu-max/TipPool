@@ -22,7 +22,9 @@
           <select name="default_role" aria-label="{{ m.staff.name }}'s usual role" data-autosubmit>
             {% for r in roles %}<option value="{{ r.key }}" {% if r.key == m.default_role %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
           </select><noscript><button class="btn btn-quiet small">Save</button></noscript></form>{% endif %}
-        {% if m.active %}
+        {% if m.active and m.staff_id in shared_elsewhere %}
+        <p class="small muted">Also works at a location you don't run: the owner shares their tips link.</p>
+        {% elif m.active %}
         <div class="link-tools">
           <span class="label">Tips link</span>
           <input class="copy-link" type="text" readonly value="{{ base_url }}{% url 'my_tips' m.staff.access_token %}" aria-label="{{ m.staff.name }}'s private tips link">

@@ -49,6 +49,7 @@ def mode():
 # AI answers per business per day: one account (or a script) can't use up the site's allowance
 DEMO_DAILY = 30
 BUSINESS_DAILY = 150
+DEMOS_DAILY = 250  # all demos together, when the site has no daily limit of its own
 
 
 def for_business(business):
@@ -84,6 +85,13 @@ def _spend():
             raise AIError("Today's AI allowance for this business is used up, so the built-in assistant "
                           "answers until tomorrow.")
     site_limit = config().ai_daily_limit
+    if business is not None and business.is_demo:
+        # every "Try the demo" is a new business: together they get at most half of the site's allowance,
+        # so visitors starting demo after demo can't leave real businesses without the AI
+        pool = site_limit // 2 if site_limit else DEMOS_DAILY
+        if _count(f"ai:{day}:demos") > max(pool, DEMO_DAILY):
+            raise AIError("Today's AI allowance for demos is used up, so the built-in assistant answers until "
+                          "tomorrow.")
     if site_limit and _count(f"ai:{day}:site") > site_limit:
         raise AIError("Today's AI allowance for this site is used up, so the built-in assistant answers until "
                       "tomorrow.")

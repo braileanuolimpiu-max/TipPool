@@ -27,7 +27,7 @@ def matching_step(secret, code, at=None, window=1):
         return None
     counter = int((at or time.time()) // 30)
     for d in range(-window, window + 1):
-        if hmac.compare_digest(_code(secret, counter + d), code):
+        if hmac.compare_digest(_code(secret, counter + d).encode(), str(code).encode()):
             return counter + d
     return None
 
