@@ -17,6 +17,8 @@ Built for the PayPal AI Hackathon 2026 ("Build What's Next with PayPal and AI").
 > **Live demo: https://tippool-if7m.onrender.com** · click **Try the demo** on the sign-in page: no sign-up, sandbox
 > money only. (Free hosting: the first visit after a quiet spell can take up to a minute to wake up.)
 
+> **Demo video (2.5 min): https://youtu.be/s2mTBvDpY5w**
+
 | Closing a shift: every share explained, checked, then paid | The guest's tip page (from the QR code) |
 |---|---|
 | ![Split review](docs/screenshots/split-review.png) | <img src="docs/screenshots/guest-tip-page.png" alt="Guest tip page" width="260"> |
