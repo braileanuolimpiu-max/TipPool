@@ -474,12 +474,14 @@ SAME_NAME = ("Someone on your team is already called {name}. Add a last initial 
              "so guests, reports and the team can tell them apart.")
 
 
-def _add_person(request, location, name, email, role):
+def _add_person(request, location, name, email, role, tell_owner=True):
     """Put someone on this location's team. The same person at another location (same PayPal email)
     keeps one tips page for everything."""
     person = StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).first()
     if person is None:
         person = StaffMember.objects.create(business=request.business, name=name, paypal_email=email)
+        if tell_owner:
+            _tell_owner_about_new_people(request, location, [person])
     membership, made = Membership.objects.get_or_create(staff=person, location=location,
                                                         defaults={"default_role": role})
     if not made:
@@ -487,6 +489,18 @@ def _add_person(request, location, name, email, role):
         membership.save()
     Change.log(request, f"Added {person.name} ({Role.label(role, location.pk)}) to the team")
     return person
+
+
+def _tell_owner_about_new_people(request, location, people):
+    """Someone other than the owner added people, with the PayPal emails they'll be paid at: the owner hears
+    about it (only they close this), as a manager could add a made-up person paid at their own address."""
+    if not people or request.user.manager.is_owner or request.business.is_demo:
+        return
+    from .alerts import raise_alert
+    who = request.user.get_full_name() or request.user.get_username()
+    listed = ", ".join(f"{p.name} ({p.paypal_email})" for p in people[:8]) + (" and more" if len(people) > 8 else "")
+    raise_alert(request.business, f"{who} added {listed} to the team, paid with PayPal at those emails.",
+                location=location, key=f"address:new:{people[0].pk}:{len(people)}", owners_only=True)
 
 
 BULK_MAX = 200
@@ -525,7 +539,7 @@ def staff_bulk(request):
         return redirect("staff_list")
     send_links = bool(request.POST.get("send_links")) and not request.business.is_demo
     added, skipped, mailed, outgoing, capped = [], [], 0, [], False
-    seen, updated = {}, []
+    seen, updated, new_people = {}, [], []
     for n, line in enumerate(lines, 1):
         sep = "\t" if "\t" in line else (";" if line.count(";") > line.count(",") else ",")
         cells = [c.strip() for c in next(csv.reader([line], delimiter=sep))] + ["", "", ""]
@@ -564,8 +578,11 @@ def staff_bulk(request):
         if full:
             skipped.append(f"line {n} ({name}): {full}")
             continue
-        person = _add_person(request, location, name, email, role)
+        is_new = not StaffMember.objects.filter(business=request.business, paypal_email__iexact=email).exists()
+        person = _add_person(request, location, name, email, role, tell_owner=False)
         added.append(person)
+        if is_new:
+            new_people.append(person)
         if send_links and platform.email_enabled():
             if not hit(f"link-mail:{request.business.pk}", LINK_EMAILS_PER_DAY, 24 * 3600):
                 capped = True
@@ -579,6 +596,7 @@ def staff_bulk(request):
                             "link: your tips, how each share was worked out, and clocking in and out."],
                 button=("Open my tips", link), links=[("Your private link", link)],
                 notes=["Keep it to yourself, and add it to your phone's home screen."]))
+    _tell_owner_about_new_people(request, location, new_people)
     if outgoing:  # one connection for all of them
         from django.core.mail import get_connection
         try:
@@ -690,7 +708,7 @@ def staff_edit(request, pk):
             raise_alert(request.business, f"{who} changed where {person.name} is paid: {address[len('PayPal email '):]}. "
                                           f"{person.name} confirms it through a link emailed to that address before they're paid there.",
                         location=request.location, key=f"address:{person.pk}:{email}", owners_only=True)
-        messages.success(request, f"Saved. {person.name} confirms the new email on their tips page before the "
+        messages.success(request, f"Saved. {person.name} confirms the new email (we email them a link) before the "
                                   "next payout." if any("email" in c for c in changes) else "Saved.")
     return redirect("staff_list")
 
@@ -1519,16 +1537,17 @@ def messages_page(request):
                     messages.error(request, str(exc))
                     return redirect("messages_page")
                 Change.log(request, f"Approved: {msg.staff.name} is now paid with {msg.staff.payout_to} (was {before})")
-                if msg.staff.payout_confirmed_at is None:  # a new PayPal address: its owner confirms it by email
-                    if services.check_payout_address(msg.staff, request.location) == "emailed":
-                        messages.success(request, f"{msg.staff.name} gets an email to confirm {msg.staff.paypal_email} "
-                                                  "before they're paid there.")
-                elif not request.user.manager.is_owner and not request.business.is_demo:
+                if not request.user.manager.is_owner and not request.business.is_demo:
+                    # where money goes changed: the owner always hears about it (only they can close this)
                     from .alerts import raise_alert
                     who = request.user.get_full_name() or request.user.get_username()
                     raise_alert(request.business, f"{who} approved a change: {msg.staff.name} is now paid with "
                                                   f"{msg.staff.payout_to} (was {before}).", location=request.location,
                                 key=f"address:{msg.staff.pk}:{msg.staff.payout_to}", owners_only=True)
+                if msg.staff.payout_confirmed_at is None:  # a new PayPal address: its owner confirms it by email
+                    if services.check_payout_address(msg.staff, request.location) == "emailed":
+                        messages.success(request, f"{msg.staff.name} gets an email to confirm {msg.staff.paypal_email} "
+                                                  "before they're paid there.")
             else:
                 Change.log(request, f"Declined {msg.staff.name}'s request to change where they're paid")
             msg.reply = "Approved." if approved else (request.POST.get("reply", "").strip()[:1000] or "Declined.")
@@ -1637,7 +1656,6 @@ def location_add(request):
 
 
 # --- Staff's own page (secret link, no login) ----------------------------------
-@limited("staff-page", 30, 600, key=lambda request, token: token)
 @limited("payout-check", 20, 3600)
 def payout_check(request, token):
     """The link emailed to a PayPal address: whoever reads that inbox confirms it's where the person is paid."""
@@ -1645,12 +1663,13 @@ def payout_check(request, token):
     if staff is None:
         return render(request, "tips/payout_check.html", {"expired": True}, status=404)
     if request.method == "POST":
-        services.confirm_payout(staff)
-        messages.success(request, f"Thanks! Your tips go to {staff.payout_to}.")
-        return redirect("my_tips", token=staff.access_token)
-    return render(request, "tips/payout_check.html", {"staff": staff})
+        if staff.payout_confirmed_at is None:
+            services.confirm_payout(staff)
+        return render(request, "tips/payout_check.html", {"staff": staff, "done": True})
+    return render(request, "tips/payout_check.html", {"staff": staff, "done": staff.payout_confirmed_at is not None})
 
 
+@limited("staff-page", 30, 600, key=lambda request, token: token)
 def my_tips(request, token):
     member = get_object_or_404(StaffMember, access_token=token)
     home = member.memberships.filter(active=True).select_related("location").first() or member.memberships.first()

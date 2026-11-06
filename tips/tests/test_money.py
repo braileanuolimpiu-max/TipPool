@@ -387,7 +387,9 @@ class MoneyTests(TestCase):
         link = next(w for w in mail.outbox[-1].body.split() if "/paid-here/" in w)
         path = link[link.index("/paid-here/"):]
         self.assertContains(self.client.get(path), "sam@example.com")
-        self.client.post(path)
+        done = self.client.post(path)
+        self.assertContains(done, "Confirmed")
+        self.assertNotContains(done, sam.access_token)  # the inbox confirms; it doesn't get the private link
         sam.refresh_from_db()
         self.assertIsNotNone(sam.payout_confirmed_at)
 
@@ -425,6 +427,28 @@ class MoneyTests(TestCase):
         self.assertEqual(self.maria.paypal_email, "maria.new@example.com")
         self.assertIsNone(self.maria.payout_confirmed_at)
         self.assertTrue(any(m.to == ["maria.new@example.com"] for m in mail.outbox))
+        self.assertTrue(Alert.objects.filter(key__startswith=f"address:{self.maria.pk}:").exists())  # owner told
+
+    def test_people_a_manager_adds_are_shown_to_the_owner(self):
+        self.client.force_login(make_manager("mgr4", self.business, owner=False))
+        self.client.post(reverse("staff_list"), {"name": "Ghost", "paypal_email": "mgr4@example.com",
+                                                 "default_role": "server"})
+        self.client.post(reverse("staff_bulk"), {"people": "Ann, ann@example.com, server\nBen, ben@example.com, server"})
+        texts = list(Alert.objects.filter(key__startswith="address:new:").values_list("text", flat=True))
+        self.assertEqual(len(texts), 2)
+        self.assertTrue(any("Ghost (mgr4@example.com)" in t for t in texts))
+        self.assertTrue(any("Ann (ann@example.com), Ben (ben@example.com)" in t for t in texts))
+
+    @override_settings(RATELIMIT_ENABLED=True)
+    def test_the_staff_page_keeps_its_rate_limit(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.client.logout()
+        url = reverse("my_tips", args=[self.maria.access_token])
+        codes = [self.client.post(url, {"payout": "confirm"}).status_code for _ in range(31)]
+        self.assertEqual(codes[-1], 429)
+        self.assertNotIn(429, codes[:30])
 
     def test_only_the_owner_closes_an_alert_about_where_someone_is_paid(self):
         from tips.models import Alert

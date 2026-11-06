@@ -1,16 +1,19 @@
 {% extends "_error.html" %}
 {% block title %}Confirm where you're paid{% endblock %}
 {% block code %}TipPool{% endblock %}
-{% block headline %}{% if expired %}This link doesn't work any more{% else %}Is this your PayPal?{% endif %}{% endblock %}
+{% block headline %}{% if expired %}This link doesn't work any more{% elif done %}Confirmed{% else %}Is this your PayPal?{% endif %}{% endblock %}
 {% block message %}
 {% if expired %}
 <p>It's older than a week, or where you're paid has changed since. Open your tips page and press "Yes, pay me here" again for a new link.</p>
+{% elif done %}
+<p>Thanks, {{ staff.name }}. Your tips from {{ staff.business.name }} go to <strong>{{ staff.paypal_email }}</strong>.</p>
+<p class="small muted">You can close this page. Your tips page shows every shift.</p>
 {% else %}
 <p>{{ staff.name }}, your tips from {{ staff.business.name }} will be paid with PayPal to <strong>{{ staff.paypal_email }}</strong>.</p>
 <p class="small muted">Only confirm if this is your own PayPal account.</p>
 {% endif %}
 {% endblock %}
 {% block actions %}
-{% if expired %}<a class="btn btn-primary" href="/">Go to TipPool</a>{% else %}
+{% if expired or done %}<a class="btn btn-primary" href="/">Go to TipPool</a>{% else %}
 <form method="post">{% csrf_token %}<button class="btn btn-primary">Yes, pay me here</button></form>{% endif %}
 {% endblock %}
