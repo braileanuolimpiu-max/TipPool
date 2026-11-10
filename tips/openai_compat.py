@@ -147,21 +147,43 @@ def _text_of(response, label, AIError):
     return text
 
 
+def _text_field(output_model):
+    """The one required text field of an answer made of text plus optional extras (Ask's "answer"), else None."""
+    required = [(name, f) for name, f in output_model.model_fields.items() if f.is_required()]
+    return required[0][0] if len(required) == 1 and required[0][1].annotation is str else None
+
+
+OTHER_TEXT_KEYS = ("response", "reply", "message", "text", "content", "result", "output")
+
+
 def _read(text, output_model):
     """The answer as `output_model`, or None. A part that is optional and doesn't fit (say, a half-filled
-    action on a plain question) is left out rather than losing the whole answer; required parts must fit."""
+    action on a plain question) is left out rather than losing the whole answer; required parts must fit.
+    For a text answer (Ask), a reply in plain words, or under another name, is still the answer."""
     if not text:
         return None
     try:
         return output_model.model_validate_json(text)
-    except (ValidationError, ValueError) as exc:
-        try:
-            data = json.loads(text)
-        except ValueError:
+    except (ValidationError, ValueError):
+        pass
+    field = _text_field(output_model)
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = text if field else None  # plain words instead of JSON
+    if isinstance(data, str):
+        return output_model.model_validate({field: data.strip()[:1500]}) if field and data.strip() else None
+    if not isinstance(data, dict):
+        return None
+    if field and not (isinstance(data.get(field), str) and data[field].strip()):
+        other = next((data[k] for k in OTHER_TEXT_KEYS if isinstance(data.get(k), str) and data[k].strip()), None)
+        if other is None:
             return None
-        if not isinstance(data, dict) or not isinstance(exc, ValidationError):
-            return None
-        optional = {name for name, field in output_model.model_fields.items() if not field.is_required()}
+        data = {**data, field: other}
+    try:
+        return output_model.model_validate(data)
+    except ValidationError as exc:
+        optional = {name for name, f in output_model.model_fields.items() if not f.is_required()}
         broken = {e["loc"][0] for e in exc.errors() if e.get("loc")}
         if not broken or not broken <= optional:
             return None

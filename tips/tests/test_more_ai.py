@@ -84,6 +84,21 @@ class OpenAICompatibleTests(TestCase):
                 self.call()
         self.assertEqual(post.call_count, 2)
 
+    def test_a_plain_words_reply_or_another_name_is_still_the_answer(self):
+        self.use("deepseek")
+        for content in ("I can only answer questions about your tips.",
+                        '{"response": "I can only answer questions about your tips."}',
+                        '"I can only answer questions about your tips."'):
+            plain = reply(payload={"choices": [{"message": {"content": content}}]})
+            with mock.patch("tips.openai_compat.requests.post", return_value=plain):
+                out = self.call()
+            self.assertEqual((out.answer, out.action), ("I can only answer questions about your tips.", None))
+
+    def test_structured_answers_still_need_their_fields(self):
+        from tips.check import CheckOut
+        self.assertIsNone(openai_compat._read("Looks fine to me.", CheckOut))
+        self.assertIsNone(openai_compat._read('{"summary": "ok"}', CheckOut))
+
     def test_no_credit_is_said_plainly(self):
         self.use("openai")
         with mock.patch("tips.openai_compat.requests.post", return_value=reply(402, {"error": {}})):
