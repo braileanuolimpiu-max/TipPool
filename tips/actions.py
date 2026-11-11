@@ -120,8 +120,9 @@ def _week_in(q):
 
 
 # --- proposing and doing --------------------------------------------------------------
-def propose(kind, params, location, user):
-    """Check the action can be done and describe it. Returns {"text", "token"}; raises ActionError."""
+def propose(kind, params, location, user, added_before=None):
+    """Check the action can be done and describe it. Returns {"text", "token"}; raises ActionError.
+    `added_before`: tips an earlier step of the same plan adds to this shift (shown in the close-out text)."""
     cur = location.business.symbol
     if kind == "pay_shift":
         night = _night_to_pay(location, params.get("shift_date"))
@@ -170,7 +171,10 @@ def propose(kind, params, location, user):
         night = _night_to_close(location, params.get("shift_date"))
         tips = night.tip_total
         text = (f"Close out the {night}: who worked from clock-ins{' and usual hours' if location.use_usual_schedule else ''}"
-                f", then split {cur}{tips} by your rules and run the close-out check. Nothing is paid yet.")
+                f", then split {cur}{tips}"
+                + (f" plus the {cur}{added_before} added in the step before ({cur}{tips + added_before})"
+                   if added_before else "")
+                + " by your rules and run the close-out check. Nothing is paid yet.")
         params = {"night": night.pk}
     elif kind == "fix_payouts":
         failed, unclaimed = _payouts_to_fix(location)
@@ -201,6 +205,7 @@ def propose_plan(steps, location, user):
     if sum(1 for k, _ in steps if k == "pay_shift") > 1:
         raise ActionError("One payout per request, please: ask for each shift separately.")
     texts, planned, changed = [], [], {}  # changed: the shifts earlier steps close or add tips to, by date
+    added = {}  # tips earlier steps add, by shift: a later close-out step says the total it will split
     for i, (kind, params) in enumerate(steps):
         day = params.get("shift_date")
         if kind == "pay_shift" and changed and (day is None or day in changed):
@@ -215,7 +220,11 @@ def propose_plan(steps, location, user):
             planned.append(("pay_shift", {"night": night.pk, "after_change": True}))
             continue
         try:
-            proposal = propose(kind, params, location, user)
+            before = None
+            if kind == "close_shift":
+                ahead = _night_to_close(location, params.get("shift_date"))
+                before = added.get(ahead.pk)
+            proposal = propose(kind, params, location, user, added_before=before)
         except ActionError as exc:
             if i == 0:
                 raise
@@ -226,6 +235,8 @@ def propose_plan(steps, location, user):
         if kind in ("close_shift", "add_tip"):
             night = Night.objects.get(pk=data["p"]["night"])
             changed[day] = changed[night.date.isoformat()] = night
+            if kind == "add_tip":
+                added[night.pk] = added.get(night.pk, Decimal("0")) + Decimal(data["p"]["amount"])
     token = signing.dumps({"k": "plan", "p": {"steps": planned}, "u": user.pk, "l": location.pk,
                            "n": secrets.token_hex(16)}, salt=SALT, compress=True)
     return {"text": f"{len(texts)} steps, in this order:", "steps": texts, "token": token}

@@ -178,6 +178,13 @@ class AgentPlanTests(ActionBase):
                                  follow=True)
         self.assertContains(again, "already done")
 
+    def test_a_close_out_after_adding_tips_says_the_total_it_will_split(self):
+        self.open_night_with_clock_ins()
+        page = self.ask("Add $40 cash to tonight's shift, close it out and pay everyone")
+        steps = page.context["asked"]["proposal"]["steps"]
+        self.assertTrue(steps[0].startswith("Add $40.00"))
+        self.assertIn("split $100.00 plus the $40.00 added in the step before ($140.00)", steps[1])
+
     def test_a_plan_pays_only_the_shift_it_changed(self):
         # yesterday's shift is waiting to be paid; tonight is still open. "Add cash and pay" must not pay yesterday.
         yesterday = self.ready_night(day=date(2026, 10, 15))
