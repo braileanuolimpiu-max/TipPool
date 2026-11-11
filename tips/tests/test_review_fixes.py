@@ -84,3 +84,29 @@ class ConfirmEmailTests(TestCase):
         for _ in range(6):
             self.client.post(reverse("my_tips", args=[sam.access_token]), {"payout": "confirm"})
         self.assertEqual(len([m for m in mail.outbox if m.to == ["sam@example.com"]]), 3)
+
+
+class SchedulePhotoTests(TestCase):
+    """A photo that doesn't say someone's role: their usual role, never a made-up one."""
+
+    def setUp(self):
+        self.location = Location.default()
+        self.sam = hire("Sam", "busser")
+        self.client.force_login(make_manager("boss"))
+
+    def upload(self, answer):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        photo = SimpleUploadedFile("sheet.png", b"\x89PNG fake", content_type="image/png")
+        with mock.patch("tips.ai.mode", return_value="claude"), \
+                mock.patch("tips.ai._claude_parse", return_value=answer) as parse:
+            page = self.client.post(reverse("close_night"), {"photo": photo})
+        return page, parse
+
+    def test_the_ai_is_told_everyones_usual_role(self):
+        _, parse = self.upload(ai.ScheduleOut(shifts=[], notes=[]))
+        prompt = parse.call_args.args[1][1]["text"]
+        self.assertIn("Usual roles (name: role id): Sam: busser", prompt)
+
+    def test_a_role_the_location_doesnt_have_becomes_the_usual_one(self):
+        page, _ = self.upload(ai.ScheduleOut(shifts=[ai.ShiftOut(name="Sam", role="captain", hours=4)], notes=[]))
+        self.assertContains(page, 'value="busser" selected')

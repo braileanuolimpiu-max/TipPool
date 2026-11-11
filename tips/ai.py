@@ -341,14 +341,17 @@ Match names to the staff list when they clearly refer to the same person (use th
 Never guess numbers you cannot read: leave the person out and explain it in "notes"."""
 
 
-def read_schedule(image_bytes, media_type, staff_names, location):
-    """Returns dict: shifts [{name, role, hours}], notes []."""
+def read_schedule(image_bytes, media_type, staff_names, location, usual_roles=None):
+    """Returns dict: shifts [{name, role, hours}], notes []. `usual_roles`: {name: role id}, used when the
+    photo doesn't say someone's role."""
     if mode() != "claude":
         raise AIError("Reading a photo needs the AI service, which isn't switched on. For now, enter the hours below.")
     content = [
         {"type": "image", "source": {"type": "base64", "media_type": media_type,
                                      "data": base64.standard_b64encode(image_bytes).decode("utf-8")}},
         {"type": "text", "text": _role_list_text(_business_roles(location)) + "\n\nStaff list: " + ", ".join(staff_names)
+                                 + ("\nUsual roles (name: role id): " + ", ".join(f"{n}: {r}" for n, r in usual_roles.items() if r)
+                                    if usual_roles else "")
                                  + "\nList everyone who worked."},
     ]
     out = _claude_parse(SCHEDULE_SYSTEM, content, ScheduleOut, effort="medium")

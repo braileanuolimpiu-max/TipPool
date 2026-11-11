@@ -907,12 +907,16 @@ def close_night(request, pk=None):
             messages.error(request, "Please upload a JPG, PNG, WEBP or GIF photo under 8 MB.")
         else:
             try:
-                result = ai.read_schedule(photo.read(), photo.content_type, [m.name for m in staff], location)
+                result = ai.read_schedule(photo.read(), photo.content_type, [m.name for m in staff], location,
+                                          usual_roles={m.name: usual_role.get(m.pk) for m in staff})
                 by_name = {m.name.lower(): m for m in staff}
+                role_keys = set(Role.objects.filter(location=location).values_list("key", flat=True))
                 for row in result["shifts"]:
                     member = by_name.get(row["name"].lower())
                     if member:
-                        prefill[member.pk] = {"role": row["role"], "hours": row["hours"]}
+                        # a role that isn't one of this location's: their usual one (the manager can change it)
+                        role = row["role"] if row["role"] in role_keys else usual_role.get(member.pk)
+                        prefill[member.pk] = {"role": role, "hours": row["hours"]}
                     else:
                         ai_notes.append(f"'{row['name']}' is on the photo but not in your staff list.")
                 ai_notes += result["notes"]
